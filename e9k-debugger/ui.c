@@ -10,6 +10,7 @@
 #include <SDL_image.h>
 #include <SDL_ttf.h>
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -923,6 +924,82 @@ ui_restoreState(e9ui_context_t *ctx, void *user)
     }
 }
 
+static void
+ui_copyFramebufferWithDisplayAspectToClipboard(const uint8_t *data,
+                                               int width,
+                                               int height,
+                                               size_t pitch,
+                                               float displayAspect)
+{
+    if (!data || width <= 0 || height <= 0 || pitch == 0) {
+        debug_error("clipboard: invalid framebuffer");
+        return;
+    }
+
+    int targetWidth = width;
+    int targetHeight = height;
+    double rawAspect = (double)width / (double)height;
+    if (displayAspect > 0.0001f) {
+        double targetAspect = (double)displayAspect;
+        if (fabs(rawAspect - targetAspect) > 0.01) {
+            if (targetAspect >= rawAspect) {
+                targetWidth = (int)(targetAspect * (double)height + 0.5);
+            } else {
+                targetHeight = (int)(((double)width / targetAspect) + 0.5);
+            }
+        }
+    }
+
+    if (targetWidth <= 0) {
+        targetWidth = width;
+    }
+    if (targetHeight <= 0) {
+        targetHeight = height;
+    }
+
+    if (targetWidth == width && targetHeight == height) {
+        if (!clipboard_setImageXRGB8888(data, width, height, pitch)) {
+            debug_error("clipboard: failed to set image");
+        }
+        return;
+    }
+
+    SDL_Surface *srcSurface = SDL_CreateRGBSurfaceWithFormatFrom(
+        (void *)data, width, height, 32, (int)pitch, SDL_PIXELFORMAT_XRGB8888);
+    if (!srcSurface) {
+        debug_error("clipboard: SDL_CreateRGBSurfaceWithFormatFrom failed: %s", SDL_GetError());
+        return;
+    }
+
+    SDL_Surface *dstSurface = SDL_CreateRGBSurfaceWithFormat(0,
+                                                             targetWidth,
+                                                             targetHeight,
+                                                             32,
+                                                             SDL_PIXELFORMAT_XRGB8888);
+    if (!dstSurface) {
+        debug_error("clipboard: SDL_CreateRGBSurfaceWithFormat failed: %s", SDL_GetError());
+        SDL_FreeSurface(srcSurface);
+        return;
+    }
+
+    if (SDL_BlitScaled(srcSurface, NULL, dstSurface, NULL) != 0) {
+        debug_error("clipboard: SDL_BlitScaled failed: %s", SDL_GetError());
+        SDL_FreeSurface(dstSurface);
+        SDL_FreeSurface(srcSurface);
+        return;
+    }
+
+    if (!clipboard_setImageXRGB8888((const uint8_t *)dstSurface->pixels,
+                                    dstSurface->w,
+                                    dstSurface->h,
+                                    (size_t)dstSurface->pitch)) {
+        debug_error("clipboard: failed to set scaled image");
+    }
+
+    SDL_FreeSurface(dstSurface);
+    SDL_FreeSurface(srcSurface);
+}
+
 void
 ui_copyFramebufferToClipboard(void)
 {
@@ -941,12 +1018,9 @@ ui_copyFramebufferToClipboard(void)
         return;
     }
     memcpy(copy, data, needed);
-    int ok = clipboard_setImageXRGB8888(copy, width, height, pitch);
+    float displayAspect = libretro_host_getDisplayAspect();
+    ui_copyFramebufferWithDisplayAspectToClipboard(copy, width, height, pitch, displayAspect);
     free(copy);
-    if (!ok) {
-        debug_error("clipboard: failed to set image");
-        return;
-    }
     e9ui_showTransientMessage("COPIED SCREEN TO CLIPBOARD");
 }
 
