@@ -30,6 +30,7 @@ typedef struct e9ui_button_state {
   int                 useMicro;
   int                 useNano;
   int                 useCustomTheme;
+  int                 customThemeFontExplicit;
   e9k_theme_button_t  customTheme;
   SDL_Texture        *bgCache;
   int                 bgCacheW;
@@ -280,11 +281,8 @@ e9ui_button_drawBackground(SDL_Renderer *renderer,
 
 
 static const e9k_theme_button_t *
-e9ui_button_getTheme(const e9ui_button_state_t *st)
+e9ui_button_getBaseTheme(const e9ui_button_state_t *st)
 {
-    if (st && st->useCustomTheme) {
-        return &st->customTheme;
-    }
     if (st && st->useNano) {
         return &e9ui->theme.nanoButton;
     }
@@ -295,6 +293,40 @@ e9ui_button_getTheme(const e9ui_button_state_t *st)
         return &e9ui->theme.miniButton;
     }
     return &e9ui->theme.button;
+}
+
+static int
+e9ui_button_customThemeUsesLiveFont(const e9ui_button_state_t *st)
+{
+    if (!st || !st->useCustomTheme) {
+        return 0;
+    }
+    return st->customThemeFontExplicit ? 0 : 1;
+}
+
+static const e9k_theme_button_t *
+e9ui_button_getTheme(const e9ui_button_state_t *st)
+{
+    if (st && st->useCustomTheme) {
+        return &st->customTheme;
+    }
+    return e9ui_button_getBaseTheme(st);
+}
+
+static TTF_Font *
+e9ui_button_resolveFont(const e9ui_button_state_t *st, const e9ui_context_t *ctx)
+{
+    const e9k_theme_button_t *theme = e9ui_button_getTheme(st);
+    if (e9ui_button_customThemeUsesLiveFont(st)) {
+        const e9k_theme_button_t *baseTheme = e9ui_button_getBaseTheme(st);
+        if (baseTheme && baseTheme->font) {
+            return baseTheme->font;
+        }
+    }
+    if (theme && theme->font) {
+        return theme->font;
+    }
+    return ctx ? ctx->font : NULL;
 }
 
 static int
@@ -313,7 +345,7 @@ static void
 e9ui_button_updateMeasure(e9ui_button_state_t *st, e9ui_context_t *ctx)
 {
     const e9k_theme_button_t *theme = e9ui_button_getTheme(st);
-    TTF_Font *useFont = (theme->font ? theme->font : (ctx?ctx->font:NULL));
+    TTF_Font *useFont = e9ui_button_resolveFont(st, ctx);
     int lh = useFont ? TTF_FontHeight(useFont) : 16;
     if (lh <= 0) {
         lh = 16;
@@ -459,7 +491,7 @@ e9ui_button_render(e9ui_component_t *self, e9ui_context_t *ctx)
     // Content: optional icon + text
     int cy = r.y + r.h/2;
     int innerStartX = r.x + 8 + padding;
-    TTF_Font *tf = theme->font ? theme->font : ctx->font;
+    TTF_Font *tf = e9ui_button_resolveFont(st, ctx);
     int textW = 0;
     int textH = 0;
     SDL_Texture *textTexture = NULL;
@@ -818,6 +850,7 @@ e9ui_button_setTheme(e9ui_component_t *btn, const e9k_theme_button_t *theme)
         return;
     }
     e9k_theme_button_t merged = *e9ui_button_getTheme(st);
+    int fontExplicit = (st->useCustomTheme && st->customThemeFontExplicit) ? 1 : 0;
     uint32_t mask = theme->mask ? theme->mask : E9K_THEME_BUTTON_MASK_ALL;
     if (mask & E9K_THEME_BUTTON_MASK_HIGHLIGHT) {
         merged.highlight = theme->highlight;
@@ -851,10 +884,12 @@ e9ui_button_setTheme(e9ui_component_t *btn, const e9k_theme_button_t *theme)
     }
     if (mask & E9K_THEME_BUTTON_MASK_FONT) {
         merged.font = theme->font;
+        fontExplicit = 1;
     }
     merged.mask = 0;
     st->customTheme = merged;
     st->useCustomTheme = 1;
+    st->customThemeFontExplicit = fontExplicit;
 }
 
 void
@@ -868,6 +903,7 @@ e9ui_button_clearTheme(e9ui_component_t *btn)
         return;
     }
     st->useCustomTheme = 0;
+    st->customThemeFontExplicit = 0;
 }
 
 void

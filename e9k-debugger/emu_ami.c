@@ -44,6 +44,7 @@
 #define EMU_AMI_DMA_RECORD_SPRITE 7u
 #define EMU_AMI_DMA_RECORD_DISK 8u
 #define EMU_AMI_DMA_RECORD_CONFLICT 9u
+#define EMU_AMI_COPPER_HIT_MARGIN_SCALE 3
 typedef struct emu_ami_blitter_vis_line_stat {
     uint32_t blitId;
     uint32_t y;
@@ -2610,13 +2611,36 @@ emu_ami_buildCopperDebugOverlayCache(e9ui_context_t *ctx,
     return 1;
 }
 
+static int
+emu_ami_copperDistanceToAxisRange(int point, int startInclusive, int endExclusive)
+{
+    if (point < startInclusive) {
+        return startInclusive - point;
+    }
+    if (point >= endExclusive) {
+        return point - endExclusive + 1;
+    }
+    return 0;
+}
+
+static unsigned
+emu_ami_copperMarkerDistanceSq(SDL_Rect marker, int x, int y)
+{
+    int dx = emu_ami_copperDistanceToAxisRange(x, marker.x, marker.x + marker.w);
+    int dy = emu_ami_copperDistanceToAxisRange(y, marker.y, marker.y + marker.h);
+    return (unsigned)(dx * dx + dy * dy);
+}
+
 static const e9k_debug_ami_copper_debug_raw_record_t *
 emu_ami_findCopperRecordAtPoint(const SDL_Rect *dst, int x, int y, SDL_Rect *outMarker, int isClick)
 {
     const e9k_debug_ami_copper_debug_frame_view_t *copperFrame =
         libretro_host_debugAmiGetCopperDebugFrameView(E9K_DEBUG_AMI_COPPER_DEBUG_FRAME_LATEST_COMPLETE);
     const e9k_debug_ami_dma_debug_frame_view_t *dmaFrame = emu_ami_getDmaDebugFrameView();
+    const e9k_debug_ami_copper_debug_raw_record_t *closestRec = NULL;
     SDL_Rect overlayDst;
+    SDL_Rect closestMarker = { 0, 0, 0, 0 };
+    unsigned closestDistanceSq = 0u;
     int lineStartDhposCache[2048];
     int cacheCount = 0;
 
@@ -2676,10 +2700,33 @@ emu_ami_findCopperRecordAtPoint(const SDL_Rect *dst, int x, int y, SDL_Rect *out
             }
             return rec;
         }
+
+        int marginX = marker.w * EMU_AMI_COPPER_HIT_MARGIN_SCALE;
+        int marginY = marker.h * EMU_AMI_COPPER_HIT_MARGIN_SCALE;
+        int expandedLeft = marker.x - marginX;
+        int expandedRight = marker.x + marker.w + marginX;
+        int expandedTop = marker.y - marginY;
+        int expandedBottom = marker.y + marker.h + marginY;
+        if (x < expandedLeft ||
+            x >= expandedRight ||
+            y < expandedTop ||
+            y >= expandedBottom) {
+            continue;
+        }
+
+        unsigned distanceSq = emu_ami_copperMarkerDistanceSq(marker, x, y);
+        if (!closestRec || distanceSq < closestDistanceSq) {
+            closestRec = rec;
+            closestMarker = marker;
+            closestDistanceSq = distanceSq;
+        }
     }
 
     (void)isClick;
-    return NULL;
+    if (closestRec && outMarker) {
+        *outMarker = closestMarker;
+    }
+    return closestRec;
 }
 
 static void

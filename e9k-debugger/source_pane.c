@@ -131,6 +131,9 @@ typedef struct source_pane_line_metrics {
     int innerHeight;
 } source_pane_line_metrics_t;
 
+/* Set to 0 to restore the old snapshot-while-running behavior for ASM/HEX/CPR. */
+static int source_pane_enableLiveAsmViews = 0;
+
 static void
 source_pane_updateSourceLocation(source_pane_state_t *st, int allowWhileRunning);
 
@@ -226,6 +229,15 @@ source_pane_getContentArea(e9ui_component_t *self, e9ui_context_t *ctx, int padP
 
 static int
 source_pane_isAsmLikeMode(source_pane_mode_t mode);
+
+static int
+source_pane_isAsmViewLiveUpdateEnabled(void);
+
+static int
+source_pane_shouldFreezeAsmWhileRunning(const source_pane_state_t *st);
+
+static int
+source_pane_areAsmViewStepButtonsEnabled(source_pane_mode_t mode);
 
 static int
 source_pane_isCpuAsmLikeMode(source_pane_mode_t mode);
@@ -420,6 +432,39 @@ source_pane_isAsmLikeMode(source_pane_mode_t mode)
     return (mode == source_pane_mode_a ||
             mode == source_pane_mode_h ||
             mode == source_pane_mode_cpr) ? 1 : 0;
+}
+
+static int
+source_pane_isAsmViewLiveUpdateEnabled(void)
+{
+    return source_pane_enableLiveAsmViews ? 1 : 0;
+}
+
+static int
+source_pane_shouldFreezeAsmWhileRunning(const source_pane_state_t *st)
+{
+    if (!st) {
+        return 0;
+    }
+    if (source_pane_isAsmViewLiveUpdateEnabled()) {
+        return 0;
+    }
+    if (st->overrideActive) {
+        return 0;
+    }
+    return machine_getRunning(debugger.machine) ? 1 : 0;
+}
+
+static int
+source_pane_areAsmViewStepButtonsEnabled(source_pane_mode_t mode)
+{
+    if (!source_pane_isAsmLikeMode(mode)) {
+        return 0;
+    }
+    if (source_pane_isAsmViewLiveUpdateEnabled()) {
+        return 1;
+    }
+    return !machine_getRunning(debugger.machine) ? 1 : 0;
 }
 
 static int
@@ -4007,10 +4052,7 @@ source_pane_getAsmWindow(source_pane_state_t *st, int maxLines, uint64_t *out_cu
         return 0;
     }
 
-    int freezeWhileRunning = 0;
-    if (!st->overrideActive && machine_getRunning(debugger.machine)) {
-        freezeWhileRunning = 1;
-    }
+    int freezeWhileRunning = source_pane_shouldFreezeAsmWhileRunning(st);
     if (st->frozenActive && !freezeWhileRunning) {
         st->frozenActive = 0;
         source_pane_freeFrozenAsm(st);
@@ -4447,10 +4489,7 @@ source_pane_getCprWindow(source_pane_state_t *st, int maxLines, uint64_t *out_cu
         return 0;
     }
 
-    int freezeWhileRunning = 0;
-    if (!st->overrideActive && machine_getRunning(debugger.machine)) {
-        freezeWhileRunning = 1;
-    }
+    int freezeWhileRunning = source_pane_shouldFreezeAsmWhileRunning(st);
     if (st->frozenActive && !freezeWhileRunning) {
         st->frozenActive = 0;
         source_pane_freeFrozenAsm(st);
@@ -4896,8 +4935,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
         }
         source_pane_refreshModeOptions(self, st);
         source_pane_mode_t stepMode = st->viewMode;
-        int stepEnabled = (source_pane_isAsmLikeMode(stepMode) &&
-                           !machine_getRunning(debugger.machine)) ? 1 : 0;
+        int stepEnabled = source_pane_areAsmViewStepButtonsEnabled(stepMode);
         source_pane_step_buttons_action_ctx_t actionCtx = {
             self,
             ctx,
@@ -4924,10 +4962,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
     if (!useFont) {
         goto done;
     }
-    int freezeWhileRunning = 0;
-    if (st && !st->overrideActive && machine_getRunning(debugger.machine)) {
-        freezeWhileRunning = 1;
-    }
+    int freezeWhileRunning = st ? source_pane_shouldFreezeAsmWhileRunning(st) : 0;
     if (st && st->frozenActive && !freezeWhileRunning && !st->scrollLocked) {
         st->frozenActive = 0;
         source_pane_freeFrozenAsm(st);
@@ -5353,8 +5388,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
               searchBox->render(searchBox, ctx);
           }
       }
-      if (st && source_pane_isAsmLikeMode(mode) &&
-          !machine_getRunning(debugger.machine)) {
+      if (st && source_pane_areAsmViewStepButtonsEnabled(mode)) {
           int topInsetPx = source_pane_overlayTopRowHeight(self, ctx, st);
           e9ui_step_buttons_render(ctx,
                                    self->bounds,
@@ -5485,7 +5519,7 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
             mode
         };
         int topInsetPx = source_pane_overlayTopRowHeight(self, ctx, st);
-        int stepEnabled = !machine_getRunning(debugger.machine) ? 1 : 0;
+        int stepEnabled = source_pane_areAsmViewStepButtonsEnabled(mode);
         if (e9ui_step_buttons_handleEvent(ctx,
                                           ev,
                                           self->bounds,
