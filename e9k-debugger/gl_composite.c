@@ -438,6 +438,9 @@ static int
 glc_renderHalationPasses(int useAdv, int sceneW, int sceneH, GLuint targetFbo, int targetW, int targetH,
                          float outX0, float outY0, float outX1, float outY1)
 {
+    GLboolean scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLint scissorBox[4] = {0, 0, 0, 0};
+
     if (!glc_bloomEnsureTargets(sceneW, sceneH)) {
         return 0;
     }
@@ -455,6 +458,10 @@ glc_renderHalationPasses(int useAdv, int sceneW, int sceneH, GLuint targetFbo, i
     float radiusY = radiusFull * downsampleScaleY;
 
     glDisable(GL_BLEND);
+    if (scissorEnabled) {
+        glGetIntegerv(GL_SCISSOR_BOX, scissorBox);
+    }
+    glDisable(GL_SCISSOR_TEST);
 
     // Pass 1: CRT -> scene texture (source upload uses top-left origin, so flip here).
     glc_glBindFramebuffer(glc_framebufferTarget, glc_bloomFbo);
@@ -536,6 +543,10 @@ glc_renderHalationPasses(int useAdv, int sceneW, int sceneH, GLuint targetFbo, i
     glc_glBindFramebuffer(glc_framebufferTarget, targetFbo);
     if (glc_glDrawBuffer) {
         glc_glDrawBuffer(targetFbo ? glc_framebufferColorAttachment : GL_BACK);
+    }
+    if (scissorEnabled) {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
     }
     glViewport(0, 0, targetW, targetH);
     glc_glUseProgram(glc_program_bloom_composite);
