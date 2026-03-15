@@ -352,6 +352,8 @@ ui_refreshHotkeyTooltips(void)
     ui_setActionTooltip(ui_btnSettings, "Settings", "settings", ui_tipSettings, sizeof(ui_tipSettings));
     ui_setActionTooltip(ui_btnReset, "Reset core", "reset_core", ui_tipReset, sizeof(ui_tipReset));
     ui_setActionTooltip(ui_btnRestart, "Restart", "restart", ui_tipRestart, sizeof(ui_tipRestart));
+    breakpoints_refreshHotkeyTooltips();
+    profile_checkpoints_refreshHotkeyTooltips();
 }
 
 static const char *

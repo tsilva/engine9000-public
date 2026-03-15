@@ -28,6 +28,7 @@
 #include "state_buffer.h"
 #include "prompt.h"
 #include "input_record.h"
+#include "profile_checkpoints.h"
 #include "config.h"
 #include "source_pane.h"
 #include "hex_convert.h"
@@ -111,12 +112,13 @@ static const hotkeys_config_spec_t hotkeys_configSpecs[] = {
     { "step", "Step", SDLK_s, KMOD_ALT },
     { "next", "Next", SDLK_n, KMOD_ALT },
     { "step_inst", "Step Inst", SDLK_i, KMOD_ALT },
+    { "breakpoint_add_current", "Breakpoint Add Current", SDLK_d, KMOD_ALT },
     { "frame_back", "Frame Step Back", SDLK_b, KMOD_ALT },
     { "frame_step", "Frame Step", SDLK_f, KMOD_ALT },
     { "frame_continue", "Frame Continue", SDLK_g, KMOD_ALT },
-    { "checkpoint_prev", "Checkpoint Prev", SDLK_UNKNOWN, 0 },
-    { "checkpoint_reset", "Checkpoint Reset", SDLK_UNKNOWN, 0 },
-    { "checkpoint_next", "Checkpoint Next", SDLK_UNKNOWN, 0 }
+    { "checkpoint_prev", "Checkpoint Toggle", SDLK_COMMA, 0 },
+    { "checkpoint_reset", "Checkpoint Reset", SDLK_PERIOD, 0 },
+    { "checkpoint_next", "Checkpoint Dump", SDLK_SLASH, 0 }
 };
 
 static hotkeys_config_override_t hotkeys_configOverrides[
@@ -129,11 +131,11 @@ static size_t hotkeys_actionRegistrationCap = 0;
 static e9ui_component_t *
 hotkeys_findTopModal(void);
 
-static int
-hotkeys_eventMatchesAction(const SDL_KeyboardEvent *kev, const char *actionId);
-
 static void
 hotkeys_getConfigBindingAt(size_t index, SDL_Keycode *key, SDL_Keymod *mods);
+
+static int
+hotkeys_trackedActionAllowed(size_t specIndex, e9ui_context_t *ctx, const SDL_KeyboardEvent *kev);
 
 static SDL_Keymod
 hotkeys_normalizeMods(SDL_Keymod mods)
@@ -347,7 +349,7 @@ hotkeys_eventMatchesBinding(const SDL_KeyboardEvent *kev, SDL_Keycode wantKey, S
     return evMods == hotkeys_normalizeMods(wantMods) ? 1 : 0;
 }
 
-static int
+int
 hotkeys_eventMatchesAction(const SDL_KeyboardEvent *kev, const char *actionId)
 {
     SDL_Keycode key = SDLK_UNKNOWN;
@@ -359,6 +361,44 @@ hotkeys_eventMatchesAction(const SDL_KeyboardEvent *kev, const char *actionId)
         return 0;
     }
     return hotkeys_eventMatchesBinding(kev, key, mods);
+}
+
+static int
+hotkeys_eventMatchesRegisteredHotkey(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
+{
+    if (!ctx || !kev || !e9ui) {
+        return 0;
+    }
+    e9k_hotkey_registry_t *hk = &e9ui->hotkeys;
+    SDL_Keycode key = kev->keysym.sym;
+    SDL_Keymod mods = hotkeys_normalizeMods(kev->keysym.mod);
+
+    for (int i = 0; i < hk->count; i++) {
+        e9k_hotkey_entry_t *entry = &hk->entries[i];
+        if (!entry->active) {
+            continue;
+        }
+        if ((SDL_Keycode)entry->key != key) {
+            continue;
+        }
+        if (entry->mask == 0 && entry->value == 0) {
+            SDL_Keymod disallowMods = (SDL_Keymod)(mods & (KMOD_CTRL | KMOD_ALT));
+            if (disallowMods != 0) {
+                continue;
+            }
+        }
+        if ((mods & (SDL_Keymod)entry->mask) != (SDL_Keymod)entry->value) {
+            continue;
+        }
+        size_t trackedSpecIndex = 0;
+        if (hotkeys_findTrackedSpecIndexForRegistryId(entry->id, &trackedSpecIndex)) {
+            if (!hotkeys_trackedActionAllowed(trackedSpecIndex, ctx, kev)) {
+                continue;
+            }
+        }
+        return 1;
+    }
+    return 0;
 }
 
 static int
@@ -1232,6 +1272,7 @@ hotkeys_configSectionForActionId(const char *actionId)
         strcmp(actionId, "step") == 0 ||
         strcmp(actionId, "next") == 0 ||
         strcmp(actionId, "step_inst") == 0 ||
+        strcmp(actionId, "breakpoint_add_current") == 0 ||
         strcmp(actionId, "frame_back") == 0 ||
         strcmp(actionId, "frame_step") == 0 ||
         strcmp(actionId, "frame_continue") == 0) {
@@ -1735,7 +1776,6 @@ hotkeys_dispatchHotkey(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
     if (focus && focus->name && strcmp(focus->name, "e9ui_textbox") == 0) {
         focusIsTextbox = 1;
     }
-    int allowPrintableHotkey = (mods == 0 && (key == SDLK_f || key == SDLK_b || key == SDLK_g) && !focusIsTextbox) ? 1 : 0;
     if ((mods & (KMOD_CTRL | KMOD_GUI)) != 0 && (key == SDLK_s || key == SDLK_r)) {
         if (focus && focus->name && strcmp(focus->name, "source_pane") == 0) {
             if (source_pane_getMode(focus) == source_pane_mode_c) {
@@ -1749,7 +1789,10 @@ hotkeys_dispatchHotkey(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
     if (focus) {
         SDL_Keymod noShiftMods = (SDL_Keymod)(mods & (KMOD_CTRL|KMOD_ALT|KMOD_GUI));
         int printable = (key >= 32 && key <= 126);
-        if (noShiftMods == 0 && printable && !allowPrintableHotkey) {
+        if (focusIsTextbox && noShiftMods == 0 && printable) {
+            return 0;
+        }
+        if (noShiftMods == 0 && printable && !hotkeys_eventMatchesRegisteredHotkey(ctx, kev)) {
             return 0;
         }
     }
@@ -1956,8 +1999,18 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
         int has_focus = (e9ui_getFocus(ctx) != NULL);
         if (!has_focus) {
             if (!input_record_isPlayback()) {
-                input_record_recordUiKey(debugger.frameCounter + 1, (unsigned)key, 1);
-                input_record_handleUiKey((unsigned)key, 1);
+                input_record_recordUiKeyEvent(debugger.frameCounter + 1,
+                                              (unsigned)key,
+                                              (uint16_t)kev->keysym.mod,
+                                              kev->repeat,
+                                              1);
+            }
+            if (hotkeys_eventMatchesAction(kev, "checkpoint_prev")) {
+                profile_checkpoints_toggle();
+            } else if (hotkeys_eventMatchesAction(kev, "checkpoint_reset")) {
+                profile_checkpoints_reset();
+            } else if (hotkeys_eventMatchesAction(kev, "checkpoint_next")) {
+                profile_checkpoints_dump();
             }
             return 1;
         }

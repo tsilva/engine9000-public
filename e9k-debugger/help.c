@@ -504,8 +504,8 @@ help_showModal(e9ui_context_t *ctx)
     e9ui_text_setFontSize(titleShortcuts, headingSize);
     e9ui_text_setColor(titleShortcuts, headingColor);
 
-    char shortcutKeyBufs[30][64];
-    const char *shortcutKeys[30] = {0};
+    char shortcutKeyBufs[31][64];
+    const char *shortcutKeys[31] = {0};
     const char *shortcutVals[] = { "Help",
                                    "Screenshot to clipboard",
                                    "Amiga <-> Neo Geo",
@@ -529,6 +529,7 @@ help_showModal(e9ui_context_t *ctx)
                                    "Step",
                                    "Next",
                                    "Step inst",
+                                   "Breakpoint add current",
                                    "Frame step back",
                                    "Frame step",
                                    "Frame continue",
@@ -560,6 +561,7 @@ help_showModal(e9ui_context_t *ctx)
         "step",
         "next",
         "step_inst",
+        "breakpoint_add_current",
         "frame_back",
         "frame_step",
         "frame_continue",
@@ -596,6 +598,9 @@ help_showModal(e9ui_context_t *ctx)
         NULL,
         NULL,
         "CTRL+c",
+        NULL,
+        NULL,
+        NULL,
         NULL,
         NULL,
         NULL

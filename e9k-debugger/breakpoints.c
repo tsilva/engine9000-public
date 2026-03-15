@@ -13,6 +13,7 @@
 #include "debugger.h"
 #include "addr2line.h"
 #include "e9ui_scroll.h"
+#include "hotkeys.h"
 #include "strutil.h"
 
 typedef struct breakpoints_record {
@@ -44,8 +45,28 @@ struct breakpoints_list_state {
     int                        last_count;
 };
 
+static e9ui_component_t *breakpoints_btnAddCurrent = NULL;
+static char breakpoints_tipAddCurrent[96];
+
 static void breakpoints_listMarkDirty(breakpoints_list_state_t *st);
 static void breakpoints_listRefreshAndMarkDirty(breakpoints_list_state_t *st);
+
+void
+breakpoints_refreshHotkeyTooltips(void)
+{
+    if (!breakpoints_btnAddCurrent) {
+        return;
+    }
+    char binding[96];
+    binding[0] = '\0';
+    if (hotkeys_formatActionBindingDisplay("breakpoint_add_current", binding, sizeof(binding)) && binding[0]) {
+        snprintf(breakpoints_tipAddCurrent, sizeof(breakpoints_tipAddCurrent), "Add Current - %s", binding);
+    } else {
+        snprintf(breakpoints_tipAddCurrent, sizeof(breakpoints_tipAddCurrent), "Add Current");
+    }
+    breakpoints_tipAddCurrent[sizeof(breakpoints_tipAddCurrent) - 1] = '\0';
+    e9ui_setTooltip(breakpoints_btnAddCurrent, breakpoints_tipAddCurrent);
+}
 
 static void
 breakpoints_setTooltipIfChanged(e9ui_component_t *comp, const char *tooltip)
@@ -1012,8 +1033,9 @@ breakpoints_makeComponent(void)
     e9ui_setDisableVariable(btn_add, machine_getRunningState(debugger.machine), 1);        
     e9ui_button_setMini(btn_add, 1);
     e9ui_button_setIconAsset(btn_add, "assets/icons/break.png");
-    e9ui_setTooltip(btn_add, "Add Current - b");
-    e9ui_button_registerHotkey(btn_add, &e9ui->ctx, SDLK_b, 0, 0);
+    hotkeys_registerButtonActionHotkey(btn_add, &e9ui->ctx, "breakpoint_add_current");
+    breakpoints_btnAddCurrent = btn_add;
+    breakpoints_refreshHotkeyTooltips();
 
     e9ui_flow_add(toolbar, btn_add);
 

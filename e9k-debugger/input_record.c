@@ -17,6 +17,7 @@
 #include "alloc.h"
 #include "debug.h"
 #include "libretro_host.h"
+#include "profile_checkpoints.h"
 
 typedef enum input_record_type {
     INPUT_RECORD_JOYPAD = 1,
@@ -671,29 +672,6 @@ input_record_recordCoreMouseButton(uint64_t frame, int port, unsigned id, int pr
     fflush(input_record_out);
 }
 
-static void
-input_record_dumpCheckpoints(void)
-{
-    e9k_debug_checkpoint_t entries[E9K_CHECKPOINT_COUNT];
-    size_t bytes = libretro_host_debugReadCheckpoints(entries, sizeof(entries));
-    size_t count = bytes / sizeof(entries[0]);
-    if (count > E9K_CHECKPOINT_COUNT) {
-        count = E9K_CHECKPOINT_COUNT;
-    }
-    printf("Profiler checkpoints (avg/min/max):\n");
-    for (size_t i = 0; i < count; ++i) {
-        if (entries[i].count == 0) {
-            continue;
-        }
-        printf("%02zu avg:%llu min:%llu max:%llu\n",
-               i,
-               (unsigned long long)entries[i].average,
-               (unsigned long long)entries[i].minimum,
-               (unsigned long long)entries[i].maximum);
-    }
-    fflush(stdout);
-}
-
 void
 input_record_handleUiKey(unsigned keycode, int pressed)
 {
@@ -701,14 +679,11 @@ input_record_handleUiKey(unsigned keycode, int pressed)
         return;
     }
     if (keycode == (unsigned)SDLK_COMMA) {
-        int enabled = 0;
-        if (libretro_host_debugGetCheckpointEnabled(&enabled)) {
-            libretro_host_debugSetCheckpointEnabled(enabled ? 0 : 1);
-        }
+        profile_checkpoints_toggle();
     } else if (keycode == (unsigned)SDLK_PERIOD) {
-        libretro_host_debugResetCheckpoints();
+        profile_checkpoints_reset();
     } else if (keycode == (unsigned)SDLK_SLASH) {
-        input_record_dumpCheckpoints();
+        profile_checkpoints_dump();
     }
 }
 

@@ -12,3 +12,15 @@
 
 e9ui_component_t *
 profile_checkpoints_makeComponent(void);
+
+void
+profile_checkpoints_toggle(void);
+
+void
+profile_checkpoints_reset(void);
+
+void
+profile_checkpoints_dump(void);
+
+void
+profile_checkpoints_refreshHotkeyTooltips(void);

@@ -15,6 +15,7 @@
 #include "libretro_host.h"
 #include "debugger.h"
 #include "e9ui.h"
+#include "hotkeys.h"
 
 typedef struct profile_checkpoints_state {
     e9k_debug_checkpoint_t entries[E9K_CHECKPOINT_COUNT];
@@ -24,6 +25,13 @@ typedef struct profile_checkpoints_state {
     e9ui_component_t *profileButton;
 } profile_checkpoints_state_t;
 
+static e9ui_component_t *profile_checkpoints_btnProfile = NULL;
+static e9ui_component_t *profile_checkpoints_btnReset = NULL;
+static e9ui_component_t *profile_checkpoints_btnDump = NULL;
+static char profile_checkpoints_tipProfile[96];
+static char profile_checkpoints_tipReset[96];
+static char profile_checkpoints_tipDump[96];
+
 static e9ui_component_t *profile_checkpoints_list_makeComponent(void);
 static void profile_checkpoints_refresh(profile_checkpoints_state_t *st);
 static int  profile_checkpoints_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW);
@@ -32,6 +40,47 @@ static void profile_checkpoints_render(e9ui_component_t *self, e9ui_context_t *c
 static void profile_checkpoints_onToggle(e9ui_context_t *ctx, void *user);
 static void profile_checkpoints_onReset(e9ui_context_t *ctx, void *user);
 static void profile_checkpoints_onDump(e9ui_context_t *ctx, void *user);
+
+static void
+profile_checkpoints_setTooltipForAction(e9ui_component_t *button,
+                                        const char *baseLabel,
+                                        const char *actionId,
+                                        char *out,
+                                        size_t outCap)
+{
+    if (!button || !baseLabel || !out || outCap == 0) {
+        return;
+    }
+    char binding[96];
+    binding[0] = '\0';
+    if (hotkeys_formatActionBindingDisplay(actionId, binding, sizeof(binding)) && binding[0]) {
+        snprintf(out, outCap, "%s - %s", baseLabel, binding);
+    } else {
+        snprintf(out, outCap, "%s", baseLabel);
+    }
+    out[outCap - 1] = '\0';
+    e9ui_setTooltip(button, out);
+}
+
+void
+profile_checkpoints_refreshHotkeyTooltips(void)
+{
+    profile_checkpoints_setTooltipForAction(profile_checkpoints_btnProfile,
+                                            "Profile",
+                                            "checkpoint_prev",
+                                            profile_checkpoints_tipProfile,
+                                            sizeof(profile_checkpoints_tipProfile));
+    profile_checkpoints_setTooltipForAction(profile_checkpoints_btnReset,
+                                            "Reset",
+                                            "checkpoint_reset",
+                                            profile_checkpoints_tipReset,
+                                            sizeof(profile_checkpoints_tipReset));
+    profile_checkpoints_setTooltipForAction(profile_checkpoints_btnDump,
+                                            "Dump",
+                                            "checkpoint_next",
+                                            profile_checkpoints_tipDump,
+                                            sizeof(profile_checkpoints_tipDump));
+}
 
 static void
 profile_checkpoints_refresh(profile_checkpoints_state_t *st)
@@ -182,7 +231,7 @@ profile_checkpoints_makeComponent(void)
 
     e9ui_component_t *btn_profile = e9ui_button_make("Profile", profile_checkpoints_onToggle, st);
     e9ui_button_setMini(btn_profile, 1);
-    e9ui_setTooltip(btn_profile, "Profile - ,");
+    profile_checkpoints_btnProfile = btn_profile;
     st->profileButton = btn_profile;
     if (st->enabled) {
         e9ui_button_setTheme(btn_profile, e9ui_theme_button_preset_profile_active());
@@ -194,13 +243,15 @@ profile_checkpoints_makeComponent(void)
     e9ui_component_t *btn_reset = e9ui_button_make("Reset", profile_checkpoints_onReset, st);
     e9ui_button_setMini(btn_reset, 1);
     e9ui_button_setTheme(btn_reset, e9ui_theme_button_preset_red());
-    e9ui_setTooltip(btn_reset, "Reset - .");
+    profile_checkpoints_btnReset = btn_reset;
     e9ui_flow_add(toolbar, btn_reset);
 
     e9ui_component_t *btn_dump = e9ui_button_make("Dump", profile_checkpoints_onDump, st);
     e9ui_button_setMini(btn_dump, 1);
-    e9ui_setTooltip(btn_dump, "Dump - /");
+    profile_checkpoints_btnDump = btn_dump;
     e9ui_flow_add(toolbar, btn_dump);
+
+    profile_checkpoints_refreshHotkeyTooltips();
 
     e9ui_component_t *stack = e9ui_stack_makeVertical();
     e9ui_stack_addFixed(stack, toolbar);
@@ -237,48 +288,60 @@ static void
 profile_checkpoints_onToggle(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
-    profile_checkpoints_state_t *st = (profile_checkpoints_state_t*)user;
-    if (!st) {
-        return;
-    }
-    int enabled = st->enabled ? 0 : 1;
-    if (libretro_host_debugSetCheckpointEnabled(enabled)) {
-        st->enabled = enabled;
-    }
+    (void)user;
+    profile_checkpoints_toggle();
 }
 
 static void
 profile_checkpoints_onReset(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
-    profile_checkpoints_state_t *st = (profile_checkpoints_state_t*)user;
-    if (!st) {
-        return;
-    }
-    if (libretro_host_debugResetCheckpoints()) {
-        profile_checkpoints_refresh(st);
-    }
+    (void)user;
+    profile_checkpoints_reset();
 }
 
 static void
 profile_checkpoints_onDump(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
-    profile_checkpoints_state_t *st = (profile_checkpoints_state_t*)user;
-    if (!st) {
-        return;
+    (void)user;
+    profile_checkpoints_dump();
+}
+
+void
+profile_checkpoints_toggle(void)
+{
+    int enabled = 0;
+    libretro_host_debugGetCheckpointEnabled(&enabled);
+    libretro_host_debugSetCheckpointEnabled(enabled ? 0 : 1);
+}
+
+void
+profile_checkpoints_reset(void)
+{
+    libretro_host_debugResetCheckpoints();
+}
+
+void
+profile_checkpoints_dump(void)
+{
+    e9k_debug_checkpoint_t entries[E9K_CHECKPOINT_COUNT];
+    size_t entryCount = 0;
+    size_t bytes = libretro_host_debugReadCheckpoints(entries, sizeof(entries));
+    entryCount = bytes / sizeof(entries[0]);
+    if (entryCount > E9K_CHECKPOINT_COUNT) {
+        entryCount = E9K_CHECKPOINT_COUNT;
     }
-    profile_checkpoints_refresh(st);
     printf("Profiler checkpoints (avg/min/max):\n");
-    for (size_t i = 0; i < st->entryCount; ++i) {
-        if (st->entries[i].count == 0) {
+    for (size_t i = 0; i < entryCount; ++i) {
+        if (entries[i].count == 0) {
             continue;
         }
         printf("%02zu avg:%llu min:%llu max:%llu\n",
                i,
-               (unsigned long long)st->entries[i].average,
-               (unsigned long long)st->entries[i].minimum,
-               (unsigned long long)st->entries[i].maximum);
+               (unsigned long long)entries[i].average,
+               (unsigned long long)entries[i].minimum,
+               (unsigned long long)entries[i].maximum);
     }
     fflush(stdout);
 }

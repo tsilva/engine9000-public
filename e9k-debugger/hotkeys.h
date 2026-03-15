@@ -34,6 +34,9 @@ int
 hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev);
 
 int
+hotkeys_eventMatchesAction(const SDL_KeyboardEvent *kev, const char *actionId);
+
+int
 hotkeys_formatActionBindingDisplay(const char *actionId, char *out, size_t cap);
 
 void

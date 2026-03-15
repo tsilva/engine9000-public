@@ -28,4 +28,5 @@ breakpoints_unregisterListState(breakpoints_list_state_t *state);
 void
 breakpoints_resolveLocation(machine_breakpoint_t *bp);
 
-
+void
+breakpoints_refreshHotkeyTooltips(void);

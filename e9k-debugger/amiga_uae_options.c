@@ -303,6 +303,20 @@ amiga_uaeHdfGuessSurfaces(const char *path)
 }
 
 static int
+amiga_uaePathIsDirectory(const char *path)
+{
+    struct stat st;
+
+    if (!path || !*path) {
+        return 0;
+    }
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+static int
 amiga_uaeParseKeyValue(const char *line, char *outKey, size_t keyCap, char *outValue, size_t valueCap)
 {
     if (!line || !outKey || keyCap == 0 || !outValue || valueCap == 0) {
@@ -506,9 +520,15 @@ amiga_uaeLoadUaeOptions(const char *uaePath)
         if (strcmp(key, "hardfile2") == 0) {
             char hdf[PATH_MAX];
             if (amiga_uaeParseHardfile2Dh0Path(value, hdf, sizeof(hdf))) {
-                strncpy(amiga_uae_hd0Hdf, hdf, sizeof(amiga_uae_hd0Hdf) - 1);
-                amiga_uae_hd0Hdf[sizeof(amiga_uae_hd0Hdf) - 1] = '\0';
-                amiga_uae_hd0Folder[0] = '\0';
+                if (amiga_uaePathIsDirectory(hdf)) {
+                    strncpy(amiga_uae_hd0Folder, hdf, sizeof(amiga_uae_hd0Folder) - 1);
+                    amiga_uae_hd0Folder[sizeof(amiga_uae_hd0Folder) - 1] = '\0';
+                    amiga_uae_hd0Hdf[0] = '\0';
+                } else {
+                    strncpy(amiga_uae_hd0Hdf, hdf, sizeof(amiga_uae_hd0Hdf) - 1);
+                    amiga_uae_hd0Hdf[sizeof(amiga_uae_hd0Hdf) - 1] = '\0';
+                    amiga_uae_hd0Folder[0] = '\0';
+                }
             }
             continue;
         }
