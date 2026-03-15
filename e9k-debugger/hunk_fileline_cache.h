@@ -13,5 +13,9 @@
 int
 hunk_fileline_cache_resolveFileLine(const char *elfPath, const char *filePath, int lineNo, uint32_t *outAddr);
 
+int
+hunk_fileline_cache_resolveFileLineAll(const char *elfPath, const char *filePath, int lineNo,
+                                       uint32_t **outAddrs, int *outCount);
+
 void
 hunk_fileline_cache_clear(void);

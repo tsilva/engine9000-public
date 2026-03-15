@@ -2533,14 +2533,218 @@ source_pane_refreshSourceFiles(e9ui_component_t *comp, source_pane_state_t *st)
 }
 
 static int
+source_pane_resolveFileLineAll(const char *elf, const char *file, int line_no,
+                               uint32_t **out_addrs, int *out_count);
+
+typedef struct source_pane_fileline_cache_entry {
+    char *path;
+    int line;
+    uint32_t addr;
+} source_pane_fileline_cache_entry_t;
+
+typedef struct source_pane_fileline_cache_state {
+    source_pane_fileline_cache_entry_t *entries;
+    int entryCount;
+    int entryCap;
+    int cacheReady;
+    char elfPath[PATH_MAX];
+    char toolchainPrefix[PATH_MAX];
+    char sourceDir[PATH_MAX];
+} source_pane_fileline_cache_state_t;
+
+static source_pane_fileline_cache_state_t source_pane_fileline_cache_state;
+
+static int
 source_pane_resolveFileLine(const char *elf, const char *file, int line_no, uint32_t *out_addr)
 {
-    if (!elf || !*elf || !debugger.elfValid || !file || !*file || line_no <= 0 || !out_addr) {
+    uint32_t *addrs = NULL;
+    int count = 0;
+
+    if (out_addr) {
+        *out_addr = 0;
+    }
+    if (!source_pane_resolveFileLineAll(elf, file, line_no, &addrs, &count)) {
         return 0;
     }
-    if (debugger_toolchainUsesHunkAddr2line()) {
-        return hunk_fileline_cache_resolveFileLine(elf, file, line_no, out_addr);
+
+    *out_addr = addrs[0];
+    alloc_free(addrs);
+    return 1;
+}
+
+static void
+source_pane_fileline_cache_clear(void)
+{
+    for (int i = 0; i < source_pane_fileline_cache_state.entryCount; ++i) {
+        alloc_free(source_pane_fileline_cache_state.entries[i].path);
+        source_pane_fileline_cache_state.entries[i].path = NULL;
     }
+    alloc_free(source_pane_fileline_cache_state.entries);
+    source_pane_fileline_cache_state.entries = NULL;
+    source_pane_fileline_cache_state.entryCount = 0;
+    source_pane_fileline_cache_state.entryCap = 0;
+    source_pane_fileline_cache_state.cacheReady = 0;
+    source_pane_fileline_cache_state.elfPath[0] = '\0';
+    source_pane_fileline_cache_state.toolchainPrefix[0] = '\0';
+    source_pane_fileline_cache_state.sourceDir[0] = '\0';
+}
+
+static int
+source_pane_fileline_cache_ensureCapacity(int minCap)
+{
+    if (source_pane_fileline_cache_state.entryCap >= minCap) {
+        return 1;
+    }
+
+    int nextCap = source_pane_fileline_cache_state.entryCap > 0 ? source_pane_fileline_cache_state.entryCap : 1024;
+    while (nextCap < minCap) {
+        nextCap *= 2;
+    }
+
+    source_pane_fileline_cache_entry_t *nextEntries =
+        (source_pane_fileline_cache_entry_t *)alloc_realloc(source_pane_fileline_cache_state.entries,
+                                                            sizeof(*nextEntries) * (size_t)nextCap);
+    if (!nextEntries) {
+        return 0;
+    }
+    for (int i = source_pane_fileline_cache_state.entryCap; i < nextCap; ++i) {
+        nextEntries[i].path = NULL;
+        nextEntries[i].line = 0;
+        nextEntries[i].addr = 0;
+    }
+
+    source_pane_fileline_cache_state.entries = nextEntries;
+    source_pane_fileline_cache_state.entryCap = nextCap;
+    return 1;
+}
+
+static int
+source_pane_fileline_cache_addEntry(const char *path, int line, uint32_t addr)
+{
+    if (!path || !path[0] || line <= 0) {
+        return 0;
+    }
+
+    char resolved[PATH_MAX];
+    source_pane_resolveSourcePath(path, resolved, sizeof(resolved));
+    if (!resolved[0]) {
+        return 0;
+    }
+
+    for (int i = 0; i < source_pane_fileline_cache_state.entryCount; ++i) {
+        source_pane_fileline_cache_entry_t *entry = &source_pane_fileline_cache_state.entries[i];
+        if (entry->line != line) {
+            continue;
+        }
+        if (entry->addr != addr) {
+            continue;
+        }
+        if (!source_pane_fileMatches(entry->path, resolved)) {
+            continue;
+        }
+        return 1;
+    }
+
+    if (!source_pane_fileline_cache_ensureCapacity(source_pane_fileline_cache_state.entryCount + 1)) {
+        return 0;
+    }
+
+    char *pathDup = alloc_strdup(resolved);
+    if (!pathDup) {
+        return 0;
+    }
+
+    source_pane_fileline_cache_entry_t *entry =
+        &source_pane_fileline_cache_state.entries[source_pane_fileline_cache_state.entryCount++];
+    entry->path = pathDup;
+    entry->line = line;
+    entry->addr = addr;
+    return 1;
+}
+
+static machine_breakpoint_t *
+source_pane_findBreakpointForLine(const char *path, int line,
+                                  const machine_breakpoint_t *bps, int count)
+{
+    if (!path || line <= 0) {
+        return NULL;
+    }
+    for (int i = 0; i < count; ++i) {
+        machine_breakpoint_t *bp = (machine_breakpoint_t*)&bps[i];
+        if (bp->line == line && source_pane_fileMatches(bp->file, path)) {
+            return bp;
+        }
+    }
+    return NULL;
+}
+
+static int
+source_pane_removeBreakpointsForLine(const char *path, int line,
+                                     const machine_breakpoint_t *bps, int count)
+{
+    if (!path || line <= 0 || !bps || count <= 0) {
+        return 0;
+    }
+
+    int matchCount = 0;
+    for (int i = 0; i < count; ++i) {
+        const machine_breakpoint_t *bp = &bps[i];
+        if (bp->line == line && source_pane_fileMatches(bp->file, path)) {
+            matchCount++;
+        }
+    }
+    if (matchCount <= 0) {
+        return 0;
+    }
+
+    uint32_t *addrs = (uint32_t *)alloc_alloc(sizeof(*addrs) * (size_t)matchCount);
+    if (!addrs) {
+        return 0;
+    }
+
+    int writeIndex = 0;
+    for (int i = 0; i < count; ++i) {
+        const machine_breakpoint_t *bp = &bps[i];
+        if (bp->line == line && source_pane_fileMatches(bp->file, path)) {
+            addrs[writeIndex++] = (uint32_t)bp->addr;
+        }
+    }
+
+    int removedAny = 0;
+    for (int i = 0; i < writeIndex; ++i) {
+        uint32_t addr = addrs[i];
+        if (machine_removeBreakpointByAddr(&debugger.machine, addr)) {
+            libretro_host_debugRemoveBreakpoint(addr);
+            removedAny = 1;
+        }
+    }
+
+    alloc_free(addrs);
+    return removedAny;
+}
+
+static int
+source_pane_compareBreakpointAddr(const void *a, const void *b)
+{
+    const uint32_t av = *(const uint32_t *)a;
+    const uint32_t bv = *(const uint32_t *)b;
+
+    if (av < bv) {
+        return -1;
+    }
+    if (av > bv) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+source_pane_fileline_cache_buildFromDisassembly(const char *elf)
+{
+    if (!elf || !*elf) {
+        return 0;
+    }
+
     char cmd[PATH_MAX * 2];
     char objdump[PATH_MAX];
     if (!debugger_toolchainBuildBinary(objdump, sizeof(objdump), "objdump")) {
@@ -2560,75 +2764,237 @@ source_pane_resolveFileLine(const char *elf, const char *file, int line_no, uint
         debug_error("break: failed to run objdump");
         return 0;
     }
-    char line[1024];
-    int want_addr = 0;
-    while (fgets(line, sizeof(line), fp)) {
-        char *nl = strchr(line, '\n');
+
+    char lineBuf[1024];
+    int wantAddr = 0;
+    int currentLine = 0;
+    char currentFile[PATH_MAX];
+    currentFile[0] = '\0';
+    while (fgets(lineBuf, sizeof(lineBuf), fp)) {
+        char *nl = strchr(lineBuf, '\n');
         if (nl) {
             *nl = '\0';
         }
-        if (line[0] == '\0') {
-            want_addr = 0;
+        if (lineBuf[0] == '\0') {
+            wantAddr = 0;
             continue;
         }
-        if (line[0] != ' ') {
-            const char *colon = strrchr(line, ':');
+        if (lineBuf[0] != ' ') {
+            const char *colon = strrchr(lineBuf, ':');
             if (!colon || !colon[1]) {
-                want_addr = 0;
+                wantAddr = 0;
+                currentLine = 0;
+                currentFile[0] = '\0';
                 continue;
             }
-            int got_line = atoi(colon + 1);
-            if (got_line != line_no) {
-                want_addr = 0;
+
+            int gotLine = atoi(colon + 1);
+            if (gotLine <= 0) {
+                wantAddr = 0;
+                currentLine = 0;
+                currentFile[0] = '\0';
                 continue;
             }
-            char file_buf[PATH_MAX];
-            size_t len = (size_t)(colon - line);
-            if (len >= sizeof(file_buf)) {
-                len = sizeof(file_buf) - 1;
+
+            size_t len = (size_t)(colon - lineBuf);
+            if (len >= sizeof(currentFile)) {
+                len = sizeof(currentFile) - 1;
             }
-            memcpy(file_buf, line, len);
-            file_buf[len] = '\0';
-            want_addr = source_pane_fileMatches(file_buf, file);
+            memcpy(currentFile, lineBuf, len);
+            currentFile[len] = '\0';
+            currentLine = gotLine;
+            wantAddr = 1;
             continue;
         }
-        if (want_addr) {
-            char addr_buf[32];
-            const char *p = line;
-            while (*p && isspace((unsigned char)*p)) {
-                p++;
-            }
-            size_t i = 0;
-            while (*p && !isspace((unsigned char)*p) && i + 1 < sizeof(addr_buf)) {
-                addr_buf[i++] = *p++;
-            }
-            addr_buf[i] = '\0';
-            uint32_t addr = 0;
-            if (source_pane_parseHex(addr_buf, &addr)) {
-                *out_addr = addr;
-                pclose(fp);
-                return 1;
-            }
+
+        if (!wantAddr || !currentFile[0] || currentLine <= 0) {
+            continue;
+        }
+
+        char addrBuf[32];
+        const char *p = lineBuf;
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        size_t i = 0;
+        while (*p && !isspace((unsigned char)*p) && i + 1 < sizeof(addrBuf)) {
+            addrBuf[i++] = *p++;
+        }
+        addrBuf[i] = '\0';
+
+        uint32_t addr = 0;
+        if (!source_pane_parseHex(addrBuf, &addr)) {
+            continue;
+        }
+        if (!source_pane_fileline_cache_addEntry(currentFile, currentLine, addr)) {
+            pclose(fp);
+            return 0;
         }
     }
+
     pclose(fp);
-    return 0;
+    return 1;
 }
 
-static machine_breakpoint_t *
-source_pane_findBreakpointForLine(const char *path, int line,
-                                  const machine_breakpoint_t *bps, int count)
+static int
+source_pane_fileline_cache_findAll(const char *file, int line_no, uint32_t **out_addrs, int *out_count)
 {
-    if (!path || line <= 0) {
-        return NULL;
+    if (out_addrs) {
+        *out_addrs = NULL;
     }
-    for (int i = 0; i < count; ++i) {
-        machine_breakpoint_t *bp = (machine_breakpoint_t*)&bps[i];
-        if (bp->line == line && source_pane_fileMatches(bp->file, path)) {
-            return bp;
+    if (out_count) {
+        *out_count = 0;
+    }
+    if (!file || !*file || line_no <= 0 || !out_addrs || !out_count) {
+        return 0;
+    }
+
+    int matchCount = 0;
+    for (int i = 0; i < source_pane_fileline_cache_state.entryCount; ++i) {
+        const source_pane_fileline_cache_entry_t *entry = &source_pane_fileline_cache_state.entries[i];
+        if (entry->line != line_no) {
+            continue;
         }
+        if (!source_pane_fileMatches(entry->path, file)) {
+            continue;
+        }
+        matchCount++;
     }
-    return NULL;
+    if (matchCount <= 0) {
+        return 0;
+    }
+
+    uint32_t *matches = (uint32_t *)alloc_alloc(sizeof(*matches) * (size_t)matchCount);
+    if (!matches) {
+        return 0;
+    }
+
+    int writeIndex = 0;
+    for (int i = 0; i < source_pane_fileline_cache_state.entryCount; ++i) {
+        const source_pane_fileline_cache_entry_t *entry = &source_pane_fileline_cache_state.entries[i];
+        if (entry->line != line_no) {
+            continue;
+        }
+        if (!source_pane_fileMatches(entry->path, file)) {
+            continue;
+        }
+        matches[writeIndex++] = entry->addr;
+    }
+
+    qsort(matches, (size_t)writeIndex, sizeof(*matches), source_pane_compareBreakpointAddr);
+
+    int uniqueCount = 0;
+    for (int i = 0; i < writeIndex; ++i) {
+        if (uniqueCount > 0 && matches[uniqueCount - 1] == matches[i]) {
+            continue;
+        }
+        matches[uniqueCount++] = matches[i];
+    }
+    if (uniqueCount <= 0) {
+        alloc_free(matches);
+        return 0;
+    }
+
+    *out_addrs = matches;
+    *out_count = uniqueCount;
+    return 1;
+}
+
+static int
+source_pane_fileline_cache_ensure(const char *elf)
+{
+    const char *toolchain = debugger.libretro.toolchainPrefix;
+    const char *sourceDir = debugger.libretro.sourceDir;
+
+    if (source_pane_fileline_cache_state.cacheReady &&
+        strcmp(source_pane_fileline_cache_state.elfPath, elf) == 0 &&
+        strcmp(source_pane_fileline_cache_state.toolchainPrefix, toolchain) == 0 &&
+        strcmp(source_pane_fileline_cache_state.sourceDir, sourceDir) == 0) {
+        return 1;
+    }
+
+    source_pane_fileline_cache_clear();
+    if (!source_pane_fileline_cache_buildFromDisassembly(elf)) {
+        return 0;
+    }
+
+    debugger_copyPath(source_pane_fileline_cache_state.elfPath,
+                      sizeof(source_pane_fileline_cache_state.elfPath),
+                      elf);
+    debugger_copyPath(source_pane_fileline_cache_state.toolchainPrefix,
+                      sizeof(source_pane_fileline_cache_state.toolchainPrefix),
+                      toolchain);
+    debugger_copyPath(source_pane_fileline_cache_state.sourceDir,
+                      sizeof(source_pane_fileline_cache_state.sourceDir),
+                      sourceDir);
+    source_pane_fileline_cache_state.cacheReady = 1;
+    return 1;
+}
+
+static int
+source_pane_resolveFileLineAll(const char *elf, const char *file, int line_no,
+                               uint32_t **out_addrs, int *out_count)
+{
+    if (out_addrs) {
+        *out_addrs = NULL;
+    }
+    if (out_count) {
+        *out_count = 0;
+    }
+    if (!elf || !*elf || !debugger.elfValid || !file || !*file || line_no <= 0 || !out_addrs || !out_count) {
+        return 0;
+    }
+    if (debugger_toolchainUsesHunkAddr2line()) {
+        return hunk_fileline_cache_resolveFileLineAll(elf, file, line_no, out_addrs, out_count);
+    }
+
+    if (!source_pane_fileline_cache_ensure(elf)) {
+        return 0;
+    }
+    return source_pane_fileline_cache_findAll(file, line_no, out_addrs, out_count);
+}
+
+static int
+source_pane_addBreakpointsForLine(const char *path, int lineNo)
+{
+    if (!path || lineNo <= 0) {
+        return 0;
+    }
+
+    uint32_t *resolvedAddrs = NULL;
+    int resolvedCount = 0;
+    if (!source_pane_resolveFileLineAll(debugger.libretro.exePath,
+                                        path,
+                                        lineNo,
+                                        &resolvedAddrs,
+                                        &resolvedCount)) {
+        return 0;
+    }
+
+    int changed = 0;
+    for (int i = 0; i < resolvedCount; ++i) {
+        uint32_t runtimeAddr = resolvedAddrs[i];
+        (void)base_map_debugToRuntime(BASE_MAP_SECTION_TEXT, runtimeAddr, &runtimeAddr);
+
+        machine_breakpoint_t *bp = machine_findBreakpointByAddr(&debugger.machine, runtimeAddr);
+        if (!bp) {
+            bp = machine_addBreakpoint(&debugger.machine, runtimeAddr, 1);
+            if (bp) {
+                libretro_host_debugAddBreakpoint(runtimeAddr);
+            }
+        }
+        if (!bp) {
+            continue;
+        }
+
+        strncpy(bp->file, path, sizeof(bp->file) - 1);
+        bp->file[sizeof(bp->file) - 1] = '\0';
+        bp->line = lineNo;
+        changed = 1;
+    }
+
+    alloc_free(resolvedAddrs);
+    return changed;
 }
 
 
@@ -5578,26 +5944,11 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
                 bps = NULL;
                 bp_count = 0;
             }
-            machine_breakpoint_t *existing = source_pane_findBreakpointForLine(path, lineNo, bps, bp_count);
-            if (existing) {
-                uint32_t addr = (uint32_t)existing->addr;
-                if (machine_removeBreakpointByAddr(&debugger.machine, addr)) {
-                    libretro_host_debugRemoveBreakpoint(addr);
-                    breakpoints_markDirty();
-                }
+            if (source_pane_removeBreakpointsForLine(path, lineNo, bps, bp_count)) {
+                breakpoints_markDirty();
                 return 1;
             }
-            uint32_t addr = 0;
-            if (!source_pane_resolveFileLine(debugger.libretro.exePath, path, lineNo, &addr)) {
-                return 0;
-            }
-            (void)base_map_debugToRuntime(BASE_MAP_SECTION_TEXT, addr, &addr);
-            machine_breakpoint_t *bp = machine_addBreakpoint(&debugger.machine, addr, 1);
-            if (bp) {
-                strncpy(bp->file, path, sizeof(bp->file) - 1);
-                bp->file[sizeof(bp->file) - 1] = '\0';
-                bp->line = lineNo;
-                libretro_host_debugAddBreakpoint(addr);
+            if (source_pane_addBreakpointsForLine(path, lineNo)) {
                 breakpoints_markDirty();
                 return 1;
             }

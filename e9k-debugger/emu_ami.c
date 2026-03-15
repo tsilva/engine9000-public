@@ -122,6 +122,8 @@ typedef struct emu_ami_sprite_vis_cache {
     size_t pixelsCap;
     uint8_t *spriteIds;
     size_t spriteIdsCap;
+    uint32_t normalSpriteMask;
+    uint32_t attachedPairMask;
     int texWidth;
     int texHeight;
     e9k_debug_ami_sprite_vis_point_t *points;
@@ -172,6 +174,9 @@ emu_ami_blitterVisColorFromId(uint32_t blitId);
 #if E9K_HACK_AMI_SPRITE_VIS
 static uint32_t
 emu_ami_spriteVisColorFromIndex(uint32_t spriteIndex);
+
+static uint32_t
+emu_ami_spriteVisAttachedColorFromIndex(uint32_t spriteIndex);
 #endif
 
 static int
@@ -251,6 +256,12 @@ emu_ami_isSpriteVisEnabled(void)
 
     return libretro_host_debugAmiGetSpriteVis(&enabled) && enabled ? 1 : 0;
 }
+
+static int
+emu_ami_hasAttachedSpriteLegend(void)
+{
+    return emu_ami_isSpriteVisEnabled() && emu_ami_spriteVisCache.attachedPairMask != 0u;
+}
 #endif
 
 static int
@@ -263,6 +274,9 @@ emu_ami_getLegendSlotCount(void)
     }
 #if E9K_HACK_AMI_SPRITE_VIS
     if (emu_ami_isSpriteVisEnabled()) {
+        count++;
+    }
+    if (emu_ami_hasAttachedSpriteLegend()) {
         count++;
     }
 #endif
@@ -559,7 +573,11 @@ emu_ami_renderSpriteLegend(e9ui_context_t *ctx, const SDL_Rect *videoDst)
 {
     emu_ami_copper_legend_entry_t entries[8];
     char labels[8][8];
+    emu_ami_copper_legend_entry_t attachedEntries[4];
+    char attachedLabels[4][16];
+    uint32_t attachedPairMask = emu_ami_spriteVisCache.attachedPairMask;
     int slotIndex = emu_ami_isCopperDebugEnabled() ? 1 : 0;
+    size_t attachedCount = 0u;
 
     if (!ctx || !ctx->renderer || !videoDst || !emu_ami_isSpriteVisEnabled()) {
         return;
@@ -570,6 +588,17 @@ emu_ami_renderSpriteLegend(e9ui_context_t *ctx, const SDL_Rect *videoDst)
         entries[i].color = emu_ami_spriteVisColorFromIndex((uint32_t)i) & 0x00ffffffu;
     }
     emu_ami_renderLegend(ctx, videoDst, entries, 8u, slotIndex, emu_ami_getLegendSlotCount());
+    if (!attachedPairMask) {
+        return;
+    }
+    for (int pairIndex = 0; pairIndex < 4; ++pairIndex) {
+        int spriteIndex = pairIndex * 2;
+        snprintf(attachedLabels[attachedCount], sizeof(attachedLabels[attachedCount]), "ATT %d+%d", spriteIndex, spriteIndex + 1);
+        attachedEntries[attachedCount].label = attachedLabels[attachedCount];
+        attachedEntries[attachedCount].color = emu_ami_spriteVisAttachedColorFromIndex((uint32_t)spriteIndex) & 0x00ffffffu;
+        attachedCount++;
+    }
+    emu_ami_renderLegend(ctx, videoDst, attachedEntries, attachedCount, slotIndex + 1, emu_ami_getLegendSlotCount());
 }
 #endif
 
@@ -901,6 +930,20 @@ emu_ami_spriteVisColorFromIndex(uint32_t spriteIndex)
         0x004dffd9u
     };
     uint32_t rgb = palette[spriteIndex & 7u];
+
+    return (uint32_t)(0xb0u << 24) | rgb;
+}
+
+static uint32_t
+emu_ami_spriteVisAttachedColorFromIndex(uint32_t spriteIndex)
+{
+    static const uint32_t palette[] = {
+        0x00f5f5f5u,
+        0x00ff9f1cu,
+        0x002ec4b6u,
+        0x00e71d36u
+    };
+    uint32_t rgb = palette[(spriteIndex >> 1) & 3u];
 
     return (uint32_t)(0xb0u << 24) | rgb;
 }
@@ -2013,6 +2056,8 @@ emu_ami_renderSpriteVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
         emu_ami_spriteVisCache.spriteIdsCap = pixelCount;
     }
 
+    emu_ami_spriteVisCache.normalSpriteMask = 0u;
+    emu_ami_spriteVisCache.attachedPairMask = 0u;
     memset(emu_ami_spriteVisCache.pixels, 0, pixelCount * sizeof(*emu_ami_spriteVisCache.pixels));
     memset(emu_ami_spriteVisCache.spriteIds, 0, pixelCount * sizeof(*emu_ami_spriteVisCache.spriteIds));
     for (size_t i = 0; i < fetchedCount; ++i) {
@@ -2022,9 +2067,18 @@ emu_ami_renderSpriteVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
             continue;
         }
         uint32_t spriteIndex = emu_ami_spriteVisCache.points[i].spriteIndex;
+        int attachedPair =
+            (emu_ami_spriteVisCache.points[i].flags & E9K_DEBUG_AMI_SPRITE_VIS_FLAG_ATTACHED) != 0u ? 1 : 0;
         size_t pixelIndex = (size_t)y * (size_t)srcWidth + (size_t)x;
-        emu_ami_spriteVisCache.pixels[pixelIndex] = emu_ami_spriteVisColorFromIndex(spriteIndex);
-        emu_ami_spriteVisCache.spriteIds[pixelIndex] = (uint8_t)(spriteIndex + 1u);
+        if (attachedPair) {
+            emu_ami_spriteVisCache.attachedPairMask |= 1u << ((spriteIndex >> 1) & 3u);
+            emu_ami_spriteVisCache.pixels[pixelIndex] = emu_ami_spriteVisAttachedColorFromIndex(spriteIndex);
+            emu_ami_spriteVisCache.spriteIds[pixelIndex] = (uint8_t)((spriteIndex + 1u) | 0x10u);
+        } else {
+            emu_ami_spriteVisCache.normalSpriteMask |= 1u << (spriteIndex & 7u);
+            emu_ami_spriteVisCache.pixels[pixelIndex] = emu_ami_spriteVisColorFromIndex(spriteIndex);
+            emu_ami_spriteVisCache.spriteIds[pixelIndex] = (uint8_t)(spriteIndex + 1u);
+        }
     }
 
     SDL_UpdateTexture(emu_ami_spriteVisCache.texture,
@@ -3113,7 +3167,8 @@ emu_ami_findSpriteVisPixelAtPoint(const SDL_Rect *dst,
                                   int mouseX,
                                   int mouseY,
                                   SDL_Rect *outRect,
-                                  uint32_t *outSpriteIndex)
+                                  uint32_t *outSpriteIndex,
+                                  int *outAttachedPair)
 {
     int localX = 0;
     int localY = 0;
@@ -3131,6 +3186,9 @@ emu_ami_findSpriteVisPixelAtPoint(const SDL_Rect *dst,
     }
     if (outSpriteIndex) {
         *outSpriteIndex = 0u;
+    }
+    if (outAttachedPair) {
+        *outAttachedPair = 0;
     }
     if (!dst || dst->w <= 0 || dst->h <= 0 || !emu_ami_isSpriteVisEnabled()) {
         return 0;
@@ -3185,7 +3243,10 @@ emu_ami_findSpriteVisPixelAtPoint(const SDL_Rect *dst,
         outRect->h = y1 - y0;
     }
     if (outSpriteIndex) {
-        *outSpriteIndex = (uint32_t)(spriteId - 1u);
+        *outSpriteIndex = (uint32_t)((spriteId & 0x0fu) - 1u);
+    }
+    if (outAttachedPair) {
+        *outAttachedPair = (spriteId & 0x10u) != 0u ? 1 : 0;
     }
     return 1;
 }
@@ -3197,21 +3258,30 @@ emu_ami_renderSpriteVisTooltipOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
     SDL_Color swatchColor = { 0, 0, 0, 255 };
     uint32_t spriteColor = 0u;
     uint32_t spriteIndex = 0u;
+    int attachedPair = 0;
     char tooltip[64];
 
     if (!ctx || !dst || dst->w <= 0 || dst->h <= 0) {
         return 0;
     }
-    if (!emu_ami_findSpriteVisPixelAtPoint(dst, ctx->mouseX, ctx->mouseY, &hoveredRect, &spriteIndex)) {
+    if (!emu_ami_findSpriteVisPixelAtPoint(dst, ctx->mouseX, ctx->mouseY, &hoveredRect, &spriteIndex, &attachedPair)) {
         return 0;
     }
 
-    spriteColor = emu_ami_spriteVisColorFromIndex(spriteIndex);
+    if (attachedPair) {
+        spriteColor = emu_ami_spriteVisAttachedColorFromIndex(spriteIndex);
+    } else {
+        spriteColor = emu_ami_spriteVisColorFromIndex(spriteIndex);
+    }
     swatchColor.r = (uint8_t)((spriteColor >> 16) & 0xffu);
     swatchColor.g = (uint8_t)((spriteColor >> 8) & 0xffu);
     swatchColor.b = (uint8_t)(spriteColor & 0xffu);
     e9ui_drawFocusRingRect(ctx, hoveredRect, 1);
-    snprintf(tooltip, sizeof(tooltip), "Sprite %u", (unsigned)spriteIndex);
+    if (attachedPair) {
+        snprintf(tooltip, sizeof(tooltip), "Attached %u+%u", (unsigned)spriteIndex, (unsigned)(spriteIndex + 1u));
+    } else {
+        snprintf(tooltip, sizeof(tooltip), "Sprite %u", (unsigned)spriteIndex);
+    }
     emu_ami_renderCopperTooltip(ctx, &hoveredRect, tooltip, 1, swatchColor);
     return 1;
 }

@@ -355,6 +355,8 @@ static uint32_t drawing_blitterVisSrcMinDropLogsFrame = 0;
 
 #if E9K_HACK_AMI_SPRITE_VIS
 #define DRAWING_SPRITE_VIS_NATIVE_LINE_COUNT ((MAXVPOS + MAXVPOS_WRAPLINES) * 2)
+#define DRAWING_SPRITE_VIS_VALUE_MASK 0x0fu
+#define DRAWING_SPRITE_VIS_VALUE_ATTACHED 0x10u
 static uae_u8 drawing_spriteVisNativeSpriteIds[DRAWING_SPRITE_VIS_NATIVE_LINE_COUNT][MAX_PIXELS_PER_LINE];
 static uae_u8 drawing_spriteVisNativeSpriteIdsSnapshot[DRAWING_SPRITE_VIS_NATIVE_LINE_COUNT][MAX_PIXELS_PER_LINE];
 static uint32_t drawing_spriteVisMarkCallsFrame = 0;
@@ -440,7 +442,7 @@ drawing_spriteVisSetNativeLineContext(int nativeLine)
 }
 
 void
-drawing_spriteVisMarkNativePixel(int pixelX, int spriteIndex)
+drawing_spriteVisMarkNativePixel(int pixelX, int spriteIndex, int attachedPair)
 {
 	if (!drawing_spriteVisEnabled) {
 		return;
@@ -470,17 +472,21 @@ drawing_spriteVisMarkNativePixel(int pixelX, int spriteIndex)
 		return;
 	}
 	drawing_spriteVisMarkCallsFrame++;
-	drawing_spriteVisNativeSpriteIds[nativeY][pixelX] = (uae_u8)(spriteIndex + 1);
+	uae_u8 value = (uae_u8)(spriteIndex + 1);
+	if (attachedPair) {
+		value |= DRAWING_SPRITE_VIS_VALUE_ATTACHED;
+	}
+	drawing_spriteVisNativeSpriteIds[nativeY][pixelX] = value;
 }
 
 static void
-drawing_spriteVisMarkNativeRange(int pixelStart, int pixelCount, int spriteIndex)
+drawing_spriteVisMarkNativeRange(int pixelStart, int pixelCount, int spriteIndex, int attachedPair)
 {
 	if (pixelCount <= 0) {
 		return;
 	}
 	for (int pixelX = pixelStart; pixelX < pixelStart + pixelCount; ++pixelX) {
-		drawing_spriteVisMarkNativePixel(pixelX, spriteIndex);
+		drawing_spriteVisMarkNativePixel(pixelX, spriteIndex, attachedPair);
 	}
 }
 
@@ -524,10 +530,13 @@ drawing_spriteVisClearNativeRange(int pixelStart, int pixelCount)
 }
 
 int
-drawing_spriteVisGetNativePixelSpriteId(int pixelY, int pixelX, uae_u32 *spriteIndex)
+drawing_spriteVisGetNativePixelSpriteId(int pixelY, int pixelX, uae_u32 *spriteIndex, int *attachedPair)
 {
 	if (spriteIndex) {
 		*spriteIndex = 0;
+	}
+	if (attachedPair) {
+		*attachedPair = 0;
 	}
 	int nativeWidth = drawing_spriteVisGetNativeWidth();
 	int nativeHeight = drawing_spriteVisGetNativeHeight();
@@ -535,11 +544,15 @@ drawing_spriteVisGetNativePixelSpriteId(int pixelY, int pixelX, uae_u32 *spriteI
 		return 0;
 	}
 	uae_u8 value = drawing_spriteVisNativeSpriteIdsSnapshot[pixelY][pixelX];
-	if (value == 0) {
+	uae_u8 spriteValue = (uae_u8)(value & DRAWING_SPRITE_VIS_VALUE_MASK);
+	if (spriteValue == 0) {
 		return 0;
 	}
 	if (spriteIndex) {
-		*spriteIndex = (uae_u32)(value - 1u);
+		*spriteIndex = (uae_u32)(spriteValue - 1u);
+	}
+	if (attachedPair) {
+		*attachedPair = (value & DRAWING_SPRITE_VIS_VALUE_ATTACHED) ? 1 : 0;
 	}
 	return 1;
 }
@@ -2526,8 +2539,16 @@ static int sprite_shdelay;
 
 #if E9K_HACK_AMI_SPRITE_VIS
 static int
-drawing_spriteVisResolveSpriteSelection(const struct spritepixelsbuf *spb, unsigned int v, int aga, uae_u32 *outCol, int *outSpriteIndex)
+drawing_spriteVisResolveSpriteSelection(const struct spritepixelsbuf *spb,
+	unsigned int v,
+	int aga,
+	uae_u32 *outCol,
+	int *outSpriteIndex,
+	int *outAttachedPair)
 {
+	if (outAttachedPair) {
+		*outAttachedPair = 0;
+	}
 	if (!spb || !outCol || !outSpriteIndex || v == 0) {
 		return 0;
 	}
@@ -2546,6 +2567,9 @@ drawing_spriteVisResolveSpriteSelection(const struct spritepixelsbuf *spb, unsig
 	if ((spb->flags & 1u) && (spb->stdata & (3u << offs))) {
 		*outCol = aga ? (uae_u32)(v + sbasecol[1]) : (uae_u32)(v + 16u);
 		*outSpriteIndex = offs;
+		if (outAttachedPair) {
+			*outAttachedPair = 1;
+		}
 		return 1;
 	}
 
@@ -2596,12 +2620,13 @@ static uae_u8 render_sprites(int pos, int dualpf, uae_u8 apixel, int aga)
 #if E9K_HACK_AMI_SPRITE_VIS
 		uae_u32 col = 0;
 		int spriteIndex = -1;
-		if (drawing_spriteVisResolveSpriteSelection(spb, v, aga, &col, &spriteIndex)) {
+		int attachedPair = 0;
+		if (drawing_spriteVisResolveSpriteSelection(spb, v, aga, &col, &spriteIndex, &attachedPair)) {
 			int pixelCount = 1;
 			if (res_shift > 0) {
 				pixelCount = 1 << res_shift;
 			}
-			drawing_spriteVisMarkNativeRange(screenPos - linetoscr_x_adjust_pixels, pixelCount, spriteIndex);
+			drawing_spriteVisMarkNativeRange(screenPos - linetoscr_x_adjust_pixels, pixelCount, spriteIndex, attachedPair);
 #if SPRITE_DEBUG_HIDE
 			col = 0;
 #endif
@@ -2727,12 +2752,20 @@ static uae_u8 sh_render_sprites(int pos, int dualpf, uae_u8 apixel, int aga)
 
 #if E9K_HACK_AMI_SPRITE_VIS
 static int
-drawing_spriteVisResolveRenderedSpriteIndex(int pos, int dualpf, uae_u8 apixel, int aga, int *outSpriteIndex)
+drawing_spriteVisResolveRenderedSpriteIndex(int pos,
+	int dualpf,
+	uae_u8 apixel,
+	int aga,
+	int *outSpriteIndex,
+	int *outAttachedPair)
 {
 	if (!outSpriteIndex) {
 		return 0;
 	}
 	*outSpriteIndex = -1;
+	if (outAttachedPair) {
+		*outAttachedPair = 0;
+	}
 	if (exthblank || exthblank_force) {
 		return 0;
 	}
@@ -2752,7 +2785,7 @@ drawing_spriteVisResolveRenderedSpriteIndex(int pos, int dualpf, uae_u8 apixel, 
 		return 0;
 	}
 	uae_u32 col = 0;
-	return drawing_spriteVisResolveSpriteSelection(spb, v, aga, &col, outSpriteIndex);
+	return drawing_spriteVisResolveSpriteSelection(spb, v, aga, &col, outSpriteIndex, outAttachedPair);
 }
 #endif
 
@@ -2764,6 +2797,8 @@ static uae_u32 shsprite(int dpix, uae_u32 spix_val, uae_u32 v, int add, int spr)
 #if E9K_HACK_AMI_SPRITE_VIS
 	int spriteIndex1 = -1;
 	int spriteIndex2 = -1;
+	int attachedPair1 = 0;
+	int attachedPair2 = 0;
 #endif
 	if (!spr) {
 		return v;
@@ -2778,8 +2813,8 @@ static uae_u32 shsprite(int dpix, uae_u32 spix_val, uae_u32 v, int add, int spr)
 	sprcol1 = sh_render_sprites(sdpix, bpldualpf, spix_val, 0);
 	sprcol2 = sh_render_sprites(sdpix + add, bpldualpf, spix_val, 0);
 #if E9K_HACK_AMI_SPRITE_VIS
-	(void)drawing_spriteVisResolveRenderedSpriteIndex(sdpix, bpldualpf, spix_val, 0, &spriteIndex1);
-	(void)drawing_spriteVisResolveRenderedSpriteIndex(sdpix + add, bpldualpf, spix_val, 0, &spriteIndex2);
+	(void)drawing_spriteVisResolveRenderedSpriteIndex(sdpix, bpldualpf, spix_val, 0, &spriteIndex1, &attachedPair1);
+	(void)drawing_spriteVisResolveRenderedSpriteIndex(sdpix + add, bpldualpf, spix_val, 0, &spriteIndex2, &attachedPair2);
 #endif
 	off = (sprcol2 & mask) * 4 + (sprcol1 & mask) + 16;
 	if ((dpix & add)) {
@@ -2788,7 +2823,7 @@ static uae_u32 shsprite(int dpix, uae_u32 spix_val, uae_u32 v, int add, int spr)
 		}
 #if E9K_HACK_AMI_SPRITE_VIS
 		if (spriteIndex2 >= 0) {
-			drawing_spriteVisMarkNativePixel(screenPos - linetoscr_x_adjust_pixels, spriteIndex2);
+			drawing_spriteVisMarkNativePixel(screenPos - linetoscr_x_adjust_pixels, spriteIndex2, attachedPair2);
 		}
 #endif
 		scol = (colors_for_drawing.color_regs_ecs[off] & 0x333) << 2;
@@ -2798,7 +2833,7 @@ static uae_u32 shsprite(int dpix, uae_u32 spix_val, uae_u32 v, int add, int spr)
 		}
 #if E9K_HACK_AMI_SPRITE_VIS
 		if (spriteIndex1 >= 0) {
-			drawing_spriteVisMarkNativePixel(screenPos - linetoscr_x_adjust_pixels, spriteIndex1);
+			drawing_spriteVisMarkNativePixel(screenPos - linetoscr_x_adjust_pixels, spriteIndex1, attachedPair1);
 		}
 #endif
 		scol = (colors_for_drawing.color_regs_ecs[off] & 0xccc) << 0;

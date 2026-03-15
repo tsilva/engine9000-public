@@ -1467,13 +1467,15 @@ e9k_debug_ami_sprite_vis_read_points(e9k_debug_ami_sprite_vis_point_t *out, size
 	for (uint32_t y = 0; y < height; ++y) {
 		for (uint32_t x = 0; x < width; ++x) {
 			uae_u32 spriteIndex = 0;
-			if (!drawing_spriteVisGetNativePixelSpriteId((int)y, (int)x, &spriteIndex)) {
+			int attachedPair = 0;
+			if (!drawing_spriteVisGetNativePixelSpriteId((int)y, (int)x, &spriteIndex, &attachedPair)) {
 				continue;
 			}
 			if (out && written < cap) {
 				out[written].x = (uint16_t)x;
 				out[written].y = (uint16_t)y;
 				out[written].spriteIndex = spriteIndex;
+				out[written].flags = attachedPair ? E9K_DEBUG_AMI_SPRITE_VIS_FLAG_ATTACHED : 0u;
 			}
 			written++;
 		}

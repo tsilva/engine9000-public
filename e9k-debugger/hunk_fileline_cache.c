@@ -194,10 +194,9 @@ hunk_fileline_cache_addEntry(const char *path, int line, uint32_t addr)
         if (!hunk_fileline_cache_fileMatches(entry->path, resolved)) {
             continue;
         }
-        if (addr < entry->addr) {
-            entry->addr = addr;
+        if (entry->addr == addr) {
+            return 1;
         }
-        return 1;
     }
     if (!hunk_fileline_cache_ensureCapacity(hunk_fileline_cache_state.entryCount + 1)) {
         return 0;
@@ -596,17 +595,34 @@ hunk_fileline_cache_buildFromDisassembly(const char *elfPath)
 }
 
 static int
-hunk_fileline_cache_find(const char *filePath, int lineNo, uint32_t *outAddr)
+hunk_fileline_cache_compareAddrs(const void *a, const void *b)
 {
-    if (outAddr) {
-        *outAddr = 0;
+    const uint32_t av = *(const uint32_t *)a;
+    const uint32_t bv = *(const uint32_t *)b;
+
+    if (av < bv) {
+        return -1;
     }
-    if (!filePath || !*filePath || lineNo <= 0 || !outAddr) {
+    if (av > bv) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+hunk_fileline_cache_findAll(const char *filePath, int lineNo, uint32_t **outAddrs, int *outCount)
+{
+    if (outAddrs) {
+        *outAddrs = NULL;
+    }
+    if (outCount) {
+        *outCount = 0;
+    }
+    if (!filePath || !*filePath || lineNo <= 0 || !outAddrs || !outCount) {
         return 0;
     }
 
-    int found = 0;
-    uint32_t best = 0;
+    int matchCount = 0;
     for (int i = 0; i < hunk_fileline_cache_state.entryCount; ++i) {
         const hunk_fileline_cache_entry_t *entry = &hunk_fileline_cache_state.entries[i];
         if (entry->line != lineNo) {
@@ -615,15 +631,45 @@ hunk_fileline_cache_find(const char *filePath, int lineNo, uint32_t *outAddr)
         if (!hunk_fileline_cache_fileMatches(entry->path, filePath)) {
             continue;
         }
-        if (!found || entry->addr < best) {
-            best = entry->addr;
-            found = 1;
-        }
+        matchCount++;
     }
-    if (!found) {
+    if (matchCount <= 0) {
         return 0;
     }
-    *outAddr = best;
+
+    uint32_t *matches = (uint32_t *)alloc_alloc(sizeof(*matches) * (size_t)matchCount);
+    if (!matches) {
+        return 0;
+    }
+
+    int writeIndex = 0;
+    for (int i = 0; i < hunk_fileline_cache_state.entryCount; ++i) {
+        const hunk_fileline_cache_entry_t *entry = &hunk_fileline_cache_state.entries[i];
+        if (entry->line != lineNo) {
+            continue;
+        }
+        if (!hunk_fileline_cache_fileMatches(entry->path, filePath)) {
+            continue;
+        }
+        matches[writeIndex++] = entry->addr;
+    }
+
+    qsort(matches, (size_t)writeIndex, sizeof(*matches), hunk_fileline_cache_compareAddrs);
+
+    int uniqueCount = 0;
+    for (int i = 0; i < writeIndex; ++i) {
+        if (uniqueCount > 0 && matches[uniqueCount - 1] == matches[i]) {
+            continue;
+        }
+        matches[uniqueCount++] = matches[i];
+    }
+    if (uniqueCount <= 0) {
+        alloc_free(matches);
+        return 0;
+    }
+
+    *outAddrs = matches;
+    *outCount = uniqueCount;
     return 1;
 }
 
@@ -660,24 +706,47 @@ hunk_fileline_cache_resolveFileLine(const char *elfPath, const char *filePath, i
     if (!elfPath || !*elfPath || !filePath || !*filePath || lineNo <= 0 || !outAddr) {
         return 0;
     }
+    uint32_t *matches = NULL;
+    int matchCount = 0;
+    if (!hunk_fileline_cache_resolveFileLineAll(elfPath, filePath, lineNo, &matches, &matchCount)) {
+        return 0;
+    }
+    *outAddr = matches[0];
+    alloc_free(matches);
+    return 1;
+}
+
+int
+hunk_fileline_cache_resolveFileLineAll(const char *elfPath, const char *filePath, int lineNo,
+                                       uint32_t **outAddrs, int *outCount)
+{
+    if (outAddrs) {
+        *outAddrs = NULL;
+    }
+    if (outCount) {
+        *outCount = 0;
+    }
+    if (!elfPath || !*elfPath || !filePath || !*filePath || lineNo <= 0 || !outAddrs || !outCount) {
+        return 0;
+    }
     if (!hunk_fileline_cache_ensure(elfPath)) {
         return 0;
     }
-    if (hunk_fileline_cache_find(filePath, lineNo, outAddr)) {
+    if (hunk_fileline_cache_findAll(filePath, lineNo, outAddrs, outCount)) {
         return 1;
     }
 
     if (!hunk_fileline_cache_state.disassemblyScanned) {
         hunk_fileline_cache_state.disassemblyScanned = 1;
         (void)hunk_fileline_cache_buildFromDisassembly(elfPath);
-        if (hunk_fileline_cache_find(filePath, lineNo, outAddr)) {
+        if (hunk_fileline_cache_findAll(filePath, lineNo, outAddrs, outCount)) {
             return 1;
         }
     }
     if (!hunk_fileline_cache_state.sectionSweepScanned) {
         hunk_fileline_cache_state.sectionSweepScanned = 1;
         (void)hunk_fileline_cache_buildFromSectionSweep(elfPath);
-        if (hunk_fileline_cache_find(filePath, lineNo, outAddr)) {
+        if (hunk_fileline_cache_findAll(filePath, lineNo, outAddrs, outCount)) {
             return 1;
         }
     }

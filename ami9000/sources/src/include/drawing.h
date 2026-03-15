@@ -361,9 +361,9 @@ extern void drawing_spriteVisClearFrame(void);
 extern void drawing_spriteVisClearAll(void);
 extern void drawing_spriteVisSnapshotFrame(void);
 extern void drawing_spriteVisSetNativeLineContext(int nativeLine);
-extern void drawing_spriteVisMarkNativePixel(int pixelX, int spriteIndex);
+extern void drawing_spriteVisMarkNativePixel(int pixelX, int spriteIndex, int attachedPair);
 extern void drawing_spriteVisClearNativeRange(int pixelStart, int pixelCount);
-extern int drawing_spriteVisGetNativePixelSpriteId(int pixelY, int pixelX, uae_u32 *spriteIndex);
+extern int drawing_spriteVisGetNativePixelSpriteId(int pixelY, int pixelX, uae_u32 *spriteIndex, int *attachedPair);
 #endif
 
 /* Functions in drawing.c.  */
