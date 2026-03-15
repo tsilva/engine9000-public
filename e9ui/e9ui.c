@@ -29,6 +29,7 @@
 #include "debug.h"
 #include "e9ui_text_cache.h"
 #include "e9ui_theme_defaults.h"
+#include "strutil.h"
 
 #ifdef E9UI_ENABLE_GAMEPAD
 #include "debugger.h"
@@ -48,6 +49,7 @@ static int e9ui_controllerRight = 0;
 static int e9ui_controllerUp = 0;
 static int e9ui_controllerDown = 0;
 static const int e9ui_controllerDeadzone = 8000;
+static char e9ui_controllerPreferredGuid[E9UI_GAMEPAD_GUID_CAP];
 #endif
 static uint32_t e9ui_fullscreenHintStart = 0;
 static TTF_Font *e9ui_fullscreenHintFont = NULL;
@@ -880,6 +882,65 @@ e9ui_renderFpsOverlay(e9ui_context_t *ctx, int w, int h)
 
 #ifdef E9UI_ENABLE_GAMEPAD
 static void
+e9ui_controllerNormalizeGuid(const char *guid, char *out, size_t outCap)
+{
+  if (!out || outCap == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!guid || !guid[0]) {
+    return;
+  }
+  if (strcmp(guid, "auto") == 0) {
+    return;
+  }
+  strutil_strlcpy(out, outCap, guid);
+}
+
+static void
+e9ui_controllerGetGuidString(SDL_JoystickGUID guid, char *out, size_t outCap)
+{
+  if (!out || outCap == 0) {
+    return;
+  }
+  out[0] = '\0';
+  char tmp[E9UI_GAMEPAD_GUID_CAP];
+  SDL_JoystickGetGUIDString(guid, tmp, (int)sizeof(tmp));
+  strutil_strlcpy(out, outCap, tmp);
+}
+
+static int
+e9ui_controllerReadGuidForIndex(int index, char *out, size_t outCap)
+{
+  if (!out || outCap == 0 || index < 0 || !SDL_IsGameController(index)) {
+    return 0;
+  }
+  e9ui_controllerGetGuidString(SDL_JoystickGetDeviceGUID(index), out, outCap);
+  return out[0] ? 1 : 0;
+}
+
+static int
+e9ui_controllerReadActiveGuid(char *out, size_t outCap)
+{
+  if (!out || outCap == 0 || !e9ui_controller) {
+    return 0;
+  }
+  SDL_Joystick *joy = SDL_GameControllerGetJoystick(e9ui_controller);
+  if (!joy) {
+    out[0] = '\0';
+    return 0;
+  }
+  e9ui_controllerGetGuidString(SDL_JoystickGetGUID(joy), out, outCap);
+  return out[0] ? 1 : 0;
+}
+
+static int
+e9ui_controllerPreferredGuidSet(void)
+{
+  return e9ui_controllerPreferredGuid[0] ? 1 : 0;
+}
+
+static void
 e9ui_controllerClose(void)
 {
   if (e9ui_controller) {
@@ -917,17 +978,56 @@ e9ui_controllerOpenIndex(int index)
 }
 
 static void
-e9ui_controllerInit(void)
+e9ui_controllerTryOpenPreferred(void)
 {
+  if (e9ui_controller || !e9ui_controllerPreferredGuidSet()) {
+    return;
+  }
   int count = SDL_NumJoysticks();
   for (int i = 0; i < count; ++i) {
-    if (SDL_IsGameController(i)) {
-      e9ui_controllerOpenIndex(i);
-      if (e9ui_controller) {
-        break;
-      }
+    char guid[E9UI_GAMEPAD_GUID_CAP];
+    if (!e9ui_controllerReadGuidForIndex(i, guid, sizeof(guid))) {
+      continue;
+    }
+    if (strcmp(guid, e9ui_controllerPreferredGuid) != 0) {
+      continue;
+    }
+    e9ui_controllerOpenIndex(i);
+    if (e9ui_controller) {
+      return;
     }
   }
+}
+
+static void
+e9ui_controllerOpenPreferredOrAuto(void)
+{
+  if (e9ui_controller) {
+    return;
+  }
+  if (e9ui_controllerPreferredGuidSet()) {
+    e9ui_controllerTryOpenPreferred();
+    return;
+  }
+  int count = SDL_NumJoysticks();
+  for (int i = 0; i < count; ++i) {
+    if (!SDL_IsGameController(i)) {
+      continue;
+    }
+    e9ui_controllerOpenIndex(i);
+    if (e9ui_controller) {
+      return;
+    }
+  }
+}
+
+static void
+e9ui_controllerInit(void)
+{
+  e9ui_controllerNormalizeGuid(debugger.preferredControllerGuid,
+                               e9ui_controllerPreferredGuid,
+                               sizeof(e9ui_controllerPreferredGuid));
+  e9ui_controllerOpenPreferredOrAuto();
 }
 
 static int
@@ -970,6 +1070,77 @@ e9ui_controllerHandleAxis(SDL_GameControllerAxis axis, int value)
   }
 }
 #endif
+
+size_t
+e9ui_gamepadReadAvailable(e9ui_gamepad_info_t *out, size_t cap)
+{
+#ifdef E9UI_ENABLE_GAMEPAD
+  size_t count = 0;
+  int total = SDL_NumJoysticks();
+  for (int i = 0; i < total; ++i) {
+    if (!SDL_IsGameController(i)) {
+      continue;
+    }
+    if (out && count < cap) {
+      e9ui_gamepad_info_t *dst = &out[count];
+      memset(dst, 0, sizeof(*dst));
+      e9ui_controllerReadGuidForIndex(i, dst->guid, sizeof(dst->guid));
+      const char *name = SDL_GameControllerNameForIndex(i);
+      strutil_strlcpy(dst->name, sizeof(dst->name), name ? name : dst->guid);
+    }
+    count++;
+  }
+  return count;
+#else
+  (void)out;
+  (void)cap;
+  return 0;
+#endif
+}
+
+const char *
+e9ui_gamepadGetPreferredGuid(void)
+{
+#ifdef E9UI_ENABLE_GAMEPAD
+  return e9ui_controllerPreferredGuid[0] ? e9ui_controllerPreferredGuid : NULL;
+#else
+  return NULL;
+#endif
+}
+
+void
+e9ui_gamepadSetPreferredGuid(const char *guid)
+{
+#ifdef E9UI_ENABLE_GAMEPAD
+  char normalized[E9UI_GAMEPAD_GUID_CAP];
+  e9ui_controllerNormalizeGuid(guid, normalized, sizeof(normalized));
+  if (strcmp(normalized, e9ui_controllerPreferredGuid) == 0) {
+    if (!e9ui_controller) {
+      e9ui_controllerOpenPreferredOrAuto();
+    }
+    return;
+  }
+
+  strutil_strlcpy(e9ui_controllerPreferredGuid, sizeof(e9ui_controllerPreferredGuid), normalized);
+
+  char activeGuid[E9UI_GAMEPAD_GUID_CAP];
+  int keepActive = 0;
+  if (e9ui_controllerReadActiveGuid(activeGuid, sizeof(activeGuid))) {
+    if (e9ui_controllerPreferredGuidSet() &&
+        strcmp(activeGuid, e9ui_controllerPreferredGuid) == 0) {
+      keepActive = 1;
+    }
+  }
+  if (!keepActive && e9ui_controller) {
+    e9ui_controllerClose();
+  }
+  if (!e9ui_controller) {
+    e9ui_controllerOpenPreferredOrAuto();
+  }
+#else
+  (void)guid;
+#endif
+}
 
 
 static void    
@@ -2586,7 +2757,7 @@ e9ui_processEvents(void)
 #ifdef E9UI_ENABLE_GAMEPAD
         else if (ev.type == SDL_CONTROLLERDEVICEADDED) {
             if (!e9ui_controller) {
-                e9ui_controllerOpenIndex(ev.cdevice.which);
+                e9ui_controllerOpenPreferredOrAuto();
             }
             continue;
         }

@@ -88,6 +88,7 @@ typedef struct e9k_debugger {
     LineBuf console;
     int     consoleScrollLines;
     char    argv0[PATH_MAX];
+    char    preferredControllerGuid[64];
     e9k_system_config_t config;
     e9k_system_config_t cliConfig;
     e9k_system_config_t settingsEdit;

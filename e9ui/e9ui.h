@@ -81,6 +81,14 @@ typedef struct e9k_hotkey_registry {
     int next_id;
 } e9k_hotkey_registry_t;
 
+#define E9UI_GAMEPAD_GUID_CAP 64
+#define E9UI_GAMEPAD_NAME_CAP 256
+
+typedef struct e9ui_gamepad_info {
+    char guid[E9UI_GAMEPAD_GUID_CAP];
+    char name[E9UI_GAMEPAD_NAME_CAP];
+} e9ui_gamepad_info_t;
+
 typedef void (*e9ui_defer_fn_t)(e9ui_context_t *ctx, void *user);
 
 typedef struct e9ui_defer_entry {
@@ -206,6 +214,15 @@ e9ui_renderFrameNoLayoutNoPresentNoClear(void);
 
 int
 e9ui_processEvents(void);
+
+size_t
+e9ui_gamepadReadAvailable(e9ui_gamepad_info_t *out, size_t cap);
+
+const char *
+e9ui_gamepadGetPreferredGuid(void);
+
+void
+e9ui_gamepadSetPreferredGuid(const char *guid);
 
 int
 e9ui_defer(e9ui_context_t *ctx, e9ui_defer_fn_t fn, void *user);

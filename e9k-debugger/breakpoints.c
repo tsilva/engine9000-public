@@ -50,6 +50,7 @@ static char breakpoints_tipAddCurrent[96];
 
 static void breakpoints_listMarkDirty(breakpoints_list_state_t *st);
 static void breakpoints_listRefreshAndMarkDirty(breakpoints_list_state_t *st);
+static void breakpoints_componentDtor(e9ui_component_t *self, e9ui_context_t *ctx);
 
 void
 breakpoints_refreshHotkeyTooltips(void)
@@ -1015,6 +1016,14 @@ breakpoints_makeList(void)
     return c;
 }
 
+static void
+breakpoints_componentDtor(e9ui_component_t *self, e9ui_context_t *ctx)
+{
+    (void)self;
+    (void)ctx;
+    breakpoints_btnAddCurrent = NULL;
+}
+
 
 e9ui_component_t *
 breakpoints_makeComponent(void)
@@ -1061,6 +1070,7 @@ breakpoints_makeComponent(void)
     } else if (list) {
         e9ui_stack_addFlex(stack, list);
     }
+    stack->dtor = breakpoints_componentDtor;
 
     return stack;
 }

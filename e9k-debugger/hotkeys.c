@@ -33,6 +33,7 @@
 #include "source_pane.h"
 #include "hex_convert.h"
 #include "emu_ami.h"
+#include "strutil.h"
 
 static int hotkeys_enabled = 1;
 static e9ui_component_t *hotkeys_configModal = NULL;
@@ -71,11 +72,17 @@ struct hotkeys_config_modal_state
     e9ui_component_t *container;
     e9ui_component_t *scroll;
     e9ui_component_t *stack;
+    e9ui_component_t *controllerSelect;
     e9ui_component_t *btnSave;
     e9ui_component_t *btnDefaults;
     e9ui_component_t *keyCaptureReturnFocus;
     hotkeys_config_entry_t *entries;
     size_t entryCount;
+    e9ui_select_option_t *controllerOptions;
+    char **controllerOptionValues;
+    char **controllerOptionLabels;
+    int controllerOptionCount;
+    char pendingControllerGuid[E9UI_GAMEPAD_GUID_CAP];
     hotkeys_config_entry_t *capturingEntry;
     SDL_Keymod pendingMods;
     SDL_Keycode pendingModifierKey;
@@ -822,6 +829,164 @@ hotkeys_configSetSavePending(hotkeys_config_modal_state_t *st)
     }
 }
 
+static void
+hotkeys_configFreeControllerOptions(hotkeys_config_modal_state_t *st)
+{
+    if (!st) {
+        return;
+    }
+    if (st->controllerOptionValues) {
+        for (int i = 0; i < st->controllerOptionCount; ++i) {
+            alloc_free(st->controllerOptionValues[i]);
+        }
+        alloc_free(st->controllerOptionValues);
+        st->controllerOptionValues = NULL;
+    }
+    if (st->controllerOptionLabels) {
+        for (int i = 0; i < st->controllerOptionCount; ++i) {
+            alloc_free(st->controllerOptionLabels[i]);
+        }
+        alloc_free(st->controllerOptionLabels);
+        st->controllerOptionLabels = NULL;
+    }
+    if (st->controllerOptions) {
+        alloc_free(st->controllerOptions);
+        st->controllerOptions = NULL;
+    }
+    st->controllerOptionCount = 0;
+}
+
+static int
+hotkeys_configSetControllerOption(hotkeys_config_modal_state_t *st,
+                                  int index,
+                                  const char *value,
+                                  const char *label)
+{
+    if (!st || !st->controllerOptions || !st->controllerOptionValues || !st->controllerOptionLabels) {
+        return 0;
+    }
+    if (index < 0 || index >= st->controllerOptionCount) {
+        return 0;
+    }
+    st->controllerOptionValues[index] = alloc_strdup(value ? value : "");
+    st->controllerOptionLabels[index] = alloc_strdup(label ? label : "");
+    if (!st->controllerOptionValues[index] || !st->controllerOptionLabels[index]) {
+        return 0;
+    }
+    st->controllerOptions[index].value = st->controllerOptionValues[index];
+    st->controllerOptions[index].label = st->controllerOptionLabels[index];
+    return 1;
+}
+
+static void
+hotkeys_configRebuildControllerOptions(hotkeys_config_modal_state_t *st)
+{
+    if (!st) {
+        return;
+    }
+
+    hotkeys_configFreeControllerOptions(st);
+
+    size_t availableCount = e9ui_gamepadReadAvailable(NULL, 0);
+    size_t totalCount = 1 + availableCount;
+    int selectedConnected = 0;
+    e9ui_gamepad_info_t *pads = NULL;
+    if (availableCount > 0) {
+        pads = (e9ui_gamepad_info_t *)alloc_calloc(availableCount, sizeof(*pads));
+        if (pads) {
+            size_t readCount = e9ui_gamepadReadAvailable(pads, availableCount);
+            availableCount = readCount;
+        } else {
+            availableCount = 0;
+        }
+    }
+    if (st->pendingControllerGuid[0]) {
+        for (size_t i = 0; i < availableCount; ++i) {
+            if (strcmp(pads[i].guid, st->pendingControllerGuid) == 0) {
+                selectedConnected = 1;
+                break;
+            }
+        }
+        if (!selectedConnected) {
+            totalCount++;
+        }
+    }
+
+    st->controllerOptions = (e9ui_select_option_t *)alloc_calloc(totalCount, sizeof(*st->controllerOptions));
+    st->controllerOptionValues = (char **)alloc_calloc(totalCount, sizeof(*st->controllerOptionValues));
+    st->controllerOptionLabels = (char **)alloc_calloc(totalCount, sizeof(*st->controllerOptionLabels));
+    if (!st->controllerOptions || !st->controllerOptionValues || !st->controllerOptionLabels) {
+        if (pads) {
+            alloc_free(pads);
+        }
+        hotkeys_configFreeControllerOptions(st);
+        return;
+    }
+    st->controllerOptionCount = (int)totalCount;
+
+    int optionIndex = 0;
+    if (!hotkeys_configSetControllerOption(st, optionIndex++, "auto", "Auto (First Connected)")) {
+        if (pads) {
+            alloc_free(pads);
+        }
+        hotkeys_configFreeControllerOptions(st);
+        return;
+    }
+
+    if (availableCount > 0 && pads) {
+        for (size_t i = 0; i < availableCount && optionIndex < st->controllerOptionCount; ++i) {
+            if (!hotkeys_configSetControllerOption(st,
+                                                   optionIndex++,
+                                                   pads[i].guid,
+                                                   pads[i].name[0] ? pads[i].name : pads[i].guid)) {
+                alloc_free(pads);
+                hotkeys_configFreeControllerOptions(st);
+                return;
+            }
+        }
+    }
+
+    if (st->pendingControllerGuid[0] && !selectedConnected && optionIndex < st->controllerOptionCount) {
+        char label[160];
+        strutil_join3Trunc(label, sizeof(label), "Disconnected (", st->pendingControllerGuid, ")");
+        if (!hotkeys_configSetControllerOption(st, optionIndex++, st->pendingControllerGuid, label)) {
+            if (pads) {
+                alloc_free(pads);
+            }
+            hotkeys_configFreeControllerOptions(st);
+            return;
+        }
+    }
+
+    if (st->controllerSelect) {
+        const char *selectedValue = st->pendingControllerGuid[0] ? st->pendingControllerGuid : "auto";
+        e9ui_labeled_select_setOptions(st->controllerSelect,
+                                       st->controllerOptions,
+                                       st->controllerOptionCount,
+                                       selectedValue);
+    }
+    if (pads) {
+        alloc_free(pads);
+    }
+}
+
+static void
+hotkeys_configControllerChanged(e9ui_context_t *ctx,
+                                e9ui_component_t *comp,
+                                const char *value,
+                                void *user)
+{
+    (void)ctx;
+    (void)comp;
+    hotkeys_config_modal_state_t *st = (hotkeys_config_modal_state_t *)user;
+    if (!st) {
+        return;
+    }
+    const char *src = (value && strcmp(value, "auto") != 0) ? value : "";
+    strutil_strlcpy(st->pendingControllerGuid, sizeof(st->pendingControllerGuid), src);
+    hotkeys_configSetSavePending(st);
+}
+
 static int
 hotkeys_isModifierKey(SDL_Keycode key, SDL_Keymod *outMod)
 {
@@ -1014,6 +1179,8 @@ hotkeys_configApplyDefaults(hotkeys_config_modal_state_t *st)
         st->entries[i].mods = hotkeys_normalizeMods(spec->defaultMods);
         hotkeys_configUpdateEntryButtonLabel(&st->entries[i]);
     }
+    st->pendingControllerGuid[0] = '\0';
+    hotkeys_configRebuildControllerOptions(st);
     hotkeys_configRecomputeConflicts(st);
 }
 
@@ -1062,6 +1229,10 @@ hotkeys_configSaveClicked(e9ui_context_t *ctx, void *user)
         int hasOverride = (entry->key != spec->defaultKey || entryMods != defMods) ? 1 : 0;
         hotkeys_setConfigBindingAt(entry->specIndex, entry->key, entryMods, hasOverride);
     }
+    strutil_strlcpy(debugger.preferredControllerGuid,
+                    sizeof(debugger.preferredControllerGuid),
+                    st->pendingControllerGuid);
+    e9ui_gamepadSetPreferredGuid(debugger.preferredControllerGuid);
     hotkeys_refreshActionRegistrations();
     ui_refreshHotkeyTooltips();
     config_saveConfig();
@@ -1238,6 +1409,7 @@ hotkeys_configContainerDtor(e9ui_component_t *self, e9ui_context_t *ctx)
     st->container = NULL;
     st->scroll = NULL;
     st->stack = NULL;
+    st->controllerSelect = NULL;
     st->btnSave = NULL;
     st->btnDefaults = NULL;
     st->keyCaptureReturnFocus = NULL;
@@ -1250,6 +1422,7 @@ hotkeys_configContainerDtor(e9ui_component_t *self, e9ui_context_t *ctx)
         alloc_free(st->entries);
         st->entries = NULL;
     }
+    hotkeys_configFreeControllerOptions(st);
     alloc_free(st);
     self->state = NULL;
 }
@@ -1399,6 +1572,46 @@ hotkeys_makeConfigBody(hotkeys_config_modal_state_t *st, e9ui_context_t *ctx)
         e9ui_stack_addFixed(targetStack, row);
         e9ui_stack_addFixed(targetStack, e9ui_vspacer_make(rowGapPx));
     }
+
+    e9ui_select_option_t initialOption = { "auto", "Auto (First Connected)" };
+    const char *selectedControllerValue = st->pendingControllerGuid[0] ? st->pendingControllerGuid : "auto";
+    e9ui_component_t *controllerSelect =
+        e9ui_labeled_select_make(NULL,
+                                 0,
+                                 0,
+                                 &initialOption,
+                                 1,
+                                 selectedControllerValue,
+                                 hotkeys_configControllerChanged,
+                                 st);
+    if (controllerSelect) {
+        e9ui_component_t *row = e9ui_hstack_make();
+        e9ui_component_t *labelText = e9ui_text_make("Controller");
+        e9ui_component_t *labelBox = labelText ? e9ui_box_make(labelText) : NULL;
+        if (labelBox) {
+            e9ui_box_setWidth(labelBox, e9ui_dim_fixed, labelWidthPx);
+        }
+        st->controllerSelect = controllerSelect;
+        if (row) {
+            int gapPx = e9ui_scale_px(ctx, 8);
+            e9ui_stack_addFixed(rightStack, e9ui_vspacer_make(10));
+            if (labelBox) {
+                e9ui_hstack_addFixed(row, labelBox, e9ui_scale_px(ctx, labelWidthPx));
+            } else if (labelText) {
+                e9ui_hstack_addFlex(row, labelText);
+            }
+            e9ui_hstack_addFixed(row, e9ui_spacer_make(gapPx), gapPx);
+            e9ui_hstack_addFlex(row, controllerSelect);
+            e9ui_stack_addFixed(rightStack, row);
+            e9ui_stack_addFixed(rightStack, e9ui_vspacer_make(rowGapPx));
+        } else {
+            e9ui_stack_addFixed(rightStack, e9ui_vspacer_make(10));
+            e9ui_stack_addFixed(rightStack, controllerSelect);
+            e9ui_stack_addFixed(rightStack, e9ui_vspacer_make(rowGapPx));
+        }
+        hotkeys_configRebuildControllerOptions(st);
+    }
+
     e9ui_stack_addFixed(leftStack, e9ui_vspacer_make(72));
     e9ui_stack_addFixed(rightStack, e9ui_vspacer_make(72));
 
@@ -1590,7 +1803,7 @@ hotkeys_showConfigModal(e9ui_context_t *ctx)
         h = 1;
     }
     e9ui_rect_t rect = { margin, margin, w, h };
-    hotkeys_configModal = e9ui_modal_show(ctx, "Debugger Hotkeys", rect, hotkeys_configUiClosed, NULL);
+    hotkeys_configModal = e9ui_modal_show(ctx, "Hotkeys/Controllers", rect, hotkeys_configUiClosed, NULL);
     if (!hotkeys_configModal) {
         return;
     }
@@ -1617,6 +1830,9 @@ hotkeys_showConfigModal(e9ui_context_t *ctx)
         st->entries[i].key = key;
         st->entries[i].mods = hotkeys_normalizeMods(mods);
     }
+    strutil_strlcpy(st->pendingControllerGuid,
+                    sizeof(st->pendingControllerGuid),
+                    debugger.preferredControllerGuid);
 
     e9ui_component_t *body = hotkeys_makeConfigBody(st, ctx);
     if (!body) {

@@ -33,6 +33,8 @@ static char profile_checkpoints_tipReset[96];
 static char profile_checkpoints_tipDump[96];
 
 static e9ui_component_t *profile_checkpoints_list_makeComponent(void);
+static void profile_checkpoints_componentDtor(e9ui_component_t *self, e9ui_context_t *ctx);
+static void profile_checkpoints_listDtor(e9ui_component_t *self, e9ui_context_t *ctx);
 static void profile_checkpoints_refresh(profile_checkpoints_state_t *st);
 static int  profile_checkpoints_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW);
 static void profile_checkpoints_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds);
@@ -80,6 +82,29 @@ profile_checkpoints_refreshHotkeyTooltips(void)
                                             "checkpoint_next",
                                             profile_checkpoints_tipDump,
                                             sizeof(profile_checkpoints_tipDump));
+}
+
+static void
+profile_checkpoints_componentDtor(e9ui_component_t *self, e9ui_context_t *ctx)
+{
+    (void)self;
+    (void)ctx;
+    profile_checkpoints_btnProfile = NULL;
+    profile_checkpoints_btnReset = NULL;
+    profile_checkpoints_btnDump = NULL;
+}
+
+static void
+profile_checkpoints_listDtor(e9ui_component_t *self, e9ui_context_t *ctx)
+{
+    (void)ctx;
+    if (!self) {
+        return;
+    }
+    if (self->state) {
+        alloc_free(self->state);
+        self->state = NULL;
+    }
 }
 
 static void
@@ -257,6 +282,7 @@ profile_checkpoints_makeComponent(void)
     e9ui_stack_addFixed(stack, toolbar);
     e9ui_stack_addFlex(stack, list);
     stack->name = "profile_checkpoints";
+    stack->dtor = profile_checkpoints_componentDtor;
 
     return stack;
 }
@@ -280,6 +306,7 @@ profile_checkpoints_list_makeComponent(void)
     comp->preferredHeight = profile_checkpoints_preferredHeight;
     comp->layout = profile_checkpoints_layout;
     comp->render = profile_checkpoints_render;
+    comp->dtor = profile_checkpoints_listDtor;
 
     return comp;
 }

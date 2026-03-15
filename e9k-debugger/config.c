@@ -153,6 +153,9 @@ config_persistConfig(FILE *f)
     if (!debugger.config.logosEnabled) {
         fprintf(f, "comp.config.logos_enabled=0\n");
     }
+    if (debugger.preferredControllerGuid[0]) {
+        fprintf(f, "comp.config.controller_guid=%s\n", debugger.preferredControllerGuid);
+    }
     if (!debugger.coreOptionsShowHelp) {
         fprintf(f, "comp.config.core_options_show_help=0\n");
     }
@@ -290,6 +293,10 @@ config_loadConfigFile(const char *path)
                 debugger.config.recordEnabled = atoi(value) ? 1 : 0;
             } else if (strcmp(prop, "logos_enabled") == 0) {
                 debugger.config.logosEnabled = atoi(value) ? 1 : 0;
+            } else if (strcmp(prop, "controller_guid") == 0) {
+                config_setConfigValue(debugger.preferredControllerGuid,
+                                      sizeof(debugger.preferredControllerGuid),
+                                      value);
             } else if (strcmp(prop, "core_options_show_help") == 0) {
                 debugger.coreOptionsShowHelp = atoi(value) ? 1 : 0;
             } else if (strcmp(prop, "core_system") == 0) {

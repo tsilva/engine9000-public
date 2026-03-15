@@ -1305,7 +1305,7 @@ settings_buildModalBody(e9ui_context_t *ctx)
                                                    debugger.settingsEdit.logosEnabled,
                                                    settings_logosChanged,
                                                    &debugger.settingsEdit.logosEnabled);
-    e9ui_component_t *btnHotkeys = e9ui_button_make("Debugger Hotkeys", settings_uiDebuggerHotkeys, NULL);
+    e9ui_component_t *btnHotkeys = e9ui_button_make("Hotkeys/Controllers", settings_uiDebuggerHotkeys, NULL);
     e9ui_component_t *rowGlobal = e9ui_hstack_make();
     e9ui_component_t *rowGlobalCenter = rowGlobal ? e9ui_center_make(rowGlobal) : NULL;
 
