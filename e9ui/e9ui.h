@@ -172,6 +172,7 @@ typedef struct {
   e9k_hotkey_registry_t hotkeys;
   e9k_layout_config_t layout;
   e9ui_transition_state_t transition;
+  int currentDisplayIndex;
 
   int glCompositeEnabled;
   int glCompositeCapture;  

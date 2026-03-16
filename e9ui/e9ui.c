@@ -63,6 +63,8 @@ static int e9ui_fpsFrames = 0;
 static float e9ui_fpsValue = 0.0f;
 static TTF_Font *e9ui_fpsFont = NULL;
 static int e9ui_fpsFontSize = 0;
+static void e9ui_updateFontScale(void);
+static void e9ui_updateRefreshRate(SDL_Window *win);
 
 static void
 e9ui_runDeferred(e9ui_context_t *ctx)
@@ -637,6 +639,24 @@ e9ui_getDisplayRefreshRate(int displayIndex)
         refresh = mode.refresh_rate;
     }
     return refresh;
+}
+
+static void
+e9ui_syncWindowDisplayState(SDL_Window *win, int forceFontScale)
+{
+    if (!win) {
+        return;
+    }
+    int displayIndex = SDL_GetWindowDisplayIndex(win);
+    int displayChanged = 0;
+    if (displayIndex >= 0 && displayIndex != e9ui->currentDisplayIndex) {
+        e9ui->currentDisplayIndex = displayIndex;
+        displayChanged = 1;
+    }
+    e9ui_updateRefreshRate(win);
+    if (forceFontScale || displayChanged) {
+        e9ui_updateFontScale();
+    }
 }
 
 static void
@@ -2264,8 +2284,7 @@ e9ui_renderFrame(void)
     return;
   }
   e9ui_sceneUpdateState();
- 
-  e9ui_updateFontScale();
+
   SDL_SetRenderDrawColor(e9ui->ctx.renderer, 16, 16, 16, 255);
   SDL_RenderClear(e9ui->ctx.renderer);
   
@@ -2536,6 +2555,7 @@ e9ui_ctor(const char* configPath, int cliOverrideWindowSize, int cliWinW, int cl
     e9ui->ctx.window = win;
     e9ui->ctx.renderer = ren;
     e9ui->ctx.dpiScale = e9ui_computeDpiScale();
+    e9ui->currentDisplayIndex = SDL_GetWindowDisplayIndex(win);
     // Enable alpha blending for proper fade animations
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
     if (e9ui->layout.winX >= 0 && e9ui->layout.winY >= 0) {
@@ -2743,10 +2763,17 @@ e9ui_processEvents(void)
                 continue;
             }
             if (ev.window.event == SDL_WINDOWEVENT_MOVED) {
-                e9ui->layout.winX = ev.window.data1; e9ui->layout.winY = ev.window.data2; config_saveConfig();
+                e9ui->layout.winX = ev.window.data1;
+                e9ui->layout.winY = ev.window.data2;
+                config_saveConfig();
+                e9ui_syncWindowDisplayState(e9ui->ctx.window, 0);
             } else if (ev.window.event == SDL_WINDOWEVENT_RESIZED || ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                e9ui->layout.winW = ev.window.data1; e9ui->layout.winH = ev.window.data2; config_saveConfig();
-                e9ui_updateFontScale();
+                e9ui->layout.winW = ev.window.data1;
+                e9ui->layout.winH = ev.window.data2;
+                config_saveConfig();
+                e9ui_syncWindowDisplayState(e9ui->ctx.window, 1);
+            } else if (ev.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED) {
+                e9ui_syncWindowDisplayState(e9ui->ctx.window, 1);
             } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                 e9ui_setMainWindowFocused(&e9ui->ctx, 1);
             } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
