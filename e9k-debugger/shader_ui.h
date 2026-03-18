@@ -20,14 +20,8 @@ shader_ui_shutdown(void);
 int
 shader_ui_isOpen(void);
 
-uint32_t
-shader_ui_getWindowId(void);
-
 void
 shader_ui_setMainWindowFocused(int focused);
-
-void
-shader_ui_handleEvent(SDL_Event *ev);
 
 void
 shader_ui_render(void);

@@ -245,33 +245,6 @@ e9ui_runFullscreenTransition(e9ui_context_t *ctx,
     return ctx->runFullscreenTransition(ctx, entering, from, to, width, height);
 }
 
-int
-e9ui_routeAuxWindowEvent(e9ui_context_t *ctx, SDL_Event *eventValue, uint32_t mainWindowId)
-{
-    if (!ctx || !ctx->routeAuxWindowEvent || !eventValue) {
-        return 0;
-    }
-    return ctx->routeAuxWindowEvent(ctx, eventValue, mainWindowId);
-}
-
-int
-e9ui_ownsAuxWindowId(e9ui_context_t *ctx, uint32_t windowId)
-{
-    if (!ctx || !ctx->ownsAuxWindowId || !windowId) {
-        return 0;
-    }
-    return ctx->ownsAuxWindowId(ctx, windowId);
-}
-
-void
-e9ui_handleAuxWindowEvent(e9ui_context_t *ctx, const SDL_Event *eventValue)
-{
-    if (!ctx || !ctx->handleAuxWindowEvent || !eventValue) {
-        return;
-    }
-    ctx->handleAuxWindowEvent(ctx, eventValue);
-}
-
 void
 e9ui_setMainWindowFocused(e9ui_context_t *ctx, int focused)
 {
@@ -2797,10 +2770,6 @@ e9ui_processEvents(void)
         if (e9ui->ctx.window) {
             mainWindowId = SDL_GetWindowID(e9ui->ctx.window);
         }
-        if (e9ui_routeAuxWindowEvent(&e9ui->ctx, &ev, mainWindowId)) {
-            e9ui_forceDefaultCursorOnNonMainHover(&ev);
-            continue;
-        }
         if (ev.type == SDL_MOUSEMOTION &&
             evWindowId &&
             mainWindowId &&
@@ -2818,9 +2787,6 @@ e9ui_processEvents(void)
         }
         else if (ev.type == SDL_MOUSEMOTION) {
             if (!mainWindowId || ev.motion.windowID != mainWindowId) {
-                continue;
-            }
-            if (e9ui_ownsAuxWindowId(&e9ui->ctx, ev.motion.windowID)) {
                 continue;
             }
             int rawXrel = ev.motion.xrel;
@@ -2858,9 +2824,6 @@ e9ui_processEvents(void)
             if (!mainWindowId || ev.button.windowID != mainWindowId) {
                 continue;
             }
-            if (e9ui_ownsAuxWindowId(&e9ui->ctx, ev.button.windowID)) {
-                continue;
-            }
             int scaledX = e9ui_scale_coord(&e9ui->ctx, ev.button.x);
             int scaledY = e9ui_scale_coord(&e9ui->ctx, ev.button.y);
             ev.button.x = scaledX;
@@ -2881,9 +2844,6 @@ e9ui_processEvents(void)
         }
         else if (ev.type == SDL_MOUSEWHEEL) {
             if (!mainWindowId || ev.wheel.windowID != mainWindowId) {
-                continue;
-            }
-            if (e9ui_ownsAuxWindowId(&e9ui->ctx, ev.wheel.windowID)) {
                 continue;
             }
             ev.wheel.y = e9ui_normalizeMouseWheelY(&e9ui->ctx, ev.wheel.y);
@@ -2907,7 +2867,6 @@ e9ui_processEvents(void)
             }
         }
         else if (ev.type == SDL_WINDOWEVENT) {
-            e9ui_handleAuxWindowEvent(&e9ui->ctx, &ev);
             if (!mainWindowId || ev.window.windowID != mainWindowId) {
                 continue;
             }
@@ -3060,10 +3019,8 @@ e9ui_processEvents(void)
         }
         // For mouse and other events, bubble through tree for hit-testing and focus updates
         (void)e9ui_sceneProcessEvent(&ev);
-	if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT && !e9ui->ctx.focusClickHandled) {
-	  if (!e9ui_ownsAuxWindowId(&e9ui->ctx, ev.button.windowID)) {
-	    e9ui_setFocus(&e9ui->ctx, NULL);
-	  }
+        if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT && !e9ui->ctx.focusClickHandled) {
+            e9ui_setFocus(&e9ui->ctx, NULL);
         }
     }
     e9ui_runDeferred(&e9ui->ctx);

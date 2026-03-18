@@ -24,12 +24,6 @@ custom_amiga_toggle(void);
 int
 custom_amiga_isOpen(void);
 
-uint32_t
-custom_amiga_getWindowId(void);
-
-void
-custom_amiga_handleEvent(SDL_Event *ev);
-
 void
 custom_amiga_setMainWindowFocused(int focused);
 

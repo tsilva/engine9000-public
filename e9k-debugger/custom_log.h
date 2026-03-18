@@ -26,12 +26,6 @@ custom_log_toggle(void);
 int
 custom_log_isOpen(void);
 
-uint32_t
-custom_log_getWindowId(void);
-
-void
-custom_log_handleEvent(SDL_Event *ev);
-
 void
 custom_log_setMainWindowFocused(int focused);
 

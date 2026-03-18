@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "aux_window.h"
 #include "memory_track_ui.h"
 #include "alloc.h"
 #include "config.h"
@@ -79,13 +80,9 @@ typedef struct memory_track_ranges {
 
 struct memory_track_ui {
     int open;
-    int alwaysOnTopState;
-    int mainWindowFocused;
-    int memoryTrackWindowFocused;
     e9ui_window_t *windowHost;
     SDL_Window *window;
     SDL_Renderer *renderer;
-    uint32_t windowId;
     e9ui_context_t ctx;
     e9ui_component_t *root;
     e9ui_component_t *overlayBodyHost;
@@ -187,6 +184,11 @@ struct memory_track_ui {
 };
 
 static memory_track_ui_t memory_track_ui_state = {0};
+
+static const aux_window_ops_t memory_track_ui_auxWindowOps = {
+    .setFocus = memory_track_ui_setMainWindowFocused,
+    .render = memory_track_ui_render,
+};
 
 static e9ui_window_backend_t
 memory_track_ui_windowBackend(void)
@@ -3142,11 +3144,7 @@ memory_track_ui_init(void)
     ui->trendFilterMode = MEMORY_TRACK_UI_TREND_ALL;
     ui->window = NULL;
     ui->renderer = NULL;
-    ui->windowId = 0;
     ui->ctx.font = e9ui->ctx.font;
-    ui->alwaysOnTopState = -1;
-    ui->mainWindowFocused = 0;
-    ui->memoryTrackWindowFocused = 0;
     e9ui_rect_t overlayRect = { 0, 0, 0, 0 };
     overlayRect = e9ui_windowResolveOpenRect(&e9ui->ctx,
                                                        memory_track_ui_windowDefaultRect(&e9ui->ctx),
@@ -3199,6 +3197,7 @@ memory_track_ui_init(void)
     ui->needsRebuild = 0;
     memory_track_ui_setError(ui, NULL);
     ui->open = 1;
+    aux_window_register(&memory_track_ui_auxWindowOps, ui);
     return 1;
 }
 
@@ -3209,6 +3208,7 @@ memory_track_ui_shutdown(void)
     if (!ui->open) {
         return;
     }
+    aux_window_unregister(&memory_track_ui_auxWindowOps, ui);
     if (ui->frameInputs && ui->frameInputsCount) {
         memory_track_ui_storeFrameTexts(ui);
     }
@@ -3287,10 +3287,6 @@ memory_track_ui_shutdown(void)
     ui->cachedFrameCap = 0;
     ui->cachedBuildFrameNo = 0;
     ui->open = 0;
-    ui->alwaysOnTopState = 0;
-    ui->mainWindowFocused = 0;
-    ui->memoryTrackWindowFocused = 0;
-    ui->windowId = 0;
     ui->headerRow = NULL;
     ui->hscroll = NULL;
     ui->scroll = NULL;
@@ -3307,23 +3303,10 @@ memory_track_ui_isOpen(void)
     return memory_track_ui_state.open ? 1 : 0;
 }
 
-uint32_t
-memory_track_ui_getWindowId(void)
-{
-    return 0;
-}
-
 void
 memory_track_ui_setMainWindowFocused(int focused)
 {
-    memory_track_ui_t *ui = &memory_track_ui_state;
-    ui->mainWindowFocused = focused ? 1 : 0;
-}
-
-void
-memory_track_ui_handleEvent(SDL_Event *ev)
-{
-    (void)ev;
+    (void)focused;
 }
 
 void

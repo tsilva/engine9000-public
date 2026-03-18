@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "ui.h"
+#include "aux_window.h"
 #include "breakpoints.h"
 #include "clipboard.h"
 #include "config.h"
@@ -37,11 +38,9 @@
 #include "prompt.h"
 #include "registers.h"
 #include "settings.h"
-#include "shader_ui.h"
 #include "snapshot.h"
 #include "rom_config.h"
 #include "source_pane.h"
-#include "sprite_debug.h"
 #include "stack.h"
 #include "status_bar.h"
 #include "system_badge.h"
@@ -49,11 +48,6 @@
 #include "trainer.h"
 #include "console.h"
 #include "smoke_test.h"
-#include "custom_amiga.h"
-#include "custom_log.h"
-#include "custom_ui.h"
-#include "memory_track_ui.h"
-#include "mega_sprite_debug.h"
 #include "transition.h"
 #include "input_record.h"
 #include "ui_test.h"
@@ -411,96 +405,11 @@ ui_runFullscreenTransition(e9ui_context_t *ctx,
     return 1;
 }
 
-int
-ui_routeAuxWindowEvent(e9ui_context_t *ctx, SDL_Event *eventValue, uint32_t mainWindowId)
-{
-    (void)ctx;
-    if (!eventValue) {
-        return 0;
-    }
-    uint32_t evWindowId = 0;
-    switch (eventValue->type) {
-    case SDL_MOUSEMOTION:
-        evWindowId = eventValue->motion.windowID;
-        break;
-    case SDL_MOUSEBUTTONDOWN:
-    case SDL_MOUSEBUTTONUP:
-        evWindowId = eventValue->button.windowID;
-        break;
-    case SDL_MOUSEWHEEL:
-        evWindowId = eventValue->wheel.windowID;
-        break;
-    case SDL_KEYDOWN:
-    case SDL_KEYUP:
-        evWindowId = eventValue->key.windowID;
-        break;
-    case SDL_TEXTINPUT:
-        evWindowId = eventValue->text.windowID;
-        break;
-    case SDL_WINDOWEVENT:
-        evWindowId = eventValue->window.windowID;
-        break;
-    default:
-        break;
-    }
-    if (!evWindowId || (mainWindowId && evWindowId == mainWindowId)) {
-        return 0;
-    }
-    if (custom_log_getWindowId() == evWindowId) {
-        custom_log_handleEvent(eventValue);
-        return 1;
-    }
-    if (custom_ui_getWindowId() == evWindowId) {
-        custom_ui_handleEvent(eventValue);
-        return 1;
-    }
-    if (custom_amiga_getWindowId() == evWindowId) {
-        custom_amiga_handleEvent(eventValue);
-        return 1;
-    }
-    if (shader_ui_getWindowId() == evWindowId) {
-        shader_ui_handleEvent(eventValue);
-        return 1;
-    }
-    if (memory_track_ui_getWindowId() == evWindowId) {
-        memory_track_ui_handleEvent(eventValue);
-        return 1;
-    }
-    return 0;
-}
-
-int
-ui_ownsAuxWindowId(e9ui_context_t *ctx, uint32_t windowId)
-{
-    (void)ctx;
-    if (!windowId) {
-        return 0;
-    }
-    return sprite_debug_is_window_id(windowId) || mega_sprite_debug_ownsWindowId(windowId);
-}
-
-void
-ui_handleAuxWindowEvent(e9ui_context_t *ctx, const SDL_Event *eventValue)
-{
-    (void)ctx;
-    if (!eventValue) {
-        return;
-    }
-    sprite_debug_handleWindowEvent(eventValue);
-    mega_sprite_debug_handleWindowEvent(eventValue);
-}
-
 void
 ui_setMainWindowFocused(e9ui_context_t *ctx, int focused)
 {
     (void)ctx;
-    custom_ui_setMainWindowFocused(focused);
-    custom_log_setMainWindowFocused(focused);
-    custom_amiga_setMainWindowFocused(focused);
-    shader_ui_setMainWindowFocused(focused);
-    memory_track_ui_setMainWindowFocused(focused);
-    sprite_debug_setMainWindowFocused(focused);
-    mega_sprite_debug_setMainWindowFocused(focused);
+    aux_window_setFocus(focused);
 }
 
 int
@@ -1046,9 +955,6 @@ ui_configureE9uiHost(void)
     e9ui->ctx.pollInjectedUiEvent = ui_hostPollInjectedUiEvent;
     e9ui->ctx.recordUiEvent = ui_hostRecordUiEvent;
     e9ui->ctx.runFullscreenTransition = ui_runFullscreenTransition;
-    e9ui->ctx.routeAuxWindowEvent = ui_routeAuxWindowEvent;
-    e9ui->ctx.ownsAuxWindowId = ui_ownsAuxWindowId;
-    e9ui->ctx.handleAuxWindowEvent = ui_handleAuxWindowEvent;
     e9ui->ctx.setMainWindowFocused = ui_setMainWindowFocused;
     e9ui->ctx.normalizeMouseWheelY = ui_normalizeMouseWheelY;
     e9ui->ctx.handleGlobalKeydown = ui_handleGlobalKeydown;

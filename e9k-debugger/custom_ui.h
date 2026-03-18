@@ -24,9 +24,6 @@ custom_ui_toggle(void);
 int
 custom_ui_isOpen(void);
 
-uint32_t
-custom_ui_getWindowId(void);
-
 int
 custom_ui_getBlitterVisDecay(void);
 
@@ -50,9 +47,6 @@ custom_ui_getBplptrLineLimitRange(int *outStart, int *outEnd);
 
 void
 custom_ui_setBplptrLineLimitRange(int start, int end);
-
-void
-custom_ui_handleEvent(SDL_Event *ev);
 
 void
 custom_ui_setMainWindowFocused(int focused);

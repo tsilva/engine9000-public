@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aux_window.h"
 #include "alloc.h"
 #include "amiga_custom_regs.h"
 #include "breakpoints.h"
@@ -108,6 +109,11 @@ struct custom_amiga_state {
 };
 
 static custom_amiga_state_t custom_amiga_state = {0};
+
+static const aux_window_ops_t custom_amiga_auxWindowOps = {
+    .setFocus = custom_amiga_setMainWindowFocused,
+    .render = custom_amiga_render,
+};
 
 static int
 custom_amiga_colorsEqual(SDL_Color a, SDL_Color b)
@@ -1404,6 +1410,7 @@ custom_amiga_init(void)
 
     ui->ctx = e9ui->ctx;
     ui->open = 1;
+    aux_window_register(&custom_amiga_auxWindowOps, ui);
     custom_amiga_syncRows(ui);
     return 1;
 }
@@ -1416,6 +1423,7 @@ custom_amiga_shutdown(void)
         return;
     }
 
+    aux_window_unregister(&custom_amiga_auxWindowOps, ui);
     (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
                                          (e9ui ? &e9ui->ctx : &ui->ctx),
                                          &ui->winHasSaved,
@@ -1456,18 +1464,6 @@ int
 custom_amiga_isOpen(void)
 {
     return custom_amiga_state.open ? 1 : 0;
-}
-
-uint32_t
-custom_amiga_getWindowId(void)
-{
-    return 0;
-}
-
-void
-custom_amiga_handleEvent(SDL_Event *ev)
-{
-    (void)ev;
 }
 
 void

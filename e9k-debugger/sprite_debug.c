@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aux_window.h"
 #include "sprite_debug.h"
 #include "alloc.h"
 #include "debugger.h"
@@ -64,10 +65,6 @@ typedef struct sprite_debug_state {
     int cached_valid;
     int open;
     int hist_x0_anchor;
-    uint32_t window_id;
-    int always_on_top_state;
-    int main_window_focused;
-    int sprite_window_focused;
     e9k_debug_sprite_state_t lastState;
     int hasLastState;
 } sprite_debug_state_t;
@@ -84,6 +81,29 @@ sprite_debug_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
+
+int
+sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
+{
+    if (!kev || !s_dbg.open) {
+        return 0;
+    }
+    if (kev->repeat != 0) {
+        return 0;
+    }
+    if (kev->keysym.sym == SDLK_ESCAPE) {
+        if (sprite_debug_is_open()) {
+            sprite_debug_toggle();
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static const aux_window_ops_t sprite_debug_auxWindowOps = {
+    .setFocus = sprite_debug_setMainWindowFocused,
+    .handleKeydown = sprite_debug_handleKeydown,
+};
 
 static int
 sprite_debug_parseInt(const char *value, int *out)
@@ -524,7 +544,9 @@ sprite_debug_toggle(void)
         s_dbg.renderer = e9ui->ctx.renderer;
         s_dbg.hist_x0_anchor = -1;
         s_dbg.open = 1;
+        aux_window_register(&sprite_debug_auxWindowOps, &s_dbg);
     } else {
+        aux_window_unregister(&sprite_debug_auxWindowOps, &s_dbg);
         if (s_dbg.texture) {
             SDL_DestroyTexture(s_dbg.texture);
             s_dbg.texture = NULL;
@@ -558,19 +580,6 @@ int
 sprite_debug_is_open(void)
 {
     return s_dbg.open ? 1 : 0;
-}
-
-void
-sprite_debug_handleWindowEvent(const SDL_Event *ev)
-{
-    (void)ev;
-}
-
-int
-sprite_debug_is_window_id(uint32_t window_id)
-{
-    (void)window_id;
-    return 0;
 }
 
 void

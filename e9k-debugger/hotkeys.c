@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "hotkeys.h"
+#include "aux_window.h"
 #include "e9ui.h"
 #include "e9ui_scroll.h"
 #include "e9ui_text.h"
@@ -21,8 +22,6 @@
 #include "settings.h"
 #include "debugger.h"
 #include "emu.h"
-#include "sprite_debug.h"
-#include "mega_sprite_debug.h"
 #include "ui.h"
 #include "crt.h"
 #include "state_buffer.h"
@@ -2109,16 +2108,7 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
             hex_convert_close();
             return 1;
         }
-        if (sprite_debug_is_window_id(kev->windowID)) {
-            if (sprite_debug_is_open()) {
-                sprite_debug_toggle();
-            }
-            return 1;
-        }
-        if (mega_sprite_debug_ownsWindowId(kev->windowID)) {
-            if (mega_sprite_debug_is_open()) {
-                mega_sprite_debug_toggle();
-            }
+        if (aux_window_handleKeydown(kev)) {
             return 1;
         }
         if (e9ui->helpModal) {
@@ -2148,10 +2138,8 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
         }
         return 1;
     }
-    if (mega_sprite_debug_ownsWindowId(kev->windowID)) {
-        if (mega_sprite_debug_handleKeydown(kev)) {
-            return 1;
-        }
+    if (aux_window_handleKeydown(kev)) {
+        return 1;
     }
     if (hotkeys_eventMatchesAction(kev, "help")) {
         e9ui_setFocus(ctx, NULL);

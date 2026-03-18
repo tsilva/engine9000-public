@@ -20,14 +20,8 @@ memory_track_ui_shutdown(void);
 int
 memory_track_ui_isOpen(void);
 
-uint32_t
-memory_track_ui_getWindowId(void);
-
 void
 memory_track_ui_setMainWindowFocused(int focused);
-
-void
-memory_track_ui_handleEvent(SDL_Event *ev);
 
 void
 memory_track_ui_render(void);

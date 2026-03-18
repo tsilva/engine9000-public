@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <SDL.h>
 
+#include "aux_window.h"
 #include "config.h"
 #include "alloc.h"
 #include "custom_ui.h"
@@ -415,6 +416,11 @@ static custom_ui_state_t custom_ui_state = {
     .bitplaneEnabled = { 1, 1, 1, 1, 1, 1, 1, 1 },
     .audiosEnabled = 1,
     .audioEnabled = { 1, 1, 1, 1 }
+};
+
+static const aux_window_ops_t custom_ui_auxWindowOps = {
+    .setFocus = custom_ui_setMainWindowFocused,
+    .render = custom_ui_render,
 };
 
 static int
@@ -5750,6 +5756,7 @@ custom_ui_init(void)
         custom_ui_enableDmaDebugForCopperStats(ui);
     }
     ui->open = 1;
+    aux_window_register(&custom_ui_auxWindowOps, ui);
     return 1;
 }
 
@@ -5761,6 +5768,7 @@ custom_ui_shutdown(void)
     if (!ui->open) {
         return;
     }
+    aux_window_unregister(&custom_ui_auxWindowOps, ui);
     if (ui->windowHost) {
         e9ui_windowDestroy(ui->windowHost);
         ui->windowHost = NULL;
@@ -5787,12 +5795,6 @@ int
 custom_ui_isOpen(void)
 {
     return custom_ui_state.open ? 1 : 0;
-}
-
-uint32_t
-custom_ui_getWindowId(void)
-{
-    return 0;
 }
 
 void
@@ -5919,12 +5921,6 @@ custom_ui_setBplptrLineLimitRange(int start, int end)
         snprintf(text, sizeof(text), "%d", ui->bplptrLineLimitEnd);
         e9ui_labeled_textbox_setText(ui->bplptrLineLimitEndRow, text);
     }
-}
-
-void
-custom_ui_handleEvent(SDL_Event *ev)
-{
-    (void)ev;
 }
 
 void

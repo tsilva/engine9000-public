@@ -21,11 +21,8 @@ sprite_debug_is_open(void);
 void
 sprite_debug_render(const e9k_debug_sprite_state_t *st);
 
-void
-sprite_debug_handleWindowEvent(const SDL_Event *ev);
-
 int
-sprite_debug_is_window_id(uint32_t window_id);
+sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev);
 
 void
 sprite_debug_setMainWindowFocused(int focused);
@@ -35,4 +32,3 @@ sprite_debug_persistConfig(FILE *file);
 
 int
 sprite_debug_loadConfigProperty(const char *prop, const char *value);
-

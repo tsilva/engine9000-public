@@ -13,6 +13,7 @@
 #include <string.h>
 #include <SDL.h>
 
+#include "aux_window.h"
 #include "config.h"
 #include "breakpoints.h"
 #include "custom_log.h"
@@ -117,6 +118,11 @@ struct custom_log_state {
 };
 
 static custom_log_state_t custom_log_state = {0};
+
+static const aux_window_ops_t custom_log_auxWindowOps = {
+    .setFocus = custom_log_setMainWindowFocused,
+    .render = custom_log_render,
+};
 
 static e9ui_window_backend_t
 custom_log_windowBackend(void)
@@ -1049,6 +1055,7 @@ custom_log_init(void)
     }
 
     ui->open = 1;
+    aux_window_register(&custom_log_auxWindowOps, ui);
     custom_log_applyEnabledOption(1);
     return 1;
 }
@@ -1061,6 +1068,7 @@ custom_log_shutdown(void)
         return;
     }
 
+    aux_window_unregister(&custom_log_auxWindowOps, ui);
     (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
                                             (e9ui ? &e9ui->ctx : &ui->ctx),
                                             &ui->winHasSaved,
@@ -1123,22 +1131,10 @@ custom_log_isOpen(void)
     return custom_log_state.open ? 1 : 0;
 }
 
-uint32_t
-custom_log_getWindowId(void)
-{
-    return 0;
-}
-
 void
 custom_log_setMainWindowFocused(int focused)
 {
     (void)focused;
-}
-
-void
-custom_log_handleEvent(SDL_Event *ev)
-{
-    (void)ev;
 }
 
 static int

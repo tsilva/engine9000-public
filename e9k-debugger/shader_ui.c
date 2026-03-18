@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aux_window.h"
 #include "shader_ui.h"
 #include "alloc.h"
 #include "crt.h"
@@ -131,6 +132,11 @@ typedef struct e9k_shader_ui {
 } e9k_shader_ui_t;
 
 static e9k_shader_ui_t shader_ui_state = {0};
+
+static const aux_window_ops_t shader_ui_auxWindowOps = {
+    .setFocus = shader_ui_setMainWindowFocused,
+    .render = shader_ui_render,
+};
 
 static e9ui_window_backend_t
 shader_ui_windowBackend(void)
@@ -1189,6 +1195,7 @@ shader_ui_init(void)
         ui->ctx = e9ui->ctx;
     }
     ui->open = 1;
+    aux_window_register(&shader_ui_auxWindowOps, ui);
     return 1;
 }
 
@@ -1199,6 +1206,7 @@ shader_ui_shutdown(void)
     if (!ui->open) {
         return;
     }
+    aux_window_unregister(&shader_ui_auxWindowOps, ui);
     (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
                                             (e9ui ? &e9ui->ctx : &ui->ctx),
                                             &ui->winHasSaved,
@@ -1226,22 +1234,10 @@ shader_ui_isOpen(void)
     return shader_ui_state.open ? 1 : 0;
 }
 
-uint32_t
-shader_ui_getWindowId(void)
-{
-    return 0;
-}
-
 void
 shader_ui_setMainWindowFocused(int focused)
 {
     (void)focused;
-}
-
-void
-shader_ui_handleEvent(SDL_Event *ev)
-{
-    (void)ev;
 }
 
 void

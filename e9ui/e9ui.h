@@ -309,15 +309,6 @@ e9ui_runFullscreenTransition(e9ui_context_t *ctx,
                              int width,
                              int height);
 
-int
-e9ui_routeAuxWindowEvent(e9ui_context_t *ctx, SDL_Event *eventValue, uint32_t mainWindowId);
-
-int
-e9ui_ownsAuxWindowId(e9ui_context_t *ctx, uint32_t windowId);
-
-void
-e9ui_handleAuxWindowEvent(e9ui_context_t *ctx, const SDL_Event *eventValue);
-
 void
 e9ui_setMainWindowFocused(e9ui_context_t *ctx, int focused);
 

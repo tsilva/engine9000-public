@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aux_window.h"
 #include "mega_sprite_debug.h"
 #include "alloc.h"
 #include "debugger.h"
@@ -76,10 +77,6 @@ typedef struct mega_sprite_debug_state
     int showLinks;
     int showOrderNumbers;
     int highlightIssuesOnly;
-    uint32_t windowId;
-    int alwaysOnTopState;
-    int mainWindowFocused;
-    int megaWindowFocused;
     e9k_debug_mega_sprite_state_t lastState;
     int hasLastState;
 } mega_sprite_debug_state_t;
@@ -96,6 +93,11 @@ mega_sprite_debug_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
+
+static const aux_window_ops_t mega_sprite_debug_auxWindowOps = {
+    .setFocus = mega_sprite_debug_setMainWindowFocused,
+    .handleKeydown = mega_sprite_debug_handleKeydown,
+};
 
 static uint32_t
 mega_sprite_debug_color(uint8_t r, uint8_t g, uint8_t b)
@@ -678,9 +680,11 @@ mega_sprite_debug_toggle(void)
         mega_sprite_debug_state.highlightIssuesOnly = 0;
         mega_sprite_debug_state.cachedValid = 0;
         mega_sprite_debug_state.lastHash = 0u;
+        aux_window_register(&mega_sprite_debug_auxWindowOps, &mega_sprite_debug_state);
         return;
     }
 
+    aux_window_unregister(&mega_sprite_debug_auxWindowOps, &mega_sprite_debug_state);
     if (mega_sprite_debug_state.texture) {
         SDL_DestroyTexture(mega_sprite_debug_state.texture);
         mega_sprite_debug_state.texture = NULL;
@@ -710,38 +714,28 @@ mega_sprite_debug_is_open(void)
     return mega_sprite_debug_state.open ? 1 : 0;
 }
 
-void
-mega_sprite_debug_handleWindowEvent(const SDL_Event *ev)
-{
-    (void)ev;
-}
-
 int
 mega_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
 {
-    if (!kev) {
-        return 0;
-    }
-    if (!mega_sprite_debug_ownsWindowId(kev->windowID)) {
+    if (!kev || !mega_sprite_debug_state.open) {
         return 0;
     }
     if (kev->repeat != 0) {
         return 0;
     }
-    return mega_sprite_debug_overlayHandleLocalKey(kev->keysym.sym);
+    if (kev->keysym.sym == SDLK_ESCAPE) {
+        if (mega_sprite_debug_is_open()) {
+            mega_sprite_debug_toggle();
+        }
+        return 1;
+    }
+    return 0;
 }
 
 void
 mega_sprite_debug_setMainWindowFocused(int focused)
 {
     (void)focused;
-}
-
-int
-mega_sprite_debug_ownsWindowId(uint32_t windowId)
-{
-    (void)windowId;
-    return 0;
 }
 
 static void

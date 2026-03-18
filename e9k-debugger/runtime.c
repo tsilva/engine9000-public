@@ -10,20 +10,17 @@
 #include <stdlib.h>
 #include <SDL.h>
 
+#include "aux_window.h"
 #include "runtime.h"
 #include "ui.h"
-#include "custom_amiga.h"
 #include "debug.h"
 #include "e9ui.h"
 #include "input_record.h"
 #include "libretro_host.h"
 #include "linebuf.h"
-#include "memory_track_ui.h"
 #include "machine.h"
 #include "profile.h"
 #include "protect.h"
-#include "shader_ui.h"
-#include "custom_ui.h"
 #include "smoke_test.h"
 #include "ui_test.h"
 #include "state_buffer.h"
@@ -31,7 +28,6 @@
 #include "debugger_signal.h"
 #include "settings.h"
 #include "debugger.h"
-#include "custom_log.h"
 
 void
 runtime_onVblank(void *user)
@@ -306,11 +302,7 @@ runtime_runLoop(void)
         ui_updateSourceTitle();
         ui_updateWindowTitle();
         e9ui_renderFrame();
-        custom_ui_render();
-        custom_log_render();
-        custom_amiga_render();
-        shader_ui_render();
-        memory_track_ui_render();
+        aux_window_render();
         if (debugger.smokeTestCompleted) {
             break;
         }
