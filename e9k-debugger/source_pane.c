@@ -1744,17 +1744,28 @@ source_pane_setAsmAnchorLocked(source_pane_state_t *st, uint64_t addr)
         source_pane_syncLockButtonVisual(st);
         return;
     }
-    int idx = 0;
-    if (!dasm_findIndexForAddr(a, &idx)) {
+    if (st->viewMode == source_pane_mode_h) {
+        st->scrollIndex = 0;
+        st->scrollAnchorAddr = a;
+        st->scrollAnchorValid = 1;
+        st->scrollLocked = 1;
+        st->gutterPending = 0;
+        source_pane_syncLockButtonVisual(st);
         return;
     }
-    idx -= 1;
-    if (idx < 0 && !(dasm_getFlags() & DASM_IFACE_FLAG_STREAMING)) {
+    int idx = 0;
+    if (!dasm_findIndexForAddr(a, &idx)) {
+        idx = 0;
+    }
+    if (!(dasm_getFlags() & DASM_IFACE_FLAG_STREAMING)) {
+        idx -= 1;
+    }
+    if (idx < 0) {
         idx = 0;
     }
     st->scrollIndex = idx;
-    st->scrollAnchorAddr = 0;
-    st->scrollAnchorValid = 0;
+    st->scrollAnchorAddr = a;
+    st->scrollAnchorValid = 1;
     st->scrollLocked = 1;
     st->gutterPending = 0;
     source_pane_syncLockButtonVisual(st);
@@ -6262,7 +6273,7 @@ source_pane_asmAddressSubmitted(e9ui_context_t *ctx, void *user)
     }
     const char *text = e9ui_textbox_getText(addr_box);
     uint64_t addr = 0;
-    if (!source_pane_parseHex64(text, &addr) || addr == 0) {
+    if (!source_pane_parseHex64(text, &addr)) {
         return;
     }
     uint64_t resolved = source_pane_resolveAsmLikeAnchorAddr(st, addr);

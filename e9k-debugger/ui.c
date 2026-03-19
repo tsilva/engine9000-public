@@ -502,7 +502,6 @@ void
 ui_refreshOnPause(void)
 {
     machine_refresh();
-    memory_refreshOnBreak();
     for (size_t i = 0; i < sizeof(ui_source_panes)/sizeof(ui_source_panes[0]); ++i) {
         if (ui_source_panes[i]) {
             source_pane_markNeedsRefresh(ui_source_panes[i]);
