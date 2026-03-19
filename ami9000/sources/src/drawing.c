@@ -61,8 +61,20 @@ happening, all ports should restrict window widths to be multiples of 16 pixels.
 #include "devices.h"
 #include "gfxboard.h"
 
+#ifndef E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
 #ifdef __LIBRETRO__
+#define E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING 1
+#else
+#define E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING 0
+#endif
+#endif
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
 #include "libretro-core.h"
+#endif
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+static int drawing_libretroWinuaeWindowPositioning = 0;
 #endif
 
 #ifndef E9K_HACK_BLITTER_VIS
@@ -77,6 +89,16 @@ happening, all ports should restrict window widths to be multiples of 16 pixels.
 #endif
 
 //#define XLINECHECK
+
+void
+drawing_setLibretroWinuaeWindowPositioning(int enabled)
+{
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	drawing_libretroWinuaeWindowPositioning = enabled ? 1 : 0;
+#else
+	(void)enabled;
+#endif
+}
 
 struct amigadisplay adisplays[MAX_AMIGADISPLAYS];
 
@@ -5274,7 +5296,9 @@ static void center_image (void)
 	int ew = vidinfo->drawbuffer.extrawidth;
 	int maxdiw = max_diwlastword;
 
-#ifndef __LIBRETRO__
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	if (drawing_libretroWinuaeWindowPositioning) {
+#endif
 	if (currprefs.gfx_overscanmode <= OVERSCANMODE_OVERSCAN && currprefs.gfx_xcenter && !fd->gfx_filter_autoscale && max_diwstop > 0) {
 
 		if (max_diwstop - min_diwstart < w && currprefs.gfx_xcenter == 2)
@@ -5312,7 +5336,9 @@ static void center_image (void)
 			visible_left_border = (vidinfo->drawbuffer.inxoffset - DISPLAY_LEFT_SHIFT) << currprefs.gfx_resolution;
 		}
 	}
-#endif /* __LIBRETRO__ */
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	}
+#endif
 
 	if (visible_left_border > max_diwlastword - 32)
 		visible_left_border = max_diwlastword - 32;
@@ -5334,7 +5360,9 @@ static void center_image (void)
 		max_drawn_amiga_line_tmp = vidinfo->drawbuffer.inheight;
 	max_drawn_amiga_line_tmp >>= linedbl;
 	
-#ifndef __LIBRETRO__
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	if (drawing_libretroWinuaeWindowPositioning) {
+#endif
 	thisframe_y_adjust = minfirstline;
 	if (currprefs.gfx_ycenter && !fd->gfx_filter_autoscale) {
 
@@ -5359,7 +5387,9 @@ static void center_image (void)
 
 		}
 	}
-#endif /* __LIBRETRO__ */
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	}
+#endif
 
 	/* Make sure the value makes sense */
 	if (thisframe_y_adjust + max_drawn_amiga_line_tmp > maxvpos + maxvpos / 2)

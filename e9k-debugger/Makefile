@@ -29,7 +29,7 @@ endif
 
 DEBUG_FLAGS=-g -fno-omit-frame-pointer
 SANITIZER_LIBS=
-LTO_FLAGS := #-flto
+LTO_FLAGS := -flto
 ifeq ($(UNAME_S),Darwin)
 DEBUG_FLAGS += -fsanitize=address,undefined
 SANITIZER_LIBS += -fsanitize=address,undefined

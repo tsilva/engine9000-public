@@ -28,6 +28,10 @@
 #define E9K_HACK_DEBUGGER_HOST 0
 #endif
 
+#ifndef E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+#define E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING 1
+#endif
+
 #if E9K_HACK_DEBUGGER_HOST
 #include "e9k_debug.h"
 #endif
@@ -117,6 +121,9 @@ static struct preset_options preset_opt;
 static bool opt_region_auto = true;
 static char opt_video_resolution_auto = RESOLUTION_AUTO_NONE;
 static bool opt_video_vresolution_auto = false;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+static bool opt_video_winuae_window_positioning = false;
+#endif
 bool opt_floppy_sound_empty_mute = false;
 bool opt_floppy_multidrive = false;
 bool opt_floppy_write_redirect = false;
@@ -1545,6 +1552,22 @@ static void retro_set_core_options()
          },
          "auto"
       },
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+      {
+         "puae_video_winuae_window_positioning",
+         "Video > WinUAE Window Positioning",
+         "WinUAE Window Positioning",
+         "Use WinUAE visible window positioning - currently unsure if this is incompatible with other PUAE window position/scaling code",
+         NULL,
+         "video",
+         {
+            { "disabled", NULL },
+            { "enabled", NULL },
+            { NULL, NULL },
+         },
+         "disabled"
+      },
+#endif
       {
          "puae_immediate_blits",
          "Video > Immediate/Waiting Blits",
@@ -3181,6 +3204,10 @@ static void retro_set_options_display(void)
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = "puae_horizontal_pos";
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+   option_display.key = "puae_video_winuae_window_positioning";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+#endif
    option_display.key = "puae_collision_level";
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = "puae_immediate_blits";
@@ -3432,6 +3459,9 @@ static void update_variables(void)
 
    uae_model_config[0] = '\0';
    uae_config[0]       = '\0';
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+   opt_video_winuae_window_positioning = false;
+#endif
 
    GET_VAR("model")
    {
@@ -4474,6 +4504,16 @@ static void update_variables(void)
             opt_horizontal_offset = -new_horizontal_offset;
       }
    }
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+   GET_VAR("video_winuae_window_positioning")
+   {
+      if (!strcmp(var.value, "enabled"))
+         opt_video_winuae_window_positioning = true;
+   }
+
+   drawing_setLibretroWinuaeWindowPositioning(opt_video_winuae_window_positioning);
+#endif
 
    GET_VAR("use_whdload")
    {
