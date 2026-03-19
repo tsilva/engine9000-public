@@ -2133,7 +2133,9 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
                 return 0;
             }
         }
-        if (focus && focus->name && strcmp(focus->name, "e9ui_textbox") == 0) {
+        if (focus && focus->name &&
+            (strcmp(focus->name, "e9ui_textbox") == 0 ||
+             strcmp(focus->name, "e9ui_data_edit") == 0)) {
             return 0;
         }
         return 1;

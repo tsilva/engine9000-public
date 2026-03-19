@@ -445,13 +445,13 @@ source_cpr_commitInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, e9ui_c
 
         if (!split) {
             e9ui_showTransientMessage("CPR EDIT INVALID");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         leftLen = (size_t)(split - text);
         if (leftLen == 0 || leftLen >= sizeof(left)) {
             e9ui_showTransientMessage("CPR EDIT INVALID");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         memcpy(left, text, leftLen);
@@ -459,13 +459,13 @@ source_cpr_commitInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, e9ui_c
         if (!source_pane_parseInlineHexWord(left, &w1) ||
             !source_pane_parseInlineHexWord(split + 1, &w2)) {
             e9ui_showTransientMessage("CPR EDIT INVALID");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         if (!libretro_host_debugWriteMemory(st->inlineEditAddr, (uint32_t)w1, 2) ||
             !libretro_host_debugWriteMemory(st->inlineEditAddr + 2u, (uint32_t)w2, 2)) {
             e9ui_showTransientMessage("CPR EDIT FAILED");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         source_pane_inlineEditRefreshAfterWrite(st);
@@ -508,12 +508,12 @@ source_cpr_commitInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, e9ui_c
         uint16_t valueWord = 0;
         if (!source_pane_parseInlineHexWord(text, &valueWord)) {
             e9ui_showTransientMessage("CPR VALUE INVALID");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         if (!libretro_host_debugWriteMemory(st->inlineEditAddr + 2u, (uint32_t)valueWord, 2)) {
             e9ui_showTransientMessage("CPR EDIT FAILED");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return -1;
         }
         source_pane_inlineEditRefreshAfterWrite(st);
@@ -608,16 +608,24 @@ source_cpr_beginInlineWordsEditAtPoint(e9ui_component_t *self, e9ui_context_t *c
         };
         if (mx >= rect.x && mx < rect.x + rect.w &&
             my >= rect.y && my < rect.y + rect.h) {
-            return source_pane_beginInlineEdit(st,
-                                               ctx,
-                                               source_pane_mode_cpr,
-                                               source_pane_inline_edit_cpr_words,
-                                               (uint32_t)addrs[i],
-                                               4,
-                                               w1,
-                                               w2,
-                                               editText,
-                                               rect);
+            if (source_pane_beginInlineEdit(st,
+                                            ctx,
+                                            source_pane_mode_cpr,
+                                            source_pane_inline_edit_cpr_words,
+                                            (uint32_t)addrs[i],
+                                            4,
+                                            w1,
+                                            w2,
+                                            editText,
+                                            rect,
+                                               source_pane_dataEditCursorForPoint(useFont,
+                                                                                  editText,
+                                                                                  e9ui_data_edit_mode_hex_words16,
+                                                                                  textX,
+                                                                                  mx))) {
+                return 1;
+            }
+            return 0;
         }
         y += metrics.lineHeight;
     }
@@ -734,16 +742,20 @@ source_cpr_beginInlineRegisterEditAtPoint(e9ui_component_t *self, e9ui_context_t
             }
             memcpy(regText, line + regStart, (size_t)regLen);
             regText[regLen] = '\0';
-            return source_pane_beginInlineEdit(st,
-                                               ctx,
-                                               source_pane_mode_cpr,
-                                               source_pane_inline_edit_cpr_reg,
-                                               (uint32_t)addrs[i],
-                                               2,
-                                               w1,
-                                               w2,
-                                               regText,
-                                               rect);
+            if (source_pane_beginInlineEdit(st,
+                                            ctx,
+                                            source_pane_mode_cpr,
+                                            source_pane_inline_edit_cpr_reg,
+                                            (uint32_t)addrs[i],
+                                            2,
+                                            w1,
+                                            w2,
+                                            regText,
+                                            rect,
+                                            0)) {
+                return 1;
+            }
+            return 0;
         }
         y += metrics.lineHeight;
     }
@@ -862,16 +874,24 @@ source_cpr_beginInlineValueEditAtPoint(e9ui_component_t *self, e9ui_context_t *c
             }
             memcpy(valueText, valueStart, (size_t)valueLen);
             valueText[valueLen] = '\0';
-            return source_pane_beginInlineEdit(st,
-                                               ctx,
-                                               source_pane_mode_cpr,
-                                               source_pane_inline_edit_cpr_value,
-                                               (uint32_t)addrs[i],
-                                               2,
-                                               w1,
-                                               w2,
-                                               valueText,
-                                               rect);
+            if (source_pane_beginInlineEdit(st,
+                                            ctx,
+                                            source_pane_mode_cpr,
+                                            source_pane_inline_edit_cpr_value,
+                                            (uint32_t)addrs[i],
+                                            2,
+                                            w1,
+                                            w2,
+                                            valueText,
+                                            rect,
+                                               source_pane_dataEditCursorForPoint(useFont,
+                                                                                  valueText,
+                                                                                  e9ui_data_edit_mode_hex_words16,
+                                                                                  valueX,
+                                                                                  mx))) {
+                return 1;
+            }
+            return 0;
         }
         y += metrics.lineHeight;
     }

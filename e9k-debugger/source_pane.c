@@ -21,6 +21,7 @@
 #include "e9ui_step_buttons.h"
 #include "config.h"
 #include "debugger.h"
+#include "inline_edit_pause.h"
 #include "source.h"
 #include "source_pane.h"
 #include "source_pane_internal.h"
@@ -4532,12 +4533,44 @@ source_pane_formatInlineHexBytes(char *dst, size_t cap, const uint8_t *bytes, in
 }
 
 static e9ui_component_t *
-source_pane_inlineEditComponent(source_pane_state_t *st)
+source_pane_inlineTextboxComponent(source_pane_state_t *st)
 {
     if (!st || !st->ownerPane || !st->inlineEditMeta) {
         return NULL;
     }
     return e9ui_child_find(st->ownerPane, st->inlineEditMeta);
+}
+
+static e9ui_component_t *
+source_pane_inlineDataEditComponent(source_pane_state_t *st)
+{
+    if (!st || !st->ownerPane || !st->inlineDataEditMeta) {
+        return NULL;
+    }
+    return e9ui_child_find(st->ownerPane, st->inlineDataEditMeta);
+}
+
+static e9ui_component_t *
+source_pane_inlineEditComponentForKind(source_pane_state_t *st, source_pane_inline_edit_kind_t kind)
+{
+    if (!st) {
+        return NULL;
+    }
+    if (kind == source_pane_inline_edit_hex_bytes ||
+        kind == source_pane_inline_edit_cpr_words ||
+        kind == source_pane_inline_edit_cpr_value) {
+        return source_pane_inlineDataEditComponent(st);
+    }
+    return source_pane_inlineTextboxComponent(st);
+}
+
+static e9ui_component_t *
+source_pane_inlineEditComponent(source_pane_state_t *st)
+{
+    if (!st) {
+        return NULL;
+    }
+    return source_pane_inlineEditComponentForKind(st, st->inlineEditKind);
 }
 
 void
@@ -4549,7 +4582,14 @@ source_pane_inlineEditCancel(source_pane_state_t *st, e9ui_context_t *ctx)
         return;
     }
 
-    editor = source_pane_inlineEditComponent(st);
+    e9ui_component_t *textboxEditor = source_pane_inlineTextboxComponent(st);
+    e9ui_component_t *dataEditor = source_pane_inlineDataEditComponent(st);
+    if (textboxEditor) {
+        e9ui_textbox_setOptions(textboxEditor, NULL, 0);
+        e9ui_textbox_setText(textboxEditor, "");
+        e9ui_setHidden(textboxEditor, 1);
+    }
+    editor = dataEditor;
     st->inlineEditActive = 0;
     st->inlineEditKind = source_pane_inline_edit_none;
     st->inlineEditMode = source_pane_mode_c;
@@ -4559,13 +4599,13 @@ source_pane_inlineEditCancel(source_pane_state_t *st, e9ui_context_t *ctx)
     st->inlineEditWord2 = 0;
     st->inlineEditRect = (SDL_Rect){0, 0, 0, 0};
     if (editor) {
-        e9ui_textbox_setOptions(editor, NULL, 0);
-        e9ui_textbox_setText(editor, "");
+        e9ui_data_edit_setText(editor, "");
         e9ui_setHidden(editor, 1);
     }
-    if (ctx && e9ui_getFocus(ctx) == editor) {
+    if (ctx && (e9ui_getFocus(ctx) == textboxEditor || e9ui_getFocus(ctx) == dataEditor)) {
         e9ui_setFocus(ctx, st->ownerPane);
     }
+    inline_edit_pauseEnd(&st->inlineEditAutoResume);
 }
 
 void
@@ -4629,17 +4669,18 @@ source_pane_inlineEditCommit(source_pane_state_t *st, e9ui_context_t *ctx)
     if (!st || !st->inlineEditActive) {
         return 0;
     }
-    if (machine_getRunning(debugger.machine)) {
-        e9ui_showTransientMessage("PAUSE TO EDIT MEMORY");
-        return 0;
-    }
-
     editor = source_pane_inlineEditComponent(st);
     if (!editor) {
         source_pane_inlineEditCancel(st, ctx);
         return 0;
     }
-    text = e9ui_textbox_getText(editor);
+    if (st->inlineEditKind == source_pane_inline_edit_hex_bytes ||
+        st->inlineEditKind == source_pane_inline_edit_cpr_words ||
+        st->inlineEditKind == source_pane_inline_edit_cpr_value) {
+        text = e9ui_data_edit_getText(editor);
+    } else {
+        text = e9ui_textbox_getText(editor);
+    }
 
     cprResult = source_cpr_commitInlineEdit(st, ctx, editor, text);
     if (cprResult != 0) {
@@ -4651,17 +4692,17 @@ source_pane_inlineEditCommit(source_pane_state_t *st, e9ui_context_t *ctx)
         memset(bytes, 0, sizeof(bytes));
         if (!source_pane_parseInlineHexBytes(text, bytes, st->inlineEditByteCount)) {
             e9ui_showTransientMessage("INVALID HEX FORMAT");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return 0;
         }
         if (!source_pane_writeHexBytes(st->inlineEditAddr, bytes, st->inlineEditByteCount)) {
             e9ui_showTransientMessage("WRITE FAILED - NO CORE SUPPORT?");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return 0;
         }
         if (!source_pane_verifyHexBytes(st->inlineEditAddr, bytes, st->inlineEditByteCount)) {
             e9ui_showTransientMessage("UNABLE TO WRITE DATA - ROM ?");
-            e9ui_textbox_selectAllExternal(editor);
+            e9ui_data_edit_selectAllExternal(editor);
             return 0;
         }
         source_pane_inlineEditRefreshAfterWrite(st);
@@ -4710,26 +4751,92 @@ source_pane_inlineEditKey(e9ui_context_t *ctx, SDL_Keycode key, SDL_Keymod mods,
 }
 
 int
+source_pane_dataEditCursorForPoint(TTF_Font *font, const char *text, e9ui_data_edit_mode_t mode,
+                                   int textX, int mx)
+{
+    int target = 0;
+    int len = 0;
+    int bestCursor = 0;
+    int bestDist = INT_MAX;
+    int fullWidth = 0;
+    int groupDigits = 0;
+
+    if (!font || !text) {
+        return 0;
+    }
+
+    target = mx - textX;
+    if (target <= 0) {
+        return 0;
+    }
+    len = (int)strlen(text);
+    fullWidth = source_pane_measureSegment(font, text, 0, len);
+    if (target >= fullWidth) {
+        return len;
+    }
+
+    switch (mode) {
+    case e9ui_data_edit_mode_hex_words16:
+        groupDigits = 4;
+        break;
+    case e9ui_data_edit_mode_hex_bytes:
+        groupDigits = 2;
+        break;
+    case e9ui_data_edit_mode_ascii_fixed:
+    default:
+        groupDigits = 0;
+        break;
+    }
+
+    for (int i = 0; i < len; ++i) {
+        int startWidth = 0;
+        int endWidth = 0;
+        int dist = 0;
+
+        if (groupDigits > 0 && (i % (groupDigits + 1)) == groupDigits) {
+            continue;
+        }
+        startWidth = source_pane_measureSegment(font, text, 0, i);
+        endWidth = source_pane_measureSegment(font, text, 0, i + 1);
+        if (target >= startWidth && target < endWidth) {
+            return i;
+        }
+        dist = startWidth - target;
+        if (dist < 0) {
+            dist = -dist;
+        }
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestCursor = i;
+        }
+    }
+
+    return bestCursor;
+}
+
+int
 source_pane_beginInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, source_pane_mode_t mode,
                             source_pane_inline_edit_kind_t kind, uint32_t addr, int byteCount,
-                            uint16_t word1, uint16_t word2, const char *text, SDL_Rect rect)
+                            uint16_t word1, uint16_t word2, const char *text, SDL_Rect rect,
+                            int initialCursor)
 {
     e9ui_component_t *editor = NULL;
+    int autoResume = 0;
 
     if (!st || !ctx || !text || byteCount <= 0) {
         return 0;
     }
-    if (machine_getRunning(debugger.machine)) {
-        e9ui_showTransientMessage("PAUSE TO EDIT MEMORY");
+
+    editor = source_pane_inlineEditComponentForKind(st, kind);
+    if (!editor) {
         return 0;
     }
-
-    editor = source_pane_inlineEditComponent(st);
-    if (!editor) {
+    if (!inline_edit_pauseBegin(&autoResume)) {
         return 0;
     }
 
     st->inlineEditActive = 1;
+    st->inlineEditAutoResume = autoResume;
     st->inlineEditKind = kind;
     st->inlineEditMode = mode;
     st->inlineEditAddr = addr;
@@ -4746,12 +4853,30 @@ source_pane_beginInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, source
             st->inlineEditRect.h = preferredH;
         }
     }
-    if (kind == source_pane_inline_edit_cpr_reg && source_cpr_buildRegisterOptions(st)) {
-        e9ui_textbox_setOptions(editor, st->cprRegisterOptions, st->cprRegisterOptionCount);
+    if (kind == source_pane_inline_edit_hex_bytes ||
+        kind == source_pane_inline_edit_cpr_words ||
+        kind == source_pane_inline_edit_cpr_value) {
+        if (kind == source_pane_inline_edit_hex_bytes) {
+            e9ui_data_edit_setCellCount(editor, byteCount);
+            e9ui_data_edit_setMode(editor, e9ui_data_edit_mode_hex_bytes);
+        } else {
+            int wordCount = byteCount / 2;
+            if (wordCount <= 0) {
+                wordCount = 1;
+            }
+            e9ui_data_edit_setCellCount(editor, wordCount);
+            e9ui_data_edit_setMode(editor, e9ui_data_edit_mode_hex_words16);
+        }
+        e9ui_data_edit_setText(editor, text);
+        e9ui_data_edit_setCursor(editor, initialCursor);
     } else {
-        e9ui_textbox_setOptions(editor, NULL, 0);
+        if (kind == source_pane_inline_edit_cpr_reg && source_cpr_buildRegisterOptions(st)) {
+            e9ui_textbox_setOptions(editor, st->cprRegisterOptions, st->cprRegisterOptionCount);
+        } else {
+            e9ui_textbox_setOptions(editor, NULL, 0);
+        }
+        e9ui_textbox_setText(editor, text);
     }
-    e9ui_textbox_setText(editor, text);
     e9ui_setHidden(editor, 0);
     if (editor->layout) {
         editor->layout(editor, ctx, (e9ui_rect_t){
@@ -4769,7 +4894,6 @@ source_pane_beginInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, source
         };
     }
     e9ui_setFocus(ctx, editor);
-    e9ui_textbox_selectAllExternal(editor);
     return 1;
 }
 
@@ -4969,16 +5093,24 @@ source_pane_beginInlineHexEditAtPoint(e9ui_component_t *self, e9ui_context_t *ct
         };
         if (mx >= rect.x && mx < rect.x + rect.w &&
             my >= rect.y && my < rect.y + rect.h) {
-            return source_pane_beginInlineEdit(st,
-                                               ctx,
-                                               source_pane_mode_h,
-                                               source_pane_inline_edit_hex_bytes,
-                                               (uint32_t)a,
-                                               (int)wantBytes,
-                                               0,
-                                               0,
-                                               editText,
-                                               rect);
+            if (source_pane_beginInlineEdit(st,
+                                            ctx,
+                                            source_pane_mode_h,
+                                            source_pane_inline_edit_hex_bytes,
+                                            (uint32_t)a,
+                                            (int)wantBytes,
+                                            0,
+                                            0,
+                                            editText,
+                                            rect,
+                                               source_pane_dataEditCursorForPoint(useFont,
+                                                                                  editText,
+                                                                                  e9ui_data_edit_mode_hex_bytes,
+                                                                                  textX,
+                                                                                  mx))) {
+                return 1;
+            }
+            return 0;
         }
         y += metrics.lineHeight;
     }
@@ -5431,7 +5563,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
       e9ui_component_t* searchBox = st && st->searchBoxMeta ? e9ui_child_find(self, st->searchBoxMeta) : NULL;
       e9ui_component_t* asmSymbolSelect = st && st->asmSymbolSelectMeta ? e9ui_child_find(self, st->asmSymbolSelectMeta) : NULL;
       e9ui_component_t* asmAddress = st && st->asmAddressMeta ? e9ui_child_find(self, st->asmAddressMeta) : NULL;
-      e9ui_component_t* inlineEdit = st && st->inlineEditMeta ? e9ui_child_find(self, st->inlineEditMeta) : NULL;
+      e9ui_component_t* inlineEdit = source_pane_inlineEditComponent(st);
       source_pane_mode_t mode = source_pane_getMode(self);
       int rowX = self->bounds.x;
       int rowY = self->bounds.y;
@@ -5653,6 +5785,12 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
         }
         return 1;
     }
+    if (st && st->inlineEditActive &&
+        ev->type == SDL_KEYDOWN &&
+        ev->key.keysym.sym == SDLK_ESCAPE) {
+        source_pane_inlineEditCancel(st, ctx);
+        return 1;
+    }
     if (st) {
         int mx = 0;
         int my = 0;
@@ -5788,69 +5926,68 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
     }
     if (ev->type == SDL_MOUSEBUTTONUP && ev->button.button == SDL_BUTTON_LEFT) {
         if (!st || !st->gutterPending) {
-            return 0;
-        }
-        st->gutterPending = 0;
-        int slop = ctx ? e9ui_scale_px(ctx, 4) : 4;
-        int dx = ev->button.x - st->gutterDownX;
-        int dy = ev->button.y - st->gutterDownY;
-        if (dx * dx + dy * dy >= slop * slop) {
-            return 0;
-        }
-        if (st->gutterMode == source_pane_mode_c) {
-            const char *path = NULL;
-            if (st->manualSrcActive && st->manualSrcPath) {
-                path = st->manualSrcPath;
-            } else {
-                path = st->curSrcPath;
-            }
-            int lineNo = st->gutterLine;
-            if (!path || !path[0] || lineNo <= 0) {
+        } else {
+            st->gutterPending = 0;
+            int slop = ctx ? e9ui_scale_px(ctx, 4) : 4;
+            int dx = ev->button.x - st->gutterDownX;
+            int dy = ev->button.y - st->gutterDownY;
+            if (dx * dx + dy * dy >= slop * slop) {
                 return 0;
             }
-            const machine_breakpoint_t *bps = NULL;
-            int bp_count = 0;
-            if (machine_getBreakpoints(&debugger.machine, &bps, &bp_count)) {
-                for (int i = 0; i < bp_count; ++i) {
-                    machine_breakpoint_t *bp = (machine_breakpoint_t*)&bps[i];
-                    if (bp->line <= 0 || !bp->file[0]) {
-                        breakpoints_resolveLocation(bp);
+            if (st->gutterMode == source_pane_mode_c) {
+                const char *path = NULL;
+                if (st->manualSrcActive && st->manualSrcPath) {
+                    path = st->manualSrcPath;
+                } else {
+                    path = st->curSrcPath;
+                }
+                int lineNo = st->gutterLine;
+                if (!path || !path[0] || lineNo <= 0) {
+                    return 0;
+                }
+                const machine_breakpoint_t *bps = NULL;
+                int bp_count = 0;
+                if (machine_getBreakpoints(&debugger.machine, &bps, &bp_count)) {
+                    for (int i = 0; i < bp_count; ++i) {
+                        machine_breakpoint_t *bp = (machine_breakpoint_t*)&bps[i];
+                        if (bp->line <= 0 || !bp->file[0]) {
+                            breakpoints_resolveLocation(bp);
+                        }
                     }
+                } else {
+                    bps = NULL;
+                    bp_count = 0;
                 }
-            } else {
-                bps = NULL;
-                bp_count = 0;
-            }
-            if (source_pane_removeBreakpointsForLine(path, lineNo, bps, bp_count)) {
-                breakpoints_markDirty();
-                return 1;
-            }
-            if (source_pane_addBreakpointsForLine(path, lineNo)) {
-                breakpoints_markDirty();
-                return 1;
-            }
-            return 0;
-        }
-        if (source_pane_isCpuAsmLikeMode(st->gutterMode)) {
-            uint32_t addr = st->gutterAddr;
-            machine_breakpoint_t *existing = machine_findBreakpointByAddr(&debugger.machine, addr);
-            if (existing) {
-                if (machine_removeBreakpointByAddr(&debugger.machine, addr)) {
-                    libretro_host_debugRemoveBreakpoint(addr);
+                if (source_pane_removeBreakpointsForLine(path, lineNo, bps, bp_count)) {
                     breakpoints_markDirty();
+                    return 1;
                 }
-                return 1;
+                if (source_pane_addBreakpointsForLine(path, lineNo)) {
+                    breakpoints_markDirty();
+                    return 1;
+                }
+                return 0;
             }
-            machine_breakpoint_t *bp = machine_addBreakpoint(&debugger.machine, addr, 1);
-            if (bp) {
-                breakpoints_resolveLocation(bp);
-                libretro_host_debugAddBreakpoint(addr);
-                breakpoints_markDirty();
-                return 1;
+            if (source_pane_isCpuAsmLikeMode(st->gutterMode)) {
+                uint32_t addr = st->gutterAddr;
+                machine_breakpoint_t *existing = machine_findBreakpointByAddr(&debugger.machine, addr);
+                if (existing) {
+                    if (machine_removeBreakpointByAddr(&debugger.machine, addr)) {
+                        libretro_host_debugRemoveBreakpoint(addr);
+                        breakpoints_markDirty();
+                    }
+                    return 1;
+                }
+                machine_breakpoint_t *bp = machine_addBreakpoint(&debugger.machine, addr, 1);
+                if (bp) {
+                    breakpoints_resolveLocation(bp);
+                    libretro_host_debugAddBreakpoint(addr);
+                    breakpoints_markDirty();
+                    return 1;
+                }
+                return 0;
             }
-            return 0;
         }
-        return 0;
     }
     if (ev->type == SDL_MOUSEWHEEL) {
         int mx = e9ui->mouseX;
@@ -5917,7 +6054,25 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
         if (!source_pane_pointInBounds(self, mx, my)) {
             return 0;
         }
-        if (st && !st->inlineEditActive && ev->button.clicks >= 2) {
+        if (st) {
+            st->inlineEditPending = 0;
+            if (!st->inlineEditActive && ev->button.clicks >= 2) {
+                st->inlineEditPending = 1;
+            }
+        }
+    }
+    if (ev->type == SDL_MOUSEBUTTONUP && ev->button.button == SDL_BUTTON_LEFT) {
+        int mx = ev->button.x;
+        int my = ev->button.y;
+        if (!source_pane_pointInBounds(self, mx, my)) {
+            return 0;
+        }
+        if (st && st->inlineEditPending) {
+            st->inlineEditPending = 0;
+        } else {
+            return 0;
+        }
+        if (st && !st->inlineEditActive) {
             if (mode == source_pane_mode_h &&
                 source_pane_beginInlineHexEditAtPoint(self, ctx, st, mx, my)) {
                 return 1;
@@ -6450,6 +6605,7 @@ source_pane_dtor(e9ui_component_t *self, e9ui_context_t *ctx)
     st->asmSymbolSelectMeta = NULL;
     st->asmAddressMeta = NULL;
     st->inlineEditMeta = NULL;
+    st->inlineDataEditMeta = NULL;
     st->functionSelectMeta = NULL;
 }
 
@@ -6539,6 +6695,13 @@ source_pane_make(void)
       st->inlineEditMeta = alloc_strdup("inline_edit");
       e9ui_child_add(c, inlineEdit, st->inlineEditMeta);
       e9ui_setHidden(inlineEdit, 1);
+  }
+  e9ui_component_t *inlineDataEdit = e9ui_data_edit_make(16, source_pane_inlineEditSubmitted, st);
+  if (inlineDataEdit) {
+      e9ui_data_edit_setKeyHandler(inlineDataEdit, source_pane_inlineEditKey, st);
+      st->inlineDataEditMeta = alloc_strdup("inline_data_edit");
+      e9ui_child_add(c, inlineDataEdit, st->inlineDataEditMeta);
+      e9ui_setHidden(inlineDataEdit, 1);
   }
 
   source_pane_refreshModeOptions(c, st);

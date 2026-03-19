@@ -23,10 +23,12 @@
 #include "e9ui_stack.h"
 #include "e9ui_hstack.h"
 #include "e9ui_textbox.h"
+#include "e9ui_data_edit.h"
 #include "e9ui_text_cache.h"
 #include "e9ui_step_buttons.h"
 #include "e9ui_scrollbar.h"
 #include "debugger.h"
+#include "inline_edit_pause.h"
 #include "libretro_host.h"
 
 #define MEMORY_SEARCH_MAX_PATTERN 128
@@ -34,6 +36,8 @@
 #define MEMORY_SEARCH_CHUNK 4096
 #define MEMORY_BYTES_PER_ROW 16u
 #define MEMORY_DEFAULT_VIEW_ROWS 32
+#define MEMORY_ROW_HEX_START_COL 10
+#define MEMORY_ROW_ASCII_START_COL (MEMORY_ROW_HEX_START_COL + ((int)MEMORY_BYTES_PER_ROW * 3) + 1)
 
 typedef struct memory_search_pattern {
     uint8_t ascii[MEMORY_SEARCH_MAX_PATTERN];
@@ -41,6 +45,12 @@ typedef struct memory_search_pattern {
     uint8_t hex[MEMORY_SEARCH_MAX_PATTERN];
     int hexLen;
 } memory_search_pattern_t;
+
+typedef enum memory_inline_edit_mode {
+    memory_inline_edit_mode_none = 0,
+    memory_inline_edit_mode_hex,
+    memory_inline_edit_mode_ascii
+} memory_inline_edit_mode_t;
 
 typedef struct memory_view_state {
     unsigned int   base;
@@ -57,9 +67,13 @@ typedef struct memory_view_state {
     e9ui_scrollbar_state_t hScrollbar;
     int            scrollX;
     int            contentPixelWidth;
+    int            inlineEditPending;
     int            inlineEditActive;
+    int            inlineEditAutoResume;
     uint32_t       inlineEditAddr;
     int            inlineEditByteCount;
+    memory_inline_edit_mode_t inlineEditMode;
+    uint8_t        inlineEditOriginalBytes[MEMORY_BYTES_PER_ROW];
     SDL_Rect       inlineEditRect;
 } memory_view_state_t;
 
@@ -341,6 +355,76 @@ memory_formatInlineHexBytes(char *dst, size_t cap, const uint8_t *bytes, int cou
             break;
         }
     }
+}
+
+static void
+memory_formatInlineAsciiBytes(char *dst, size_t cap, const uint8_t *bytes, int count)
+{
+    int limit = 0;
+
+    if (!dst || cap == 0) {
+        return;
+    }
+    dst[0] = '\0';
+    if (!bytes || count <= 0) {
+        return;
+    }
+
+    limit = count;
+    if ((size_t)limit >= cap) {
+        limit = (int)cap - 1;
+    }
+    if (limit < 0) {
+        limit = 0;
+    }
+    for (int i = 0; i < limit; ++i) {
+        unsigned char c = bytes[i];
+        dst[i] = (c >= 32 && c <= 126) ? (char)c : '.';
+    }
+    dst[limit] = '\0';
+}
+
+static int
+memory_parseInlineAsciiBytes(const char *text, const uint8_t *originalBytes, uint8_t *outBytes, int count)
+{
+    char originalText[MEMORY_BYTES_PER_ROW + 1];
+    size_t textLen = 0;
+
+    if (!text || !originalBytes || !outBytes || count <= 0 || count > (int)MEMORY_BYTES_PER_ROW) {
+        return 0;
+    }
+
+    textLen = strlen(text);
+    if (textLen > (size_t)count) {
+        return 0;
+    }
+
+    memcpy(outBytes, originalBytes, (size_t)count);
+    memory_formatInlineAsciiBytes(originalText, sizeof(originalText), originalBytes, count);
+
+    if (textLen == (size_t)count) {
+        for (int i = 0; i < count; ++i) {
+            unsigned char c = (unsigned char)text[i];
+            if (c < 32 || c > 126) {
+                return 0;
+            }
+            if (c == (unsigned char)originalText[i] &&
+                !(originalBytes[i] >= 32 && originalBytes[i] <= 126)) {
+                continue;
+            }
+            outBytes[i] = c;
+        }
+        return 1;
+    }
+
+    for (size_t i = 0; i < textLen; ++i) {
+        unsigned char c = (unsigned char)text[i];
+        if (c < 32 || c > 126) {
+            return 0;
+        }
+        outBytes[i] = c;
+    }
+    return 1;
 }
 
 static int
@@ -1080,6 +1164,12 @@ memory_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event
         }
         return 1;
     }
+    if (st->inlineEditActive &&
+        ev->type == SDL_KEYDOWN &&
+        ev->key.keysym.sym == SDLK_ESCAPE) {
+        memory_inlineEditCancel(st, ctx);
+        return 1;
+    }
 
     if (ctx &&
         (ev->type == SDL_MOUSEMOTION || ev->type == SDL_MOUSEBUTTONDOWN || ev->type == SDL_MOUSEBUTTONUP)) {
@@ -1113,7 +1203,7 @@ memory_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event
 
     if (ctx) {
         memory_step_buttons_action_ctx_t actionCtx = { st };
-        int stepEnabled = machine_getRunning(debugger.machine) ? 0 : 1;
+        int stepEnabled = 1;
         if (e9ui_step_buttons_handleEvent(ctx,
                                           ev,
                                           self->bounds,
@@ -1158,10 +1248,27 @@ memory_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event
         int mx = ev->button.x;
         int my = ev->button.y;
 
+        st->inlineEditPending = 0;
         if (!memory_pointInBounds(self, mx, my)) {
             return 0;
         }
-        if (!st->inlineEditActive && ev->button.clicks >= 2 &&
+        if (!st->inlineEditActive && ev->button.clicks >= 2) {
+            st->inlineEditPending = 1;
+        }
+        return 0;
+    }
+    if (ev->type == SDL_MOUSEBUTTONUP && ev->button.button == SDL_BUTTON_LEFT) {
+        int mx = ev->button.x;
+        int my = ev->button.y;
+
+        if (!st->inlineEditPending) {
+            return 0;
+        }
+        st->inlineEditPending = 0;
+        if (!memory_pointInBounds(self, mx, my)) {
+            return 0;
+        }
+        if (!st->inlineEditActive &&
             memory_beginInlineEditAtPoint(self, ctx, st, mx, my)) {
             return 1;
         }
@@ -1230,6 +1337,70 @@ memory_measureSegment(TTF_Font *font, const char *line, int start, int len)
     int w = 0;
     (void)TTF_SizeText(font, tmp, &w, NULL);
     return w;
+}
+
+static int
+memory_dataEditCursorForPoint(TTF_Font *font, const char *text, e9ui_data_edit_mode_t mode,
+                              int textX, int mx)
+{
+    int target = 0;
+    int len = 0;
+    int bestCursor = 0;
+    int bestDist = INT_MAX;
+    int fullWidth = 0;
+    int groupDigits = 0;
+
+    if (!font || !text) {
+        return 0;
+    }
+
+    target = mx - textX;
+    if (target <= 0) {
+        return 0;
+    }
+    len = (int)strlen(text);
+    fullWidth = memory_measureSegment(font, text, 0, len);
+    if (target >= fullWidth) {
+        return len;
+    }
+
+    switch (mode) {
+    case e9ui_data_edit_mode_hex_words16:
+        groupDigits = 4;
+        break;
+    case e9ui_data_edit_mode_hex_bytes:
+        groupDigits = 2;
+        break;
+    case e9ui_data_edit_mode_ascii_fixed:
+    default:
+        groupDigits = 0;
+        break;
+    }
+
+    for (int i = 0; i < len; ++i) {
+        int startWidth = 0;
+        int endWidth = 0;
+        int dist = 0;
+
+        if (groupDigits > 0 && (i % (groupDigits + 1)) == groupDigits) {
+            continue;
+        }
+        startWidth = memory_measureSegment(font, text, 0, i);
+        endWidth = memory_measureSegment(font, text, 0, i + 1);
+        if (target >= startWidth && target < endWidth) {
+            return i;
+        }
+        dist = startWidth - target;
+        if (dist < 0) {
+            dist = -dist;
+        }
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestCursor = i;
+        }
+    }
+
+    return bestCursor;
 }
 
 static void
@@ -1313,14 +1484,17 @@ memory_inlineEditCancel(memory_view_state_t *st, e9ui_context_t *ctx)
     st->inlineEditActive = 0;
     st->inlineEditAddr = 0;
     st->inlineEditByteCount = 0;
+    st->inlineEditMode = memory_inline_edit_mode_none;
+    memset(st->inlineEditOriginalBytes, 0, sizeof(st->inlineEditOriginalBytes));
     st->inlineEditRect = (SDL_Rect){0, 0, 0, 0};
     if (editor) {
-        e9ui_textbox_setText(editor, "");
+        e9ui_data_edit_setText(editor, "");
         e9ui_setHidden(editor, 1);
     }
     if (ctx && editor && e9ui_getFocus(ctx) == editor) {
         e9ui_setFocus(ctx, st->ownerView);
     }
+    inline_edit_pauseEnd(&st->inlineEditAutoResume);
 }
 
 static int
@@ -1333,32 +1507,44 @@ memory_inlineEditCommit(memory_view_state_t *st, e9ui_context_t *ctx)
     if (!st || !st->inlineEditActive) {
         return 0;
     }
-    if (machine_getRunning(debugger.machine)) {
-        e9ui_showTransientMessage("PAUSE TO EDIT MEMORY");
-        return 0;
-    }
-
     editor = memory_inlineEditComponent(st);
     if (!editor) {
         memory_inlineEditCancel(st, ctx);
         return 0;
     }
 
-    text = e9ui_textbox_getText(editor);
+    text = e9ui_data_edit_getText(editor);
     memset(bytes, 0, sizeof(bytes));
-    if (!memory_parseInlineHexBytes(text, bytes, st->inlineEditByteCount)) {
-        e9ui_showTransientMessage("INVALID HEX FORMAT");
-        e9ui_textbox_selectAllExternal(editor);
+    switch (st->inlineEditMode) {
+    case memory_inline_edit_mode_ascii:
+        if (!memory_parseInlineAsciiBytes(text,
+                                          st->inlineEditOriginalBytes,
+                                          bytes,
+                                          st->inlineEditByteCount)) {
+            e9ui_showTransientMessage("STRING TOO LONG");
+            e9ui_data_edit_selectAllExternal(editor);
+            return 0;
+        }
+        break;
+    case memory_inline_edit_mode_hex:
+        if (!memory_parseInlineHexBytes(text, bytes, st->inlineEditByteCount)) {
+            e9ui_showTransientMessage("INVALID HEX FORMAT");
+            e9ui_data_edit_selectAllExternal(editor);
+            return 0;
+        }
+        break;
+    default:
+        memory_inlineEditCancel(st, ctx);
         return 0;
     }
     if (!memory_writeHexBytes(st->inlineEditAddr, bytes, st->inlineEditByteCount)) {
         e9ui_showTransientMessage("WRITE FAILED - NO CORE SUPPORT?");
-        e9ui_textbox_selectAllExternal(editor);
+        e9ui_data_edit_selectAllExternal(editor);
         return 0;
     }
     if (!memory_verifyHexBytes(st->inlineEditAddr, bytes, st->inlineEditByteCount)) {
         e9ui_showTransientMessage("UNABLE TO WRITE DATA - ROM ?");
-        e9ui_textbox_selectAllExternal(editor);
+        e9ui_data_edit_selectAllExternal(editor);
         return 0;
     }
 
@@ -1405,21 +1591,22 @@ memory_beginInlineEditAtPoint(e9ui_component_t *self, e9ui_context_t *ctx, memor
     uint32_t rowAddr = 0;
     uint8_t rowData[MEMORY_BYTES_PER_ROW];
     char editText[64];
+    char asciiText[MEMORY_BYTES_PER_ROW + 1];
     char line[256];
     int baseX = 0;
     int hexStartX = 0;
     int hexWidth = 0;
+    int asciiStartX = 0;
+    int asciiWidth = 0;
+    int initialCursor = 0;
     SDL_Rect rect;
     e9ui_component_t *editor = NULL;
+    memory_inline_edit_mode_t mode = memory_inline_edit_mode_none;
+    int autoResume = 0;
 
     if (!self || !ctx || !st) {
         return 0;
     }
-    if (machine_getRunning(debugger.machine)) {
-        e9ui_showTransientMessage("PAUSE TO EDIT MEMORY");
-        return 0;
-    }
-
     font = e9ui->theme.text.source ? e9ui->theme.text.source : ctx->font;
     if (!font) {
         return 0;
@@ -1466,24 +1653,58 @@ memory_beginInlineEditAtPoint(e9ui_component_t *self, e9ui_context_t *ctx, memor
     }
 
     memory_formatInlineHexBytes(editText, sizeof(editText), rowData, (int)MEMORY_BYTES_PER_ROW);
+    memory_formatInlineAsciiBytes(asciiText, sizeof(asciiText), rowData, (int)MEMORY_BYTES_PER_ROW);
     memory_formatRowLine(line, sizeof(line), rowAddr, rowData);
     baseX = self->bounds.x + pad - st->scrollX;
-    hexStartX = baseX + memory_measureSegment(font, line, 0, 10);
-    hexWidth = memory_measureSegment(font, line, 10, (int)strlen(editText));
-    rect = (SDL_Rect){
-        hexStartX - e9ui_scale_px(ctx, 4),
-        y + row * lineHeight - e9ui_scale_px(ctx, 2),
-        hexWidth + e9ui_scale_px(ctx, 12),
-        lineHeight + e9ui_scale_px(ctx, 4)
-    };
+    hexStartX = baseX + memory_measureSegment(font, line, 0, MEMORY_ROW_HEX_START_COL);
+    hexWidth = memory_measureSegment(font, line, MEMORY_ROW_HEX_START_COL, (int)strlen(editText));
+    asciiStartX = baseX + memory_measureSegment(font, line, 0, MEMORY_ROW_ASCII_START_COL);
+    asciiWidth = memory_measureSegment(font, line, MEMORY_ROW_ASCII_START_COL, (int)strlen(asciiText));
+    if (mx >= hexStartX - e9ui_scale_px(ctx, 4) &&
+        mx < hexStartX + hexWidth + e9ui_scale_px(ctx, 8)) {
+        mode = memory_inline_edit_mode_hex;
+        initialCursor = memory_dataEditCursorForPoint(font,
+                                                      editText,
+                                                      e9ui_data_edit_mode_hex_bytes,
+                                                      hexStartX,
+                                                      mx);
+        rect = (SDL_Rect){
+            hexStartX - e9ui_scale_px(ctx, 4),
+            y + row * lineHeight - e9ui_scale_px(ctx, 2),
+            hexWidth + e9ui_scale_px(ctx, 12),
+            lineHeight + e9ui_scale_px(ctx, 4)
+        };
+    } else if (mx >= asciiStartX - e9ui_scale_px(ctx, 4) &&
+               mx < asciiStartX + asciiWidth + e9ui_scale_px(ctx, 8)) {
+        mode = memory_inline_edit_mode_ascii;
+        initialCursor = memory_dataEditCursorForPoint(font,
+                                                      asciiText,
+                                                      e9ui_data_edit_mode_ascii_fixed,
+                                                      asciiStartX,
+                                                      mx);
+        rect = (SDL_Rect){
+            asciiStartX - e9ui_scale_px(ctx, 4),
+            y + row * lineHeight - e9ui_scale_px(ctx, 2),
+            asciiWidth + e9ui_scale_px(ctx, 12),
+            lineHeight + e9ui_scale_px(ctx, 4)
+        };
+    } else {
+        return 0;
+    }
 
     editor = memory_inlineEditComponent(st);
     if (!editor) {
         return 0;
     }
+    if (!inline_edit_pauseBegin(&autoResume)) {
+        return 0;
+    }
     st->inlineEditActive = 1;
+    st->inlineEditAutoResume = autoResume;
     st->inlineEditAddr = rowAddr;
     st->inlineEditByteCount = (int)MEMORY_BYTES_PER_ROW;
+    st->inlineEditMode = mode;
+    memcpy(st->inlineEditOriginalBytes, rowData, sizeof(st->inlineEditOriginalBytes));
     st->inlineEditRect = rect;
     if (st->inlineEditRect.w < e9ui_scale_px(ctx, 80)) {
         st->inlineEditRect.w = e9ui_scale_px(ctx, 80);
@@ -1494,7 +1715,14 @@ memory_beginInlineEditAtPoint(e9ui_component_t *self, e9ui_context_t *ctx, memor
             st->inlineEditRect.h = preferredH;
         }
     }
-    e9ui_textbox_setText(editor, editText);
+    if (mode == memory_inline_edit_mode_ascii) {
+        e9ui_data_edit_setMode(editor, e9ui_data_edit_mode_ascii_fixed);
+        e9ui_data_edit_setText(editor, asciiText);
+    } else {
+        e9ui_data_edit_setMode(editor, e9ui_data_edit_mode_hex_bytes);
+        e9ui_data_edit_setText(editor, editText);
+    }
+    e9ui_data_edit_setCursor(editor, initialCursor);
     e9ui_setHidden(editor, 0);
     if (editor->layout) {
         editor->layout(editor, ctx, (e9ui_rect_t){
@@ -1512,7 +1740,6 @@ memory_beginInlineEditAtPoint(e9ui_component_t *self, e9ui_context_t *ctx, memor
         };
     }
     e9ui_setFocus(ctx, editor);
-    e9ui_textbox_selectAllExternal(editor);
     return 1;
 }
 
@@ -1534,7 +1761,7 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
     }
     memory_step_buttons_action_ctx_t actionCtx = { st };
     {
-        int stepEnabled = machine_getRunning(debugger.machine) ? 0 : 1;
+        int stepEnabled = 1;
         e9ui_step_buttons_tick(ctx,
                                self->bounds,
                                0,
@@ -1550,7 +1777,7 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
     if (!font) {
         return;
     }
-    int stepEnabled = machine_getRunning(debugger.machine) ? 0 : 1;
+    int stepEnabled = 1;
     int rightGutter = memory_stepButtonsGutterWidth(ctx, self);
     if (rightGutter < 0) {
         rightGutter = 0;
@@ -1791,7 +2018,7 @@ memory_makeComponent(void)
 
     st->addressBox = e9ui_textbox_make(32, memory_onAddressSubmit, NULL, st);
     st->searchBox = e9ui_textbox_make(128, memory_onSearchSubmit, memory_onSearchChange, st);
-    e9ui_component_t *inlineEdit = e9ui_textbox_make(64, memory_inlineEditSubmitted, NULL, st);
+    e9ui_component_t *inlineEdit = e9ui_data_edit_make((int)MEMORY_BYTES_PER_ROW, memory_inlineEditSubmitted, st);
     if (!st->addressBox || !st->searchBox || !inlineEdit) {
         if (st->addressBox) {
             e9ui_childDestroy(st->addressBox, NULL);
@@ -1812,8 +2039,7 @@ memory_makeComponent(void)
     e9ui_textbox_setFocusBorderVisible(st->addressBox, 0);
     e9ui_textbox_setFocusBorderVisible(st->searchBox, 0);
     e9ui_textbox_setKeyHandler(st->searchBox, memory_onSearchKey, st);
-    e9ui_textbox_setPlaceholder(inlineEdit, "hex");
-    e9ui_textbox_setKeyHandler(inlineEdit, memory_inlineEditKey, st);
+    e9ui_data_edit_setKeyHandler(inlineEdit, memory_inlineEditKey, st);
     st->inlineEditMeta = alloc_strdup("inline_edit");
     if (!st->inlineEditMeta) {
         e9ui_childDestroy(inlineEdit, NULL);

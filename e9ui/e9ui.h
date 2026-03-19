@@ -25,6 +25,7 @@
 #include "e9ui_spacer.h"
 #include "e9ui_vspacer.h"
 #include "e9ui_textbox.h"
+#include "e9ui_data_edit.h"
 #include "e9ui_separator.h"
 #include "e9ui_overlay.h"
 #include "e9ui_center.h"

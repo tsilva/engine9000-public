@@ -62,6 +62,7 @@ typedef struct source_pane_state {
     int gutterDownX;
     int gutterDownY;
     source_pane_mode_t gutterMode;
+    int inlineEditPending;
     e9ui_scrollbar_state_t cScrollbar;
     int cScrollX;
     int cContentPixelWidth;
@@ -112,7 +113,9 @@ typedef struct source_pane_state {
     int searchMatchLength;
     e9ui_component_t *ownerPane;
     char *inlineEditMeta;
+    char *inlineDataEditMeta;
     int inlineEditActive;
+    int inlineEditAutoResume;
     source_pane_inline_edit_kind_t inlineEditKind;
     source_pane_mode_t inlineEditMode;
     uint32_t inlineEditAddr;
@@ -174,4 +177,9 @@ source_pane_inlineEditRefreshAfterWrite(source_pane_state_t *st);
 int
 source_pane_beginInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, source_pane_mode_t mode,
                             source_pane_inline_edit_kind_t kind, uint32_t addr, int byteCount,
-                            uint16_t word1, uint16_t word2, const char *text, SDL_Rect rect);
+                            uint16_t word1, uint16_t word2, const char *text, SDL_Rect rect,
+                            int initialCursor);
+
+int
+source_pane_dataEditCursorForPoint(TTF_Font *font, const char *text, e9ui_data_edit_mode_t mode,
+                                   int textX, int mx);
