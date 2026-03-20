@@ -151,8 +151,16 @@ source_pane_areAsmViewStepButtonsEnabled(const source_pane_state_t *st);
 static int
 source_pane_isCpuAsmLikeMode(source_pane_mode_t mode);
 
+static int
+source_pane_getAsmWindow(source_pane_state_t *st, int maxLines, uint64_t *out_curAddr,
+                         const char ***out_lines, const uint64_t **out_addrs, int *out_count);
+
 static uint64_t
 source_pane_resolveAsmLikeAnchorAddr(source_pane_state_t *st, uint64_t addr);
+
+static int
+source_pane_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ctx, source_pane_state_t *st,
+                             source_pane_mode_t mode, int mx, int my);
 
 void
 source_pane_inlineEditCancel(source_pane_state_t *st, e9ui_context_t *ctx);
@@ -247,6 +255,158 @@ source_pane_getCScrollbarModel(e9ui_component_t *self,
     *outVisibleLines = maxLines;
     *outTopIndex = first > 0 ? (first - 1) : 0;
     return 1;
+}
+
+static int
+source_pane_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ctx, source_pane_state_t *st,
+                             source_pane_mode_t mode, int mx, int my)
+{
+    if (!self || !ctx || !st) {
+        return 0;
+    }
+
+    TTF_Font *useFont = source_pane_resolveFont(ctx);
+    if (!useFont) {
+        return 0;
+    }
+
+    const int padPx = 10;
+    if (mode == source_pane_mode_c) {
+        source_pane_updateSourceLocation(st, 0);
+        int manualView = st->manualSrcActive && st->manualSrcPath;
+        const char *path = manualView ? st->manualSrcPath : st->curSrcPath;
+        int curLine = manualView ? 0 : st->curSrcLine;
+        if (!path || !path[0] || (!manualView && curLine <= 0)) {
+            return 0;
+        }
+
+        source_pane_line_metrics_t metrics = source_pane_computeLineMetrics(self, ctx, useFont, padPx);
+        if (metrics.innerHeight <= 0) {
+            return 0;
+        }
+        int maxLines = metrics.maxLines > 0 ? metrics.maxLines : 1;
+        int start = 1;
+        if (!manualView) {
+            start = curLine - (maxLines / 2);
+            if (start < 1) {
+                start = 1;
+            }
+        }
+        if (st->scrollLocked) {
+            start = st->scrollLine;
+            if (start < 1) {
+                start = 1;
+            }
+        }
+        int end = start + maxLines - 1;
+        const char **lines = NULL;
+        int count = 0;
+        int first = 0;
+        int total = 0;
+        if (!source_getRange(path, start, end, &lines, &count, &first, &total)) {
+            return 0;
+        }
+        if (count < maxLines && total > 0) {
+            int missing = maxLines - count;
+            int altStart = first - missing;
+            if (altStart < 1) {
+                altStart = 1;
+            }
+            int altEnd = altStart + maxLines - 1;
+            if (altEnd > total) {
+                altEnd = total;
+            }
+            source_getRange(path, altStart, altEnd, &lines, &count, &first, &total);
+        }
+
+        int digits = 1;
+        int tmpTotal = total > 0 ? total : (first + count - 1);
+        for (int v = tmpTotal; v >= 10; v /= 10) {
+            digits++;
+        }
+        if (digits < 3) {
+            digits = 3;
+        }
+        char zeros[16];
+        if (digits >= (int)sizeof(zeros)) {
+            digits = (int)sizeof(zeros) - 1;
+        }
+        for (int i = 0; i < digits; ++i) {
+            zeros[i] = '8';
+        }
+        zeros[digits] = '\0';
+        int gutterW = 0;
+        int th = 0;
+        TTF_SizeText(useFont, zeros, &gutterW, &th);
+        int gutterPad = e9ui_scale_px(ctx, 16);
+        SDL_Rect contentArea = source_pane_getContentArea(self, ctx, padPx);
+        int gutterRight = contentArea.x + padPx + gutterW + gutterPad;
+        if (mx >= gutterRight) {
+            return 0;
+        }
+        int row = (my - (contentArea.y + padPx)) / metrics.lineHeight;
+        if (row < 0 || row >= count) {
+            return 0;
+        }
+        int lineNo = first + row;
+        st->gutterPending = 1;
+        st->gutterMode = source_pane_mode_c;
+        st->gutterLine = lineNo;
+        st->gutterDownX = mx;
+        st->gutterDownY = my;
+        return 1;
+    }
+
+    if (source_pane_isCpuAsmLikeMode(mode)) {
+        source_pane_line_metrics_t metrics = source_pane_computeLineMetrics(self, ctx, useFont, padPx);
+        if (metrics.innerHeight <= 0) {
+            return 0;
+        }
+        int maxLines = metrics.maxLines > 0 ? metrics.maxLines : 1;
+        int drawMaxLines = maxLines + 1;
+        uint64_t curAddr = 0;
+        const char **lines = NULL;
+        const uint64_t *addrs = NULL;
+        int count = 0;
+        if (!source_pane_getAsmWindow(st, drawMaxLines, &curAddr, &lines, &addrs, &count)) {
+            return 0;
+        }
+        (void)curAddr;
+        (void)lines;
+        int hexw = dasm_getAddrHexWidth();
+        if (hexw < 6) {
+            hexw = 6;
+        }
+        if (hexw > 16) {
+            hexw = 16;
+        }
+        char sample[32];
+        for (int i = 0; i < hexw; ++i) {
+            sample[i] = 'F';
+        }
+        sample[hexw] = '\0';
+        int gutterW = 0;
+        int th = 0;
+        TTF_SizeText(useFont, sample, &gutterW, &th);
+        int gutterPad = e9ui_scale_px(ctx, 16);
+        SDL_Rect contentArea = source_pane_getContentArea(self, ctx, padPx);
+        int gutterRight = contentArea.x + padPx + gutterW + gutterPad;
+        if (mx >= gutterRight) {
+            return 0;
+        }
+        int row = (my - (contentArea.y + padPx)) / metrics.lineHeight;
+        if (row < 0 || row >= count) {
+            return 0;
+        }
+        st->gutterPending = 1;
+        st->gutterMode = mode;
+        st->gutterAddr = (uint32_t)(addrs[row] & 0x00ffffffu);
+        st->gutterDownX = mx;
+        st->gutterDownY = my;
+        return 1;
+    }
+
+    return 0;
 }
 
 static int
@@ -6060,6 +6220,9 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
                 st->inlineEditPending = 1;
             }
         }
+        if (source_pane_beginGutterPress(self, ctx, st, mode, mx, my)) {
+            return 1;
+        }
     }
     if (ev->type == SDL_MOUSEBUTTONUP && ev->button.button == SDL_BUTTON_LEFT) {
         int mx = ev->button.x;
@@ -6089,143 +6252,6 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
                 source_cpr_beginInlineWordsEditAtPoint(self, ctx, st, mx, my)) {
                 return 1;
             }
-        }
-        TTF_Font *useFont = source_pane_resolveFont(ctx);
-        if (!useFont) {
-            return 0;
-        }
-        const int padPx = 10;
-        if (mode == source_pane_mode_c) {
-            source_pane_updateSourceLocation(st, 0);
-            int manualView = st && st->manualSrcActive && st->manualSrcPath;
-            const char *path = manualView ? st->manualSrcPath : (st ? st->curSrcPath : NULL);
-            int curLine = manualView ? 0 : (st ? st->curSrcLine : 0);
-            if (!path || !path[0] || (!manualView && curLine <= 0)) {
-                return 0;
-            }
-            source_pane_line_metrics_t metrics = source_pane_computeLineMetrics(self, ctx, useFont, padPx);
-            if (metrics.innerHeight <= 0) {
-                return 0;
-            }
-            int maxLines = metrics.maxLines > 0 ? metrics.maxLines : 1;
-            int start = 1;
-            if (!manualView) {
-                start = curLine - (maxLines / 2);
-                if (start < 1) {
-                    start = 1;
-                }
-            }
-            if (st && st->scrollLocked) {
-                start = st->scrollLine;
-                if (start < 1) {
-                    start = 1;
-                }
-            }
-            int end = start + maxLines - 1;
-            const char **lines = NULL;
-            int count = 0;
-            int first = 0;
-            int total = 0;
-            if (!source_getRange(path, start, end, &lines, &count, &first, &total)) {
-                return 0;
-            }
-            if (count < maxLines && total > 0) {
-                int missing = maxLines - count;
-                int altStart = first - missing;
-                if (altStart < 1) {
-                    altStart = 1;
-                }
-                int altEnd = altStart + maxLines - 1;
-                if (altEnd > total) {
-                    altEnd = total;
-                }
-                source_getRange(path, altStart, altEnd, &lines, &count, &first, &total);
-            }
-
-            int digits = 1;
-            int tmp_total = (total > 0) ? total : (first + count - 1);
-            for (int v = tmp_total; v >= 10; v /= 10) {
-                digits++;
-            }
-            if (digits < 3) {
-                digits = 3;
-            }
-            char zeros[16];
-            if (digits >= (int)sizeof(zeros)) {
-                digits = (int)sizeof(zeros) - 1;
-            }
-            for (int i = 0; i < digits; ++i) {
-                zeros[i] = '8';
-            }
-            zeros[digits] = '\0';
-            int gutterW = 0;
-            int th = 0;
-            TTF_SizeText(useFont, zeros, &gutterW, &th);
-            int gutterPad = e9ui_scale_px(ctx, 16);
-            SDL_Rect contentArea = source_pane_getContentArea(self, ctx, padPx);
-            int gutterRight = contentArea.x + padPx + gutterW + gutterPad;
-            if (mx >= gutterRight) {
-                return 0;
-            }
-            int row = (my - (contentArea.y + padPx)) / metrics.lineHeight;
-            if (row < 0 || row >= count) {
-                return 0;
-            }
-            int lineNo = first + row;
-            st->gutterPending = 1;
-            st->gutterMode = source_pane_mode_c;
-            st->gutterLine = lineNo;
-            st->gutterDownX = mx;
-            st->gutterDownY = my;
-            return 1;
-        }
-        if (source_pane_isCpuAsmLikeMode(mode)) {
-            source_pane_line_metrics_t metrics = source_pane_computeLineMetrics(self, ctx, useFont, padPx);
-            if (metrics.innerHeight <= 0) {
-                return 0;
-            }
-            int maxLines = metrics.maxLines > 0 ? metrics.maxLines : 1;
-            int drawMaxLines = maxLines + 1;
-            uint64_t curAddr = 0;
-            const char **lines = NULL;
-            const uint64_t *addrs = NULL;
-            int count = 0;
-            if (!source_pane_getAsmWindow(st, drawMaxLines, &curAddr, &lines, &addrs, &count)) {
-                return 0;
-            }
-            (void)curAddr;
-            (void)lines;
-            int hexw = dasm_getAddrHexWidth();
-            if (hexw < 6) {
-                hexw = 6;
-            }
-            if (hexw > 16) {
-                hexw = 16;
-            }
-            char sample[32];
-            for (int i = 0; i < hexw; ++i) {
-                sample[i] = 'F';
-            }
-            sample[hexw] = '\0';
-            int gutterW = 0;
-            int th = 0;
-            TTF_SizeText(useFont, sample, &gutterW, &th);
-            int gutterPad = e9ui_scale_px(ctx, 16);
-            SDL_Rect contentArea = source_pane_getContentArea(self, ctx, padPx);
-            int gutterRight = contentArea.x + padPx + gutterW + gutterPad;
-            if (mx >= gutterRight) {
-                return 0;
-            }
-            int row = (my - (contentArea.y + padPx)) / metrics.lineHeight;
-            if (row < 0 || row >= count) {
-                return 0;
-            }
-            st->gutterPending = 1;
-            st->gutterMode = mode;
-            st->gutterAddr = (uint32_t)(addrs[row] & 0x00ffffffu);
-            st->gutterDownX = mx;
-            st->gutterDownY = my;
-            return 1;
         }
     }
     if (ev->type == SDL_KEYDOWN && ctx && e9ui_getFocus(ctx) == self) {
