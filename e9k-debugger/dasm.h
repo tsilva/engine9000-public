@@ -61,4 +61,3 @@ dasm_getRangeByIndex(int start_index, int end_index,
                      const uint64_t **out_addrs,
                      int *out_first_index,
                      int *out_count);
-

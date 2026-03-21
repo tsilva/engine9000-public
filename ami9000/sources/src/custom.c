@@ -5410,6 +5410,15 @@ static void finish_final_fetch(int hpos)
 	/* The latter condition might be able to happen in interlaced frames. */
 	if (vposh >= minfirstline && (thisframe_first_drawn_line < 0 || vposh < thisframe_first_drawn_line)) {
 		thisframe_first_drawn_line = vposh;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+		printf("ydraw-latch first=%d vpos=%d plf=%d len=%d planes=%d minfirst=%d\n",
+			thisframe_first_drawn_line,
+			vposh,
+			thisline_decision.plfleft,
+			thisline_decision.plflinelen,
+			thisline_decision.nr_planes,
+			minfirstline);
+#endif
 	}
 	thisframe_last_drawn_line = vposh;
 

@@ -96,4 +96,3 @@ dasm_getRangeByIndex(int start_index, int end_index,
     }
     return iface->getRangeByIndex(start_index, end_index, out_lines, out_addrs, out_first_index, out_count);
 }
-

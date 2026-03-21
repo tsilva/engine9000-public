@@ -62,6 +62,9 @@ libretro_host_getEstimatedVideoFps(void);
 unsigned
 libretro_host_getEstimatedVideoDistinctColors(void);
 
+bool
+libretro_host_getEstimatedVideoVisibleArea(unsigned *outWidth, unsigned *outHeight);
+
 void
 libretro_host_setJoypadState(unsigned port, unsigned id, int pressed);
 
@@ -200,6 +203,9 @@ libretro_host_debugGetCheckpointEnabled(int *out_enabled);
 
 bool
 libretro_host_debugDisassembleQuick(uint32_t pc, char *out, size_t cap, size_t *out_len);
+
+size_t
+libretro_host_debugReadKnownPcs(uint32_t start_addr, uint32_t end_addr, uint32_t *out, size_t cap);
 
 bool
 libretro_host_profilerStart(int stream);

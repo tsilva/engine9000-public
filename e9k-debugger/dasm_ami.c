@@ -23,6 +23,9 @@ typedef struct dasm_ami_cache {
     int anchorValid;
 } dasm_ami_cache_t;
 
+#define DASM_AMI_KNOWN_PC_CAP 256u
+#define DASM_AMI_KNOWN_PC_LOOKBACK_BYTES 1024u
+
 static dasm_ami_cache_t g_dasmAmi;
 
 static void
@@ -174,6 +177,156 @@ dasm_ami_isIllegalMnemonic(const char *text)
 }
 
 static uint32_t
+dasm_ami_normAddr(uint32_t addr);
+
+static int
+dasm_ami_mnemonicEq(const char *text, const char *mnemonic)
+{
+    const char *p = dasm_ami_stripBytes(text);
+    size_t i = 0;
+
+    if (!p) {
+        return 0;
+    }
+    while (mnemonic[i]) {
+        if (!p[i]) {
+            return 0;
+        }
+        if (tolower((unsigned char)p[i]) != tolower((unsigned char)mnemonic[i])) {
+            return 0;
+        }
+        ++i;
+    }
+    if (p[i] == '\0' || p[i] == ' ' || p[i] == '\t') {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+dasm_ami_mnemonicStartsWith(const char *text, const char *prefix)
+{
+    const char *p = dasm_ami_stripBytes(text);
+    size_t i = 0;
+
+    if (!p) {
+        return 0;
+    }
+    while (prefix[i]) {
+        if (!p[i]) {
+            return 0;
+        }
+        if (tolower((unsigned char)p[i]) != tolower((unsigned char)prefix[i])) {
+            return 0;
+        }
+        ++i;
+    }
+    return 1;
+}
+
+static int
+dasm_ami_scoreInstruction(const char *text)
+{
+    int score = 0;
+
+    if (dasm_ami_isIllegalMnemonic(text)) {
+        return -1000;
+    }
+    if (dasm_ami_mnemonicStartsWith(text, "aline") || dasm_ami_mnemonicStartsWith(text, "fline")) {
+        score -= 80;
+    }
+    if (dasm_ami_mnemonicEq(text, "or.b") ||
+        dasm_ami_mnemonicEq(text, "andi.b") ||
+        dasm_ami_mnemonicEq(text, "eori.b")) {
+        score -= 24;
+    }
+    if (dasm_ami_mnemonicEq(text, "cmpi.b") ||
+        dasm_ami_mnemonicEq(text, "ori.b")) {
+        score -= 8;
+    }
+    if (dasm_ami_mnemonicStartsWith(text, "move") ||
+        dasm_ami_mnemonicStartsWith(text, "lea") ||
+        dasm_ami_mnemonicStartsWith(text, "pea") ||
+        dasm_ami_mnemonicStartsWith(text, "cmp") ||
+        dasm_ami_mnemonicStartsWith(text, "tst") ||
+        dasm_ami_mnemonicStartsWith(text, "clr") ||
+        dasm_ami_mnemonicStartsWith(text, "add") ||
+        dasm_ami_mnemonicStartsWith(text, "sub") ||
+        dasm_ami_mnemonicStartsWith(text, "bra") ||
+        dasm_ami_mnemonicStartsWith(text, "bne") ||
+        dasm_ami_mnemonicStartsWith(text, "beq") ||
+        dasm_ami_mnemonicStartsWith(text, "bcc") ||
+        dasm_ami_mnemonicStartsWith(text, "bcs") ||
+        dasm_ami_mnemonicStartsWith(text, "bpl") ||
+        dasm_ami_mnemonicStartsWith(text, "bmi") ||
+        dasm_ami_mnemonicStartsWith(text, "bvc") ||
+        dasm_ami_mnemonicStartsWith(text, "bvs") ||
+        dasm_ami_mnemonicStartsWith(text, "bhi") ||
+        dasm_ami_mnemonicStartsWith(text, "bls") ||
+        dasm_ami_mnemonicStartsWith(text, "bge") ||
+        dasm_ami_mnemonicStartsWith(text, "blt") ||
+        dasm_ami_mnemonicStartsWith(text, "bgt") ||
+        dasm_ami_mnemonicStartsWith(text, "ble") ||
+        dasm_ami_mnemonicStartsWith(text, "db") ||
+        dasm_ami_mnemonicStartsWith(text, "jsr") ||
+        dasm_ami_mnemonicStartsWith(text, "bsr") ||
+        dasm_ami_mnemonicStartsWith(text, "jmp") ||
+        dasm_ami_mnemonicStartsWith(text, "rts") ||
+        dasm_ami_mnemonicStartsWith(text, "rte") ||
+        dasm_ami_mnemonicStartsWith(text, "link") ||
+        dasm_ami_mnemonicStartsWith(text, "unlk")) {
+        score += 8;
+    }
+
+    return score;
+}
+
+static int
+dasm_ami_scorePrevCandidate(uint32_t startAddr, uint32_t curAddr, uint32_t *out_prev, uint32_t *out_back)
+{
+    uint32_t walk = startAddr;
+    uint32_t prev = startAddr;
+    int score = 0;
+    int steps = 0;
+
+    while (walk < curAddr && steps < 32) {
+        char buf[64];
+        size_t len = 0;
+        uint32_t next;
+
+        if (!libretro_host_debugDisassembleQuick(walk, buf, sizeof(buf), &len) || len == 0) {
+            return -1000;
+        }
+        if (len > 0x1000u) {
+            return -1000;
+        }
+
+        score += dasm_ami_scoreInstruction(buf);
+        next = dasm_ami_normAddr(walk + (uint32_t)len);
+        if (next <= walk || next > curAddr) {
+            return -1000;
+        }
+        prev = walk;
+        walk = next;
+        ++steps;
+    }
+
+    if (walk != curAddr || steps <= 0) {
+        return -1000;
+    }
+
+    score += 1000;
+    score += steps * 2;
+    if (out_prev) {
+        *out_prev = prev;
+    }
+    if (out_back) {
+        *out_back = curAddr - startAddr;
+    }
+    return score;
+}
+
+static uint32_t
 dasm_ami_normAddr(uint32_t addr)
 {
     addr &= 0x00ffffffu;
@@ -207,36 +360,60 @@ static uint32_t
 dasm_ami_prevInstr(uint32_t addr)
 {
     uint32_t cur = dasm_ami_normAddr(addr);
+    uint32_t knownPcs[DASM_AMI_KNOWN_PC_CAP];
+
     if (cur < 2u) {
         return 0u;
     }
-    uint32_t prev = dasm_ami_normAddr(cur - 2u);
-    uint32_t bestPrev = prev;
-    uint32_t bestBack = UINT32_MAX;
-    int bestRank = -1;
-    const uint32_t maxBackBytes = 64u;
-    for (uint32_t back = 2u; back <= maxBackBytes && back <= cur; back += 2u) {
-        uint32_t cand = dasm_ami_normAddr(cur - back);
-        char buf[64];
-        size_t len = 0;
-        if (!libretro_host_debugDisassembleQuick(cand, buf, sizeof(buf), &len) || len == 0) {
+
+    uint32_t knownStart = 0u;
+    if (cur > DASM_AMI_KNOWN_PC_LOOKBACK_BYTES) {
+        knownStart = cur - DASM_AMI_KNOWN_PC_LOOKBACK_BYTES;
+    }
+    size_t knownCount = libretro_host_debugReadKnownPcs(knownStart,
+                                                        cur,
+                                                        knownPcs,
+                                                        (size_t)DASM_AMI_KNOWN_PC_CAP);
+    for (size_t i = 0; i < knownCount; ++i) {
+        uint32_t knownPc = dasm_ami_normAddr(knownPcs[i]);
+        uint32_t walk = knownPc;
+        uint32_t prevFromKnown = knownPc;
+
+        if (knownPc >= cur) {
             continue;
         }
-        if (len > 0x1000u) {
-            continue;
-        }
-        uint32_t next = dasm_ami_normAddr(cand + (uint32_t)len);
-        if (next == cur) {
-            int rank = dasm_ami_isIllegalMnemonic(buf) ? 0 : 1;
-            if (rank > bestRank ||
-                (rank == bestRank && back < bestBack)) {
-                bestRank = rank;
-                bestBack = back;
-                bestPrev = cand;
+        while (walk < cur) {
+            uint32_t next = dasm_ami_nextInstr(walk, 0);
+            if (next <= walk || next > cur) {
+                break;
+            }
+            prevFromKnown = walk;
+            walk = next;
+            if (walk == cur) {
+                return prevFromKnown;
             }
         }
     }
-    if (bestRank >= 0) {
+
+    uint32_t prev = dasm_ami_normAddr(cur - 2u);
+    uint32_t bestPrev = prev;
+    uint32_t bestBack = UINT32_MAX;
+    int bestScore = -1000000;
+    const uint32_t maxBackBytes = 64u;
+    for (uint32_t back = 2u; back <= maxBackBytes && back <= cur; back += 2u) {
+        uint32_t cand = dasm_ami_normAddr(cur - back);
+        uint32_t candPrev = cand;
+        uint32_t candBack = back;
+        int score = dasm_ami_scorePrevCandidate(cand, cur, &candPrev, &candBack);
+
+        if (score > bestScore ||
+            (score == bestScore && candBack < bestBack)) {
+            bestScore = score;
+            bestBack = candBack;
+            bestPrev = candPrev;
+        }
+    }
+    if (bestScore > -1000000) {
         return bestPrev;
     }
     return prev;

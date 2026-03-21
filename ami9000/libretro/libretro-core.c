@@ -84,6 +84,10 @@ unsigned short int retrox_crop = 0;
 unsigned short int retroy_crop = 0;
 float aspect_ratio = 0;
 
+#ifndef E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+#define E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG 0
+#endif
+
 extern int bplcon0;
 extern int detected_screen_resolution;
 extern int diwlastword_total;
@@ -220,6 +224,10 @@ extern int retro_thisframe_last_drawn_line;
 static int retro_thisframe_last_drawn_line_old = -1;
 static int retro_thisframe_last_drawn_line_start = -1;
 extern int thisframe_y_adjust;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+extern int drawing_firstContentDestLine;
+extern int drawing_lastContentDestLine;
+#endif
 static int thisframe_y_adjust_old = -1;
 
 static int opt_horizontal_offset = 0;
@@ -3400,6 +3408,10 @@ static void retro_set_geometry(unsigned video_config, bool init)
       case PUAE_VIDEO_PAL_HI:
          w = PUAE_VIDEO_WIDTH;
          h = PUAE_VIDEO_HEIGHT_PAL / 2;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+         if (init && opt_video_winuae_window_positioning)
+            h = PUAE_VIDEO_HEIGHT_PAL;
+#endif
          break;
       case PUAE_VIDEO_PAL_HI_DL:
          w = PUAE_VIDEO_WIDTH;
@@ -3421,6 +3433,10 @@ static void retro_set_geometry(unsigned video_config, bool init)
       case PUAE_VIDEO_NTSC_HI:
          w = PUAE_VIDEO_WIDTH;
          h = PUAE_VIDEO_HEIGHT_NTSC / 2;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+         if (init && opt_video_winuae_window_positioning)
+            h = PUAE_VIDEO_HEIGHT_NTSC;
+#endif
          break;
       case PUAE_VIDEO_NTSC_HI_DL:
          w = PUAE_VIDEO_WIDTH;
@@ -4511,7 +4527,9 @@ static void update_variables(void)
       if (!strcmp(var.value, "enabled"))
          opt_video_winuae_window_positioning = true;
    }
+#endif
 
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
    drawing_setLibretroWinuaeWindowPositioning(opt_video_winuae_window_positioning);
 #endif
 
@@ -8732,6 +8750,22 @@ static bool retro_update_av_info(void)
          retrow_crop = retrow;
    }
 
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+   if (opt_video_winuae_window_positioning)
+   {
+      int drawHeight = gfxvidinfo->drawbuffer.inheight;
+      int visibleHeight = retro_thisframe_last_drawn_line - minfirstline + 1;
+
+      if (visibleHeight > 0 && visibleHeight <= drawHeight)
+         drawHeight = visibleHeight;
+
+      if (drawHeight > 0 && drawHeight > retroh)
+         retroh = drawHeight;
+      if (drawHeight > 0 && drawHeight > retroh_crop)
+         retroh_crop = drawHeight;
+   }
+#endif
+
    /* Must do full av_info update if max size grows */
    if (retrow > retrow_max)
    {
@@ -8747,6 +8781,32 @@ static bool retro_update_av_info(void)
    /* Offset centerings */
    update_video_center_vertical();
    update_video_center_horizontal();
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+   if (opt_video_winuae_window_positioning)
+   {
+      int visibleHeight = get_vertical_visible_height(false);
+
+      retroy_crop = 0;
+      if (visibleHeight > 0)
+      {
+         retroh_crop = visibleHeight;
+         if (retroh_crop > retroh)
+         {
+            retroh_crop = retroh;
+         }
+      }
+      if (drawing_firstContentDestLine >= 0 && drawing_lastContentDestLine >= drawing_firstContentDestLine)
+      {
+         retroy_crop = drawing_firstContentDestLine;
+         retroh_crop = drawing_lastContentDestLine - drawing_firstContentDestLine + 1;
+         if (retroy_crop + retroh_crop > retroh)
+         {
+            retroh_crop = retroh - retroy_crop;
+         }
+      }
+   }
+#endif
 
    /* Fetch default av_info (not current!) */
    struct retro_system_av_info new_av_info;
@@ -8897,6 +8957,28 @@ void retro_run(void)
       if (request_init_custom_timer == 0)
          init_custom();
    }
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+	if (opt_video_winuae_window_positioning)
+	{
+		printf("ypresent lines=%d/%d crop=%d yoff=%d full=%d req=%d old=%d init=%d canvas=%d/%d actual=%d/%d vby=%d/%d yadj=%d\n",
+			retro_thisframe_first_drawn_line,
+			retro_thisframe_last_drawn_line,
+			retroh_crop,
+			retroy_crop,
+			retroh,
+			request_update_av_info ? 1 : 0,
+			old_frame,
+			request_init_custom_timer,
+			defaultw,
+			defaulth,
+			retrow,
+			retroh,
+			gfxvidinfo->drawbuffer.yoffset,
+			gfxvidinfo->drawbuffer.outheight,
+			thisframe_y_adjust);
+	}
+#endif
 
    /* Warning messages */
    if (retro_message)

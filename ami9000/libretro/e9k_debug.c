@@ -24,6 +24,7 @@
 
 #define E9K_DEBUG_CALLSTACK_MAX 256
 #define E9K_DEBUG_BREAKPOINT_MAX 4096
+#define E9K_DEBUG_AMI_KNOWN_PC_RING_CAP 256u
 
 extern bool libretro_frame_end;
 
@@ -78,6 +79,10 @@ typedef struct e9k_debug_blitter_vis_line_stat_s
 static int e9k_debug_paused = 0;
 static uint32_t e9k_debug_callstack[E9K_DEBUG_CALLSTACK_MAX];
 static size_t e9k_debug_callstackDepth = 0;
+static uint32_t e9k_debug_amiKnownPcRing[E9K_DEBUG_AMI_KNOWN_PC_RING_CAP];
+static size_t e9k_debug_amiKnownPcHead = 0;
+static size_t e9k_debug_amiKnownPcCount = 0;
+static uint32_t e9k_debug_amiKnownPcLast = 0xffffffffu;
 
 static int e9k_debug_stepInstr = 0;
 static int e9k_debug_stepInstrAfter = 0;
@@ -389,6 +394,42 @@ static uint32_t
 e9k_debug_maskAddr(uaecptr addr)
 {
 	return (uint32_t)addr & 0x00ffffffu;
+}
+
+static void
+e9k_debug_amiRecordKnownPc(uint32_t pc24)
+{
+	pc24 &= 0x00ffffffu;
+	pc24 &= ~1u;
+	if (e9k_debug_amiKnownPcLast == pc24) {
+		return;
+	}
+	e9k_debug_amiKnownPcRing[e9k_debug_amiKnownPcHead] = pc24;
+	e9k_debug_amiKnownPcHead = (e9k_debug_amiKnownPcHead + 1u) % E9K_DEBUG_AMI_KNOWN_PC_RING_CAP;
+	if (e9k_debug_amiKnownPcCount < E9K_DEBUG_AMI_KNOWN_PC_RING_CAP) {
+		e9k_debug_amiKnownPcCount++;
+	}
+	e9k_debug_amiKnownPcLast = pc24;
+}
+
+static void
+e9k_debug_amiResetKnownPcs(void)
+{
+	e9k_debug_amiKnownPcHead = 0;
+	e9k_debug_amiKnownPcCount = 0;
+	e9k_debug_amiKnownPcLast = 0xffffffffu;
+}
+
+static int
+e9k_debug_amiShouldRecordKnownPc(void)
+{
+	if (e9k_debug_stepInstr || e9k_debug_stepInstrAfter) {
+		return 1;
+	}
+	if (e9k_debug_stepLine || e9k_debug_stepNext || e9k_debug_stepOut || e9k_debug_stepIntoPending) {
+		return 1;
+	}
+	return 0;
 }
 
 static uint32_t
@@ -1043,6 +1084,56 @@ e9k_debug_read_cycle_count(void)
 		return (uint64_t)(c / (evt_t)CYCLE_UNIT);
 	}
 	return (uint64_t)c;
+}
+
+E9K_DEBUG_EXPORT size_t
+e9k_debug_read_known_pcs(uint32_t startAddr, uint32_t endAddr, uint32_t *out, size_t cap)
+{
+	size_t count = 0;
+
+	if (!out || cap == 0) {
+		return 0;
+	}
+
+	startAddr &= 0x00ffffffu;
+	startAddr &= ~1u;
+	endAddr &= 0x00ffffffu;
+	endAddr &= ~1u;
+	if (endAddr < startAddr) {
+		uint32_t tmp = startAddr;
+		startAddr = endAddr;
+		endAddr = tmp;
+	}
+
+	for (size_t i = 0; i < e9k_debug_amiKnownPcCount; ++i) {
+		size_t idx = (e9k_debug_amiKnownPcHead + E9K_DEBUG_AMI_KNOWN_PC_RING_CAP - 1u - i) % E9K_DEBUG_AMI_KNOWN_PC_RING_CAP;
+		uint32_t pc24 = e9k_debug_amiKnownPcRing[idx] & 0x00ffffffu;
+		int exists = 0;
+
+		if (pc24 < startAddr || pc24 > endAddr) {
+			continue;
+		}
+		for (size_t j = 0; j < count; ++j) {
+			if (out[j] == pc24) {
+				exists = 1;
+				break;
+			}
+		}
+		if (exists) {
+			continue;
+		}
+		if (count >= cap) {
+			break;
+		}
+		out[count++] = pc24;
+	}
+	return count;
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_reset_known_pcs(void)
+{
+	e9k_debug_amiResetKnownPcs();
 }
 
 E9K_DEBUG_EXPORT void
@@ -2040,6 +2131,9 @@ E9K_DEBUG_EXPORT int
 e9k_debug_instructionHook(uaecptr pc, uae_u16 opcode)
 {
 	uint32_t pc24 = e9k_debug_maskAddr(pc);
+	if (e9k_debug_amiShouldRecordKnownPc()) {
+		e9k_debug_amiRecordKnownPc(pc24);
+	}
 
 	if (e9k_debug_watchReplayActive) {
 		e9k_debug_watchReplayActive = 0;

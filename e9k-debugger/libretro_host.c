@@ -87,6 +87,8 @@ typedef size_t (*e9k_debug_neogeo_get_sprite_state_fn_t)(e9k_debug_sprite_state_
 typedef size_t (*e9k_debug_neogeo_get_p1_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
 typedef size_t (*e9k_debug_mega_get_sprite_state_fn_t)(e9k_debug_mega_sprite_state_t *out, size_t cap);
 typedef size_t (*e9k_debug_disassemble_quick_fn_t)(uint32_t pc, char *out, size_t cap);
+typedef size_t (*e9k_debug_read_known_pcs_fn_t)(uint32_t startAddr, uint32_t endAddr, uint32_t *out, size_t cap);
+typedef void (*e9k_debug_reset_known_pcs_fn_t)(void);
 typedef size_t (*e9k_debug_read_checkpoints_fn_t)(e9k_debug_checkpoint_t *out, size_t cap);
 typedef void (*e9k_debug_reset_checkpoints_fn_t)(void);
 typedef void (*e9k_debug_set_checkpoint_enabled_fn_t)(int enabled);
@@ -174,6 +176,8 @@ typedef struct  {
     uint8_t *estimateFpsDistinctColorUsed;
     size_t estimateFpsDistinctColorCapacity;
     unsigned estimateFpsDistinctColorCount;
+    unsigned estimateFpsVisibleWidth;
+    unsigned estimateFpsVisibleHeight;
     retro_set_environment_fn_t setEnvironment;
     retro_set_video_refresh_fn_t setVideoRefresh;
     retro_set_audio_sample_fn_t setAudioSample;
@@ -235,6 +239,8 @@ typedef struct  {
     e9k_debug_neogeo_get_p1_rom_fn_t debugNeoGeoGetP1Rom;
     e9k_debug_mega_get_sprite_state_fn_t debugMegaGetSpriteState;
     e9k_debug_disassemble_quick_fn_t debugDisassembleQuick;
+    e9k_debug_read_known_pcs_fn_t debugReadKnownPcs;
+    e9k_debug_reset_known_pcs_fn_t debugResetKnownPcs;
     e9k_debug_read_checkpoints_fn_t debugReadCheckpoints;
     e9k_debug_reset_checkpoints_fn_t debugResetCheckpoints;
     e9k_debug_set_checkpoint_enabled_fn_t debugSetCheckpointEnabled;
@@ -950,6 +956,287 @@ libretro_host_estimateFpsCountDistinctColor(uint32_t color)
 }
 
 static void
+libretro_host_estimateFpsVoteColor(uint32_t color, uint32_t *candidate, size_t *balance)
+{
+    if (!candidate || !balance) {
+        return;
+    }
+    if (*balance == 0u) {
+        *candidate = color;
+        *balance = 1u;
+        return;
+    }
+    if (*candidate == color) {
+        (*balance)++;
+        return;
+    }
+    (*balance)--;
+}
+
+static int
+libretro_host_estimateFpsHasHorizontalRepeatFactor(const uint8_t *frameData,
+                                                   unsigned width,
+                                                   unsigned height,
+                                                   size_t pitch,
+                                                   unsigned factor)
+{
+    if (!frameData || !width || !height || pitch == 0 || factor <= 1u) {
+        return 0;
+    }
+    if ((width % factor) != 0u) {
+        return 0;
+    }
+
+    uint64_t comparisons = 0u;
+    uint64_t matches = 0u;
+
+    for (unsigned y = 0; y < height; ++y) {
+        const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+        for (unsigned x = 0; x + factor <= width; x += factor) {
+            uint32_t firstColor = row[x];
+            for (unsigned offset = 1; offset < factor; ++offset) {
+                comparisons++;
+                if (row[x + offset] == firstColor) {
+                    matches++;
+                }
+            }
+        }
+    }
+
+    if (comparisons == 0u) {
+        return 0;
+    }
+    return (matches * 100u) >= (comparisons * 98u) ? 1 : 0;
+}
+
+static unsigned
+libretro_host_estimateFpsGetHorizontalRepeatFactor(const uint8_t *frameData,
+                                                   unsigned width,
+                                                   unsigned height,
+                                                   size_t pitch)
+{
+    if (libretro_host_estimateFpsHasHorizontalRepeatFactor(frameData, width, height, pitch, 4u)) {
+        return 4u;
+    }
+    if (libretro_host_estimateFpsHasHorizontalRepeatFactor(frameData, width, height, pitch, 2u)) {
+        return 2u;
+    }
+    return 1u;
+}
+
+static int
+libretro_host_estimateFpsFindBorderColor(const uint8_t *frameData,
+                                         unsigned width,
+                                         unsigned height,
+                                         size_t pitch,
+                                         uint32_t *outColor)
+{
+    if (!frameData || !width || !height || pitch == 0 || !outColor) {
+        return 0;
+    }
+
+    uint32_t candidate = 0u;
+    size_t balance = 0u;
+    size_t total = 0u;
+
+    const uint32_t *topRow = (const uint32_t *)frameData;
+    const uint32_t *bottomRow = (const uint32_t *)(frameData + ((size_t)(height - 1u) * pitch));
+
+    for (unsigned x = 0; x < width; ++x) {
+        libretro_host_estimateFpsVoteColor(topRow[x], &candidate, &balance);
+        total++;
+    }
+
+    if (height > 1u) {
+        for (unsigned x = 0; x < width; ++x) {
+            libretro_host_estimateFpsVoteColor(bottomRow[x], &candidate, &balance);
+            total++;
+        }
+    }
+
+    for (unsigned y = 1; y + 1u < height; ++y) {
+        const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+        libretro_host_estimateFpsVoteColor(row[0], &candidate, &balance);
+        total++;
+        if (width > 1u) {
+            libretro_host_estimateFpsVoteColor(row[width - 1u], &candidate, &balance);
+            total++;
+        }
+    }
+
+    if (total == 0u || balance == 0u) {
+        return 0;
+    }
+
+    size_t matches = 0u;
+    for (unsigned x = 0; x < width; ++x) {
+        if (topRow[x] == candidate) {
+            matches++;
+        }
+    }
+    if (height > 1u) {
+        for (unsigned x = 0; x < width; ++x) {
+            if (bottomRow[x] == candidate) {
+                matches++;
+            }
+        }
+    }
+    for (unsigned y = 1; y + 1u < height; ++y) {
+        const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+        if (row[0] == candidate) {
+            matches++;
+        }
+        if (width > 1u && row[width - 1u] == candidate) {
+            matches++;
+        }
+    }
+
+    if ((matches * 5u) < (total * 3u)) {
+        return 0;
+    }
+
+    *outColor = candidate;
+    return 1;
+}
+
+static void
+libretro_host_estimateFpsSetVisibleArea(unsigned width, unsigned height)
+{
+    libretro_host.estimateFpsVisibleWidth = width;
+    libretro_host.estimateFpsVisibleHeight = height;
+}
+
+static void
+libretro_host_estimateFpsEstimateVisibleArea(const uint8_t *frameData,
+                                             unsigned width,
+                                             unsigned height,
+                                             size_t pitch)
+{
+    libretro_host_estimateFpsSetVisibleArea(0u, 0u);
+    if (!frameData || !width || !height || pitch == 0) {
+        return;
+    }
+
+    unsigned repeatFactor = libretro_host_estimateFpsGetHorizontalRepeatFactor(frameData,
+                                                                                width,
+                                                                                height,
+                                                                                pitch);
+    unsigned fullWidth = width / repeatFactor;
+    if (fullWidth == 0u) {
+        fullWidth = width;
+    }
+
+    uint32_t borderColor = 0u;
+    if (!libretro_host_estimateFpsFindBorderColor(frameData, width, height, pitch, &borderColor)) {
+        libretro_host_estimateFpsSetVisibleArea(fullWidth, height);
+        return;
+    }
+
+    unsigned rowThreshold = fullWidth / 32u;
+    unsigned colThreshold = height / 32u;
+    if (rowThreshold < 1u) {
+        rowThreshold = 1u;
+    }
+    if (colThreshold < 1u) {
+        colThreshold = 1u;
+    }
+    rowThreshold *= repeatFactor;
+
+    int top = -1;
+    int bottom = -1;
+    for (unsigned y = 0; y < height; ++y) {
+        const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+        unsigned activeCount = 0u;
+        for (unsigned x = 0; x < width; ++x) {
+            if (row[x] != borderColor) {
+                activeCount++;
+            }
+        }
+        if (activeCount >= rowThreshold) {
+            top = (int)y;
+            break;
+        }
+    }
+    if (top < 0) {
+        libretro_host_estimateFpsSetVisibleArea(fullWidth, height);
+        return;
+    }
+
+    for (int y = (int)height - 1; y >= top; --y) {
+        const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+        unsigned activeCount = 0u;
+        for (unsigned x = 0; x < width; ++x) {
+            if (row[x] != borderColor) {
+                activeCount++;
+            }
+        }
+        if (activeCount >= rowThreshold) {
+            bottom = y;
+            break;
+        }
+    }
+    if (bottom < top) {
+        libretro_host_estimateFpsSetVisibleArea(fullWidth, height);
+        return;
+    }
+
+    int left = -1;
+    int right = -1;
+    for (unsigned x = 0; x < width; ++x) {
+        unsigned activeCount = 0u;
+        for (int y = top; y <= bottom; ++y) {
+            const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+            if (row[x] != borderColor) {
+                activeCount++;
+            }
+        }
+        if (activeCount >= colThreshold) {
+            left = (int)x;
+            break;
+        }
+    }
+    if (left < 0) {
+        libretro_host_estimateFpsSetVisibleArea(fullWidth, (unsigned)(bottom - top + 1));
+        return;
+    }
+
+    for (int x = (int)width - 1; x >= left; --x) {
+        unsigned activeCount = 0u;
+        for (int y = top; y <= bottom; ++y) {
+            const uint32_t *row = (const uint32_t *)(frameData + ((size_t)y * pitch));
+            if (row[x] != borderColor) {
+                activeCount++;
+            }
+        }
+        if (activeCount >= colThreshold) {
+            right = x;
+            break;
+        }
+    }
+    if (right < left) {
+        libretro_host_estimateFpsSetVisibleArea(fullWidth, (unsigned)(bottom - top + 1));
+        return;
+    }
+
+    unsigned visibleWidth = (unsigned)(right - left + 1);
+    unsigned visibleHeight = (unsigned)(bottom - top + 1);
+    if (repeatFactor > 1u) {
+        visibleWidth /= repeatFactor;
+    }
+    if (visibleWidth == 0u) {
+        visibleWidth = 1u;
+    }
+    if (visibleWidth > fullWidth) {
+        visibleWidth = fullWidth;
+    }
+    if (visibleHeight > height) {
+        visibleHeight = height;
+    }
+
+    libretro_host_estimateFpsSetVisibleArea(visibleWidth, visibleHeight);
+}
+
+static void
 libretro_host_clearEstimateFpsState(void)
 {
     if (libretro_host.estimateFpsReferenceFrameData) {
@@ -963,6 +1250,8 @@ libretro_host_clearEstimateFpsState(void)
     libretro_host.estimateFpsReferenceHeight = 0;
     libretro_host.estimateFpsReferenceFrameIndex = 0;
     libretro_host.estimateFpsValue = 0.0;
+    libretro_host.estimateFpsVisibleWidth = 0u;
+    libretro_host.estimateFpsVisibleHeight = 0u;
     libretro_host_estimateFpsClearDistinctColorState();
 }
 
@@ -1036,6 +1325,7 @@ libretro_host_estimateFpsProcessFrame(const uint8_t *frameData,
     if (!frameData || !width || !height || pitch == 0) {
         return;
     }
+    libretro_host_estimateFpsEstimateVisibleArea(frameData, width, height, pitch);
     if (!libretro_host.estimateFpsReferenceFrameData ||
         libretro_host.estimateFpsReferenceFrameSize == 0) {
         libretro_host_estimateFpsStoreReferenceFrame(frameData, width, height, pitch, frameIndex);
@@ -1749,6 +2039,8 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugNeoGeoGetSpriteState = NULL;
     libretro_host.debugNeoGeoGetP1Rom = NULL;
     libretro_host.debugDisassembleQuick = (e9k_debug_disassemble_quick_fn_t)libretro_host_loadSymbol("e9k_debug_disassemble_quick");
+    libretro_host.debugReadKnownPcs = (e9k_debug_read_known_pcs_fn_t)libretro_host_loadSymbol("e9k_debug_read_known_pcs");
+    libretro_host.debugResetKnownPcs = (e9k_debug_reset_known_pcs_fn_t)libretro_host_loadSymbol("e9k_debug_reset_known_pcs");
     libretro_host.debugReadCheckpoints = (e9k_debug_read_checkpoints_fn_t)libretro_host_loadSymbol("e9k_debug_read_checkpoints");
     libretro_host.debugResetCheckpoints = (e9k_debug_reset_checkpoints_fn_t)libretro_host_loadSymbol("e9k_debug_reset_checkpoints");
     libretro_host.debugSetCheckpointEnabled = (e9k_debug_set_checkpoint_enabled_fn_t)libretro_host_loadSymbol("e9k_debug_set_checkpoint_enabled");
@@ -1958,6 +2250,21 @@ unsigned
 libretro_host_getEstimatedVideoDistinctColors(void)
 {
     return libretro_host.estimateFpsDistinctColorCount;
+}
+
+bool
+libretro_host_getEstimatedVideoVisibleArea(unsigned *outWidth, unsigned *outHeight)
+{
+    if (!outWidth || !outHeight) {
+        return false;
+    }
+    if (libretro_host.estimateFpsVisibleWidth == 0u ||
+        libretro_host.estimateFpsVisibleHeight == 0u) {
+        return false;
+    }
+    *outWidth = libretro_host.estimateFpsVisibleWidth;
+    *outHeight = libretro_host.estimateFpsVisibleHeight;
+    return true;
 }
 
 void
@@ -2881,6 +3188,15 @@ libretro_host_debugDisassembleQuick(uint32_t pc, char *out, size_t cap, size_t *
     return len > 0;
 }
 
+size_t
+libretro_host_debugReadKnownPcs(uint32_t start_addr, uint32_t end_addr, uint32_t *out, size_t cap)
+{
+    if (!out || cap == 0 || !libretro_host.debugReadKnownPcs) {
+        return 0;
+    }
+    return libretro_host.debugReadKnownPcs(start_addr, end_addr, out, cap);
+}
+
 bool
 libretro_host_getSerializeSize(size_t *out_size)
 {
@@ -2963,6 +3279,9 @@ libretro_host_resetCore(void)
         return false;
     }
     libretro_host.reset();
+    if (libretro_host.debugResetKnownPcs) {
+        libretro_host.debugResetKnownPcs();
+    }
     const machine_breakpoint_t *bps = NULL;
     int bpCount = 0;
     if (machine_getBreakpoints(&debugger.machine, &bps, &bpCount) && bps && bpCount > 0) {

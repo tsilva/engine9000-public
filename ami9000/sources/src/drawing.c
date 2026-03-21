@@ -69,6 +69,10 @@ happening, all ports should restrict window widths to be multiples of 16 pixels.
 #endif
 #endif
 
+#ifndef E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+#define E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG 0
+#endif
+
 #if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
 #include "libretro-core.h"
 #endif
@@ -313,6 +317,33 @@ static uae_u8 **row_map;
 static uae_u8 *row_map_genlock_buffer;
 static uae_u8 row_tmp[MAX_PIXELS_PER_LINE * 32 / 8];
 static int max_drawn_amiga_line;
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+int drawing_firstContentDestLine = 32767;
+int drawing_lastContentDestLine = -1;
+static int drawing_firstVaryDestLine = 32767;
+static int drawing_lastVaryDestLine = -1;
+
+static int
+drawing_rowHasVariation(struct vidbuffer *vb, int y)
+{
+	uae_u8 *row;
+	int x;
+
+	if (y < 0 || y >= vb->inheight) {
+		return 0;
+	}
+	row = row_map[y];
+	if (!row) {
+		return 0;
+	}
+	for (x = 1; x < vb->inwidth; x++) {
+		if (memcmp(row, row + x * vb->pixbytes, vb->pixbytes) != 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+#endif
 uae_u8 **row_map_genlock;
 uae_u8 *row_map_color_burst_buffer;
 
@@ -1152,7 +1183,13 @@ static void xlinecheck (unsigned int start, unsigned int end)
 
 static void clearbuffer (struct vidbuffer *dst)
 {
-#ifndef __LIBRETRO__
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+	if (!drawing_libretroWinuaeWindowPositioning) {
+#ifdef __LIBRETRO__
+		return;
+#endif
+	}
+#endif
 	if (!dst->bufmem_allocated)
 		return;
 	uae_u8 *p = dst->bufmem_allocated;
@@ -1160,7 +1197,6 @@ static void clearbuffer (struct vidbuffer *dst)
 		memset (p, 0, dst->width_allocated * dst->pixbytes);
 		p += dst->rowbytes;
 	}
-#endif
 }
 
 static void reset_decision_table (void)
@@ -5113,6 +5149,22 @@ static void pfield_draw_line(struct vidbuffer *vb, int lineno, int gfx_ypos, int
 		row_map_color_burst_buffer[gfx_ypos] = bplcolorburst;
 
 	if (border == 0) {
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+		if (gfx_ypos < drawing_firstContentDestLine) {
+			drawing_firstContentDestLine = gfx_ypos;
+		}
+		if (gfx_ypos > drawing_lastContentDestLine) {
+			drawing_lastContentDestLine = gfx_ypos;
+		}
+		if (follow_ypos >= 0) {
+			if (follow_ypos < drawing_firstContentDestLine) {
+				drawing_firstContentDestLine = follow_ypos;
+			}
+			if (follow_ypos > drawing_lastContentDestLine) {
+				drawing_lastContentDestLine = follow_ypos;
+			}
+		}
+#endif
 
 		pfield_expand_dp_bplcon();
 		// must be after pfield_expand_dp_bplcon
@@ -5295,12 +5347,10 @@ static void center_image (void)
 	int w = vidinfo->drawbuffer.inwidth;
 	int ew = vidinfo->drawbuffer.extrawidth;
 	int maxdiw = max_diwlastword;
-
 #if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
 	if (drawing_libretroWinuaeWindowPositioning) {
 #endif
 	if (currprefs.gfx_overscanmode <= OVERSCANMODE_OVERSCAN && currprefs.gfx_xcenter && !fd->gfx_filter_autoscale && max_diwstop > 0) {
-
 		if (max_diwstop - min_diwstart < w && currprefs.gfx_xcenter == 2)
 			/* Try to center. */
 			visible_left_border = (max_diwstop - min_diwstart - w) / 2 + min_diwstart;
@@ -5576,10 +5626,51 @@ static void init_drawing_frame (void)
 
 	init_hardware_for_drawing_frame ();
 
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING
+	int ydrawFirstRaw = thisframe_first_drawn_line;
+	int ydrawLastRaw = thisframe_last_drawn_line;
+#endif
+
 	if (thisframe_first_drawn_line < 0)
 		thisframe_first_drawn_line = minfirstline;
 	if (thisframe_first_drawn_line > thisframe_last_drawn_line)
 		thisframe_last_drawn_line = thisframe_first_drawn_line;
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+	if (drawing_libretroWinuaeWindowPositioning) {
+		printf("winsrc planes=%d/%d plfline=%d/%d diw=%d/%d ddf=%d/%d minfirst=%d maxdraw=%d db=%d/%d ex=%d/%d alloc=%d/%d over=%d beam=%04x linedbl=%d\n",
+			first_planes_vpos,
+			last_planes_vpos,
+			plffirstline_total,
+			plflastline_total,
+			diwfirstword_total,
+			diwlastword_total,
+			ddffirstword_total,
+			ddflastword_total,
+			minfirstline,
+			max_drawn_amiga_line,
+			vidinfo->drawbuffer.inwidth,
+			vidinfo->drawbuffer.inheight,
+			vidinfo->drawbuffer.extrawidth,
+			vidinfo->drawbuffer.extraheight,
+			vidinfo->drawbuffer.width_allocated,
+			vidinfo->drawbuffer.height_allocated,
+			currprefs.gfx_overscanmode,
+			new_beamcon0,
+			linedbl);
+		printf("ydraw raw=%d/%d final=%d/%d minfirst=%d maxdraw=%d inh=%d halloc=%d maph=%d linedbl=%d\n",
+			ydrawFirstRaw,
+			ydrawLastRaw,
+			thisframe_first_drawn_line,
+			thisframe_last_drawn_line,
+			minfirstline,
+			max_drawn_amiga_line,
+			vidinfo->drawbuffer.inheight,
+			vidinfo->drawbuffer.height_allocated,
+			native2amiga_line_map_height,
+			linedbl);
+	}
+#endif
 
 	int maxline = ((maxvpos_display + maxvpos_display_vsync + 1) << linedbl) + 2;
 	for (int i = 0; i < maxline; i++) {
@@ -5860,6 +5951,14 @@ static void draw_frame2(struct vidbuffer *vbin, struct vidbuffer *vbout)
 #if LARGEST_LINE_DEBUG
 	int largest = 0;
 #endif
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+	int firstDestLine = 32767;
+	int lastDestLine = -1;
+	drawing_firstContentDestLine = 32767;
+	drawing_lastContentDestLine = -1;
+	drawing_firstVaryDestLine = 32767;
+	drawing_lastVaryDestLine = -1;
+#endif
 
 	set_vblanking_limits();
 	reset_hblanking_limits();
@@ -5881,6 +5980,22 @@ static void draw_frame2(struct vidbuffer *vbin, struct vidbuffer *vbout)
 			lastline = line;
 			continue;
 		}
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+		if (whereline < firstDestLine) {
+			firstDestLine = whereline;
+		}
+		if (whereline > lastDestLine) {
+			lastDestLine = whereline;
+		}
+		if (wherenext >= 0) {
+			if (wherenext < firstDestLine) {
+				firstDestLine = wherenext;
+			}
+			if (wherenext > lastDestLine) {
+				lastDestLine = wherenext;
+			}
+		}
+#endif
 
 		if (firstline) {
 			if (lastline >= 0) {
@@ -5907,7 +6022,53 @@ static void draw_frame2(struct vidbuffer *vbin, struct vidbuffer *vbout)
 
 		hposblank = 0;
 		pfield_draw_line(vbout, line, whereline, wherenext);
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+		if (drawing_rowHasVariation(vbin, whereline)) {
+			if (whereline < drawing_firstVaryDestLine) {
+				drawing_firstVaryDestLine = whereline;
+			}
+			if (whereline > drawing_lastVaryDestLine) {
+				drawing_lastVaryDestLine = whereline;
+			}
+		}
+		if (drawing_rowHasVariation(vbin, wherenext)) {
+			if (wherenext < drawing_firstVaryDestLine) {
+				drawing_firstVaryDestLine = wherenext;
+			}
+			if (wherenext > drawing_lastVaryDestLine) {
+				drawing_lastVaryDestLine = wherenext;
+			}
+		}
+#endif
 	}
+
+#if E9K_HACK_LIBRETRO_WINUAE_WINDOW_POSITIONING && E9K_HACK_LIBRETRO_WINUAE_BOTTOM_CROP_DEBUG
+	if (drawing_libretroWinuaeWindowPositioning) {
+		if (firstDestLine == 32767) {
+			firstDestLine = -1;
+		}
+		if (drawing_firstContentDestLine == 32767) {
+			drawing_firstContentDestLine = -1;
+		}
+		if (drawing_firstVaryDestLine == 32767) {
+			drawing_firstVaryDestLine = -1;
+		}
+		printf("ydst first=%d last=%d in=%d out=%d yoff=%d firstdraw=%d lastdraw=%d\n",
+			firstDestLine,
+			lastDestLine,
+			vbin->inheight,
+			vbin->outheight,
+			vbin->yoffset >> VRES_MAX,
+			thisframe_first_drawn_line,
+			thisframe_last_drawn_line);
+		printf("ycontent first=%d last=%d\n",
+			drawing_firstContentDestLine,
+			drawing_lastContentDestLine);
+		printf("yvary first=%d last=%d\n",
+			drawing_firstVaryDestLine,
+			drawing_lastVaryDestLine);
+	}
+#endif
 
 #if LARGEST_LINE_DEBUG
 	write_log (_T("%d\n"), largest);

@@ -153,7 +153,8 @@ source_pane_isCpuAsmLikeMode(source_pane_mode_t mode);
 
 static int
 source_pane_getAsmWindow(source_pane_state_t *st, int maxLines, uint64_t *out_curAddr,
-                         const char ***out_lines, const uint64_t **out_addrs, int *out_count);
+                         const char ***out_lines, const uint64_t **out_addrs,
+                         int *out_count);
 
 static uint64_t
 source_pane_resolveAsmLikeAnchorAddr(source_pane_state_t *st, uint64_t addr);
@@ -4422,7 +4423,8 @@ source_pane_persistLoad(e9ui_component_t *self, e9ui_context_t *ctx, const char 
 
 static int
 source_pane_getAsmWindow(source_pane_state_t *st, int maxLines, uint64_t *out_curAddr,
-                         const char ***out_lines, const uint64_t **out_addrs, int *out_count)
+                         const char ***out_lines, const uint64_t **out_addrs,
+                         int *out_count)
 {
     if (out_curAddr) {
         *out_curAddr = 0;

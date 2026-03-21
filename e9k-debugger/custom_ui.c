@@ -124,6 +124,7 @@ typedef struct custom_ui_state {
     e9ui_component_t *estimateFpsCheckbox;
     e9ui_component_t *estimateFpsText;
     e9ui_component_t *estimateFpsColorsText;
+    e9ui_component_t *estimateFpsVisibleAreaText;
     e9ui_component_t *estimateFpsDetailsRow;
     e9ui_component_t *dmaStatsHintText;
     e9ui_component_t *dmaStatsHintTextRow;
@@ -5069,6 +5070,14 @@ custom_ui_buildRoot(custom_ui_state_t *ui)
     e9ui_text_setColor(estimateFpsColorsText, (SDL_Color){ 196, 214, 232, 255 });
     ui->estimateFpsColorsText = estimateFpsColorsText;
 
+    e9ui_component_t *estimateFpsVisibleAreaText = e9ui_text_make("VISIBLE AREA: --");
+    if (!estimateFpsVisibleAreaText) {
+        e9ui_childDestroy(rootStack, &ui->ctx);
+        return NULL;
+    }
+    e9ui_text_setColor(estimateFpsVisibleAreaText, (SDL_Color){ 196, 214, 232, 255 });
+    ui->estimateFpsVisibleAreaText = estimateFpsVisibleAreaText;
+
     e9ui_component_t *estimateFpsDetails = e9ui_stack_makeVertical();
     if (!estimateFpsDetails) {
         e9ui_childDestroy(rootStack, &ui->ctx);
@@ -5077,6 +5086,8 @@ custom_ui_buildRoot(custom_ui_state_t *ui)
     e9ui_stack_addFixed(estimateFpsDetails, estimateFpsText);
     e9ui_stack_addFixed(estimateFpsDetails, e9ui_vspacer_make(2));
     e9ui_stack_addFixed(estimateFpsDetails, estimateFpsColorsText);
+    e9ui_stack_addFixed(estimateFpsDetails, e9ui_vspacer_make(2));
+    e9ui_stack_addFixed(estimateFpsDetails, estimateFpsVisibleAreaText);
 
     e9ui_component_t *estimateFpsDetailsRow = custom_ui_insetRowMake(estimateFpsDetails, 28, 0);
     if (!estimateFpsDetailsRow) {
@@ -5516,6 +5527,9 @@ custom_ui_syncEstimateFpsDisplay(custom_ui_state_t *ui)
         if (ui->estimateFpsColorsText) {
             e9ui_text_setText(ui->estimateFpsColorsText, "COLORS: --");
         }
+        if (ui->estimateFpsVisibleAreaText) {
+            e9ui_text_setText(ui->estimateFpsVisibleAreaText, "VISIBLE AREA: --");
+        }
         return;
     }
     double estimatedFps = libretro_host_getEstimatedVideoFps();
@@ -5534,6 +5548,17 @@ custom_ui_syncEstimateFpsDisplay(custom_ui_state_t *ui)
             e9ui_text_setText(ui->estimateFpsColorsText, text);
         } else {
             e9ui_text_setText(ui->estimateFpsColorsText, "COLORS: ...");
+        }
+    }
+    if (ui->estimateFpsVisibleAreaText) {
+        unsigned visibleWidth = 0u;
+        unsigned visibleHeight = 0u;
+        if (libretro_host_getEstimatedVideoVisibleArea(&visibleWidth, &visibleHeight)) {
+            char text[48];
+            snprintf(text, sizeof(text), "VISIBLE AREA: %ux%u", visibleWidth, visibleHeight);
+            e9ui_text_setText(ui->estimateFpsVisibleAreaText, text);
+        } else {
+            e9ui_text_setText(ui->estimateFpsVisibleAreaText, "VISIBLE AREA: ...");
         }
     }
 }
@@ -5696,6 +5721,7 @@ custom_ui_init(void)
     ui->estimateFpsCheckbox = NULL;
     ui->estimateFpsText = NULL;
     ui->estimateFpsColorsText = NULL;
+    ui->estimateFpsVisibleAreaText = NULL;
     ui->estimateFpsDetailsRow = NULL;
     ui->dmaStatsHintText = NULL;
     ui->dmaStatsHintTextRow = NULL;
