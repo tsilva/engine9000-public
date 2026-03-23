@@ -9,6 +9,10 @@
 #include "sysconfig.h"
 #include "sysdeps.h"
 
+#ifndef E9K_HACK_7Z_ENABLE
+#define E9K_HACK_7Z_ENABLE 1
+#endif
+
 #ifndef __LIBRETRO__
 #ifdef _WIN32
 #include <windows.h>
@@ -33,6 +37,41 @@
 #define unpack_log write_log
 #undef unpack_log
 #define unpack_log(fmt, ...)
+
+#if defined(A_7Z) && defined(E9K_HACK_7Z_ENABLE)
+static TCHAR *
+zfile_archiveUtf16ToTchar(const uae_u16 *nameUtf16)
+{
+	size_t index;
+	size_t length;
+	TCHAR *name;
+
+	if (!nameUtf16) {
+		return NULL;
+	}
+	length = 0;
+	while (nameUtf16[length]) {
+		length++;
+	}
+	name = xcalloc (TCHAR, length + 1);
+	if (!name) {
+		return NULL;
+	}
+	for (index = 0; index < length; index++) {
+		uae_u16 ch;
+
+		ch = nameUtf16[index];
+		if (ch >= 0x20 && ch <= 0x7e) {
+			name[index] = (TCHAR)ch;
+		} else if (ch == 0) {
+			break;
+		} else {
+			name[index] = '_';
+		}
+	}
+	return name;
+}
+#endif
 
 
 static time_t fromdostime (uae_u32 dd)
@@ -522,6 +561,23 @@ static struct zfile *archive_unpack_zip (struct zfile *zf)
 #ifdef A_7Z
 /* 7Z */
 
+#if defined(E9K_HACK_7Z_ENABLE)
+#include "7z.h"
+#include "7zFile.h"
+#include "7zVersion.h"
+#include "7zCrc.h"
+
+#define ZFILE_ARCHIVE7Z_LOOK_BUFFER_SIZE (1 << 14)
+
+static void *SzAlloc (ISzAllocPtr p, size_t size)
+{
+	return xmalloc (uae_u8, size);
+}
+static void SzFree (ISzAllocPtr p, void *address)
+{
+	xfree (address);
+}
+#else
 #include "7z/7z.h"
 #include "7z/Alloc.h"
 #include "7z/7zFile.h"
@@ -536,10 +592,12 @@ static void SzFree(void *p, void *address)
 {
 	xfree (address);
 }
+#endif
 
 static ISzAlloc allocImp;
 static ISzAlloc allocTempImp;
 
+#if !defined(E9K_HACK_7Z_ENABLE)
 static SRes SzFileReadImp (void *object, void *buffer, size_t *size)
 {
 	CFileInStream *s = (CFileInStream *)object;
@@ -563,6 +621,7 @@ static SRes SzFileSeekImp(void *object, Int64 *pos, ESzSeek origin)
 	*pos = zfile_ftell (zf);
 	return SZ_OK;
 }
+#endif
 
 static void init_7z (void)
 {
@@ -583,16 +642,29 @@ struct SevenZContext
 {
 	CSzArEx db;
 	CFileInStream archiveStream;
+#if defined(E9K_HACK_7Z_ENABLE)
+	CLookToRead2 lookStream;
+#else
 	CLookToRead lookStream;
+#endif
 	Byte *outBuffer;
 	size_t outBufferSize;
 	UInt32 blockIndex;
+#if defined(E9K_HACK_7Z_ENABLE)
+	int archiveOpen;
+#endif
 };
 
 static void archive_close_7z (void *ctx)
 {
 	struct SevenZContext *ctx7 = (struct SevenZContext*)ctx;
 	SzArEx_Free (&ctx7->db, &allocImp);
+#if defined(E9K_HACK_7Z_ENABLE)
+	if (ctx7->archiveOpen) {
+		File_Close (&ctx7->archiveStream.file);
+	}
+	allocImp.Free (&allocImp, ctx7->lookStream.buf);
+#endif
 	allocImp.Free (&allocImp, ctx7->outBuffer);
 	xfree (ctx);
 }
@@ -610,6 +682,49 @@ struct zvolume *archive_directory_7z (struct zfile *z)
 	init_7z ();
 	ctx = xcalloc (struct SevenZContext, 1);
 	ctx->blockIndex = 0xffffffff;
+#if defined(E9K_HACK_7Z_ENABLE)
+	ctx->lookStream.bufSize = ZFILE_ARCHIVE7Z_LOOK_BUFFER_SIZE * sizeof (Byte);
+	ctx->lookStream.buf = allocImp.Alloc (&allocImp, ctx->lookStream.bufSize);
+	if (!ctx->lookStream.buf) {
+		xfree (ctx);
+		return NULL;
+	}
+#if defined(_WIN32) && defined(USE_WINDOWS_FILE) && !defined(LEGACY_WIN32)
+	if (InFile_OpenW (&ctx->archiveStream.file, zfile_getname (z)) != 0) {
+		allocImp.Free (&allocImp, ctx->lookStream.buf);
+		xfree (ctx);
+		return NULL;
+	}
+#else
+	{
+		char *archivePath;
+
+		archivePath = ua (zfile_getname (z));
+		if (!archivePath || InFile_Open (&ctx->archiveStream.file, archivePath) != 0) {
+			xfree (archivePath);
+			allocImp.Free (&allocImp, ctx->lookStream.buf);
+			xfree (ctx);
+			return NULL;
+		}
+		xfree (archivePath);
+	}
+#endif
+	ctx->archiveOpen = 1;
+	FileInStream_CreateVTable (&ctx->archiveStream);
+	LookToRead2_CreateVTable (&ctx->lookStream, False);
+	ctx->lookStream.realStream = &ctx->archiveStream.vt;
+	LookToRead2_Init (&ctx->lookStream);
+
+	SzArEx_Init (&ctx->db);
+	res = SzArEx_Open (&ctx->db, &ctx->lookStream.vt, &allocImp, &allocTempImp);
+	if (res != SZ_OK) {
+		write_log (_T("7Z: SzArchiveOpen %s returned %d\n"), zfile_getname (z), res);
+		File_Close (&ctx->archiveStream.file);
+		allocImp.Free (&allocImp, ctx->lookStream.buf);
+		xfree (ctx);
+		return NULL;
+	}
+#else
 	ctx->archiveStream.s.Read = SzFileReadImp;
 	ctx->archiveStream.s.Seek = SzFileSeekImp;
 	ctx->archiveStream.file.myhandle = (void*)z;
@@ -624,7 +739,48 @@ struct zvolume *archive_directory_7z (struct zfile *z)
 		xfree (ctx);
 		return NULL;
 	}
+#endif
 	zv = zvolume_alloc (z, ArchiveFormat7Zip, ctx, NULL);
+#if defined(E9K_HACK_7Z_ENABLE)
+	for (i = 0; i < (int)ctx->db.NumFiles; i++) {
+		struct zarchive_info zai;
+		size_t nameLength;
+		UInt16 *nameUtf16;
+		TCHAR *name;
+
+		memset(&zai, 0, sizeof zai);
+		nameLength = SzArEx_GetFileNameUtf16 (&ctx->db, i, NULL);
+		nameUtf16 = xcalloc (UInt16, nameLength);
+		if (!nameUtf16) {
+			continue;
+		}
+		SzArEx_GetFileNameUtf16 (&ctx->db, i, nameUtf16);
+		name = zfile_archiveUtf16ToTchar (nameUtf16);
+		xfree (nameUtf16);
+		if (!name || !name[0]) {
+			xfree (name);
+			continue;
+		}
+		zai.name = name;
+		zai.flags = SzBitWithVals_Check (&ctx->db.Attribs, i) ? (int)ctx->db.Attribs.Vals[i] : -1;
+		zai.size = SzArEx_GetFileSize (&ctx->db, i);
+		if (SzBitWithVals_Check (&ctx->db.MTime, i)) {
+			uae_u64 t = (((uae_u64)ctx->db.MTime.Vals[i].High) << 32) | ctx->db.MTime.Vals[i].Low;
+			if (t >= EPOCH_DIFF) {
+				zai.tv.tv_sec = (t - EPOCH_DIFF) / RATE_DIFF;
+				zai.tv.tv_sec -= _timezone;
+				if (_daylight)
+					zai.tv.tv_sec += 1 * 60 * 60;
+			}
+		}
+		if (!SzArEx_IsDir (&ctx->db, i)) {
+			struct znode *zn = zvolume_addfile_abs (zv, &zai);
+			if (zn)
+				zn->offset = i;
+		}
+		xfree (name);
+	}
+#else
 	for (i = 0; i < ctx->db.db.NumFiles; i++) {
 		CSzFileItem *f = ctx->db.db.Files + i;
 		TCHAR *name = (TCHAR*)(ctx->db.FileNames.data + ctx->db.FileNameOffsets[i] * 2);
@@ -649,11 +805,15 @@ struct zvolume *archive_directory_7z (struct zfile *z)
 				zn->offset = i;
 		}
 	}
+#endif
 	zv->method = ArchiveFormat7Zip;
 	return zv;
 }
 
-static struct zfile *archive_access_7z (struct znode *zn)
+#ifndef E9K_HACK_7Z_ENABLE
+static
+#endif    
+struct zfile *archive_access_7z (struct znode *zn)
 {
 	SRes res;
 	struct zvolume *zv = zn->volume;
@@ -666,7 +826,11 @@ static struct zfile *archive_access_7z (struct znode *zn)
 	if (!z)
 		return NULL;
 	ctx = (struct SevenZContext*)zv->handle;
+#if defined(E9K_HACK_7Z_ENABLE)
+	res = SzArEx_Extract (&ctx->db, &ctx->lookStream.vt, zn->offset,
+#else
 	res = SzArEx_Extract (&ctx->db, &ctx->lookStream.s, zn->offset,
+#endif
 		&ctx->blockIndex, &ctx->outBuffer, &ctx->outBufferSize,
 		&offset, &outSizeProcessed,
 		&allocImp, &allocTempImp);

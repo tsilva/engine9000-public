@@ -1240,7 +1240,7 @@ target_amiga_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *ou
     out->footerWarning = NULL;
 
     const char *romExts[] = { "*.uae" };
-    const char *floppyExts[] = { "*.adf", "*.adz", "*.fdi", "*.dms", "*.ipf", "*.raw" };
+    const char *floppyExts[] = { "*.adf", "*.adz", "*.fdi", "*.dms", "*.ipf", "*.raw", ".7z" };
     const char *hdfExts[] = { "*.hdf", "*.hdz" };
     const char *elfExts[] = { "*.elf" };
 

@@ -90,7 +90,7 @@
 //#define WITH_CHD
 #define A_ZIP
 //#define A_RAR
-//#define A_7Z
+#define A_7Z
 #define A_LHA
 //#define A_LZX
 #define A_DMS

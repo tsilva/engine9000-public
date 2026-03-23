@@ -10,6 +10,10 @@
 #define RECURSIVE_ARCHIVES 1
 //#define ZFILE_DEBUG
 
+#ifndef E9K_HACK_7Z_ENABLE
+#define E9K_HACK_7Z_ENABLE 1
+#endif
+
 #include "sysconfig.h"
 #include "sysdeps.h"
 
@@ -1161,18 +1165,22 @@ static struct zfile *wrp (struct zfile *z, int *retcode)
 #endif
 
 #ifdef A_7Z
+#if defined(E9K_HACK_7Z_ENABLE)
+#include "LzmaDec.h"
+#include "7zCrc.h"
+#else
 #include "7z/Xz.h"
 #include "7z/Lzmadec.h"
 #include "7z/7zCrc.h"
+#endif
 
 static void *SzAlloc (void *p, size_t size)
 {
 	return xmalloc (uae_u8, size);
 }
-static void SzFree(void *p, void *address)
-{
-	xfree (address);
-}
+static void SzFree(void *p, void *address) { xfree(address); }
+
+#ifndef E9K_HACK_7Z_ENABLE
 #define XZ_OUT_SIZE 10000
 #define XZ_IN_SIZE 10000
 static struct zfile *xz (struct zfile *z, int *retcode)
@@ -1242,6 +1250,7 @@ static struct zfile *xz (struct zfile *z, int *retcode)
 	XzUnpacker_Free (&cx);
 	return zo;
 }
+#endif
 #endif
 
 #ifdef A_DMS
@@ -1504,8 +1513,10 @@ struct zfile *zuncompress (struct znode *parent, struct zfile *z, int dodefault,
 					return wrp (z, retcode);
 #endif
 #ifdef A_7Z
+#ifndef E9K_HACK_7Z_ENABLE				
 				if (strcasecmp (ext, _T("xz")) == 0)
 					return xz (z, retcode);
+#endif
 #endif
 			}
 #ifdef A_DMS
@@ -1550,8 +1561,10 @@ struct zfile *zuncompress (struct znode *parent, struct zfile *z, int dodefault,
 				return dsq (z, 0, retcode);
 #endif
 #ifdef A_7Z
+#ifndef E9K_HACK_7Z_ENABLE			
 			if (header[0] == 0xfd && header[1] == 0x37 && header[2] == 0x7a && header[3] == 0x58 && header[4] == 0x5a && header[5] == 0)
 				return xz (z, retcode);
+#endif
 #endif
 		}
 #ifdef A_DMS
