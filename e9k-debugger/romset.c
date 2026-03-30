@@ -17,12 +17,6 @@
 #include "romset.h"
 #include "debugger.h"
 
-int
-debugger_platform_pathJoin(char *out, size_t cap, const char *dir, const char *name);
-
-int
-debugger_platform_scanFolder(const char *folder, int (*cb)(const char *path, void *user), void *user);
-
 typedef struct romset_romchunk {
     char   *path;
     size_t  size;

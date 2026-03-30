@@ -6,15 +6,15 @@
  * See COPYING for license details
  */
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "target.h"
 #include "debugger.h"
 #include "debug.h"
 #include "emu_mega.h"
 #include "mega_sprite_debug.h"
 #include "megadrive_core_options.h"
-
-#include <stdlib.h>
-#include <string.h>
 
 static void
 target_megadrive_stubSetConfigDefaults(e9k_system_config_t *config)

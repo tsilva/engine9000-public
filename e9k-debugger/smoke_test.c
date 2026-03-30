@@ -6,7 +6,6 @@
  * See COPYING for license details
  */
 
-
 #include <SDL.h>
 #include <SDL_image.h>
 #include <ctype.h>

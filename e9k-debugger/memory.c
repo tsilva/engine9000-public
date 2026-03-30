@@ -27,7 +27,7 @@
 #include "e9ui_text_cache.h"
 #include "e9ui_step_buttons.h"
 #include "e9ui_scrollbar.h"
-#include "debugger.h"
+#include "target.h"
 #include "inline_edit_pause.h"
 #include "libretro_host.h"
 
@@ -76,6 +76,10 @@ typedef struct memory_view_state {
     uint8_t        inlineEditOriginalBytes[MEMORY_BYTES_PER_ROW];
     SDL_Rect       inlineEditRect;
 } memory_view_state_t;
+
+typedef struct memory_step_buttons_action_ctx {
+    memory_view_state_t *st;
+} memory_step_buttons_action_ctx_t;
 
 static int
 memory_buildSearchPattern(const char *text, memory_search_pattern_t *outPattern);
@@ -1101,9 +1105,6 @@ memory_hscrollBounds(e9ui_context_t *ctx, e9ui_component_t *self)
     return bounds;
 }
 
-typedef struct memory_step_buttons_action_ctx {
-    memory_view_state_t *st;
-} memory_step_buttons_action_ctx_t;
 
 static int
 memory_stepButtonsOnAction(void *user, e9ui_step_buttons_action_t action)
@@ -2019,37 +2020,12 @@ memory_makeComponent(void)
     st->addressBox = e9ui_textbox_make(32, memory_onAddressSubmit, NULL, st);
     st->searchBox = e9ui_textbox_make(128, memory_onSearchSubmit, memory_onSearchChange, st);
     e9ui_component_t *inlineEdit = e9ui_data_edit_make((int)MEMORY_BYTES_PER_ROW, memory_inlineEditSubmitted, st);
-    if (!st->addressBox || !st->searchBox || !inlineEdit) {
-        if (st->addressBox) {
-            e9ui_childDestroy(st->addressBox, NULL);
-            st->addressBox = NULL;
-        }
-        if (st->searchBox) {
-            e9ui_childDestroy(st->searchBox, NULL);
-            st->searchBox = NULL;
-        }
-        if (inlineEdit) {
-            e9ui_childDestroy(inlineEdit, NULL);
-        }
-        e9ui_childDestroy(row, NULL);
-        alloc_free(st);
-        alloc_free(c);
-        return NULL;
-    }
     e9ui_textbox_setFocusBorderVisible(st->addressBox, 0);
     e9ui_textbox_setFocusBorderVisible(st->searchBox, 0);
     e9ui_textbox_setKeyHandler(st->searchBox, memory_onSearchKey, st);
     e9ui_data_edit_setKeyHandler(inlineEdit, memory_inlineEditKey, st);
     st->inlineEditMeta = alloc_strdup("inline_edit");
-    if (!st->inlineEditMeta) {
-        e9ui_childDestroy(inlineEdit, NULL);
-        e9ui_childDestroy(st->addressBox, NULL);
-        e9ui_childDestroy(st->searchBox, NULL);
-        e9ui_childDestroy(row, NULL);
-        alloc_free(st);
-        alloc_free(c);
-        return NULL;
-    }
+
     e9ui_child_add(c, inlineEdit, st->inlineEditMeta);
     e9ui_setHidden(inlineEdit, 1);
 

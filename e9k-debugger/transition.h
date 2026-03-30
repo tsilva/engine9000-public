@@ -9,7 +9,6 @@
 #pragma once
 
 #include "e9ui.h"
-#include "debugger.h"
 
 const char *
 transition_modeName(e9k_transition_mode_t mode);

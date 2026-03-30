@@ -6,10 +6,11 @@
  * See COPYING for license details
  */
 
-#include "debugger.h"
-#include "target.h"
 #include <SDL.h>
 #include <string.h>
+
+#include "debugger.h"
+#include "target.h"
 
 target_iface_t* target_targets[3];
 target_iface_t* target;

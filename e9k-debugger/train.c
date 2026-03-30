@@ -6,14 +6,13 @@
  * See COPYING for license details
  */
 
-
 #include <string.h>
+
 #include "train.h"
 #include "alloc.h"
 #include "list.h"
 
 static list_t *s_train_ignoreAddrs = NULL;
-
 static uint32_t s_train_lastWatchAddr = 0;
 static int s_train_haveLastWatchAddr = 0;
 static uint32_t s_train_watchIndex = UINT32_MAX;

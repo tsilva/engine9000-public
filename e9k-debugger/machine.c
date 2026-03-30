@@ -12,7 +12,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include <limits.h>
-#include "resource.h"
+
 #include "machine.h"
 #include "debugger.h"
 #include "ui.h"

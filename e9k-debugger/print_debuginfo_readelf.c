@@ -15,10 +15,8 @@
 #include <string.h>
 
 #include "print_debuginfo_readelf.h"
-
 #include "alloc.h"
 #include "debugger.h"
-#include "debug.h"
 #include "base_map.h"
 
 static void

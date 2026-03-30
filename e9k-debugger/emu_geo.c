@@ -6,10 +6,10 @@
  * See COPYING for license details
  */
 
-#include "debugger.h"
+#include "target.h"
 #include "debugger_input_bindings.h"
 #include "e9ui.h"
-#include "sprite_debug.h"
+#include "neogeo_sprite_debug.h"
 #include "libretro.h"
 #include "alloc.h"
 
@@ -96,7 +96,7 @@ emu_geo_toggleSpriteDebug(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
     (void)user;
-    sprite_debug_toggle();
+    neogeo_sprite_debug_toggle();
 }
 
 void
@@ -659,8 +659,8 @@ emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst)
     emu_e9k_spriteOverlayRender(ctx->renderer, dst, &emu_geo_spriteShadow);
   }
   
-  if (sprite_debug_is_open() && emu_geo_spriteShadowReady) {
-    sprite_debug_render(&emu_geo_spriteShadow);
+  if (neogeo_sprite_debug_is_open() && emu_geo_spriteShadowReady) {
+    neogeo_sprite_debug_render(&emu_geo_spriteShadow);
   }  
 }
 

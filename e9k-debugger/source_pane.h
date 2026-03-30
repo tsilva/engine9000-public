@@ -12,6 +12,7 @@
 #include <SDL_ttf.h>
 #include <stdint.h>
 #include <stddef.h>
+
 #include "e9ui_component.h"
 #include "e9ui_context.h"
 

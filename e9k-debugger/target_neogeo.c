@@ -23,6 +23,13 @@
 #include "file.h"
 #include "strutil.h"
 
+typedef struct target_neogeo_systemtype_state {
+    e9ui_component_t *aesCheckbox;
+    e9ui_component_t *mvsCheckbox;
+    char *systemType;
+    int updating;
+} target_neogeo_systemtype_state_t;
+
 static const char *
 target_neogeo_defaultCorePath(void);
 
@@ -42,14 +49,6 @@ target_neogeo_setConfigDefaults(e9k_system_config_t *config)
     config->neogeo.systemType[sizeof(config->neogeo.systemType) - 1] = '\0';
     config->neogeo.libretro.exePath[0] = '\0';
 }
-
-typedef struct target_neogeo_systemtype_state {
-    e9ui_component_t *aesCheckbox;
-    e9ui_component_t *mvsCheckbox;
-    char *systemType;
-    int updating;
-} target_neogeo_systemtype_state_t;
-
 
 static void
 target_neogeo_settingsClearOptions(void)

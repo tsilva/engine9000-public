@@ -6,13 +6,13 @@
  * See COPYING for license details
  */
 
-#include "amiga_uae_options.h"
 
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
+#include "amiga_uae_options.h"
 #include "alloc.h"
 #include "debugger.h"
 #include "libretro_host.h"

@@ -7,6 +7,7 @@
  */
 
 #include "e9ui.h"
+
 typedef struct e9ui_text_select_run {
     char *text;
     int textLen;

@@ -15,14 +15,10 @@
 #include <SDL_ttf.h>
 #include <SDL_image.h>
 #include "e9ui.h"
-#include "debug.h"
 #include "linebuf.h"
 #include "machine.h"
-#include "e9k-geo.h"
-#include "file.h"
-#include "dasm.h"
-#include "emu.h"
 #include "target.h"
+
 #define countof(x) (sizeof(x) / sizeof(x[0]))
 
 struct state_wrap_info;
@@ -268,6 +264,9 @@ debugger_platform_formatToolCommand(char *out,
 
 int
 debugger_platform_finalizeToolBinary(char *toolPath, size_t cap);
+
+int
+debugger_platform_uncompressBuffer(uint8_t *dest, size_t *inOutDestSize, const uint8_t *source, size_t sourceSize);
 
 void
 debugger_suppressBreakpointAtPC(void);

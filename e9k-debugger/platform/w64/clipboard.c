@@ -6,13 +6,13 @@
  * See COPYING for license details
  */
 
-#include "clipboard.h"
-
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <png.h>
+
+#include "clipboard.h"
 
 static void
 clipboard_logWin32Error(const char *what)

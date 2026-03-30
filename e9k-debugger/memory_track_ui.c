@@ -79,8 +79,7 @@ typedef struct memory_track_ranges {
 } memory_track_ranges_t;
 
 struct memory_track_ui {
-    int open;
-    e9ui_window_t *windowHost;
+    e9ui_window_state_t windowState;
     SDL_Window *window;
     SDL_Renderer *renderer;
     e9ui_context_t ctx;
@@ -183,7 +182,13 @@ struct memory_track_ui {
     char error[128];
 };
 
-static memory_track_ui_t memory_track_ui_state = {0};
+static memory_track_ui_t memory_track_ui_state = {
+    .windowState.winX = E9UI_WINDOW_COORD_UNSET,
+    .windowState.winY = E9UI_WINDOW_COORD_UNSET,
+    .windowState.openMinWidthPx = 520,
+    .windowState.openMinHeightPx = 420,
+    .windowState.openCenterWhenNoSaved = 1,
+};
 
 static const aux_window_ops_t memory_track_ui_auxWindowOps = {
     .setFocus = memory_track_ui_setMainWindowFocused,
@@ -199,7 +204,7 @@ memory_track_ui_windowBackend(void)
 static int
 memory_track_ui_isOverlayBackend(const memory_track_ui_t *ui)
 {
-    return ui && ui->windowHost ? 1 : 0;
+    return ui && ui->windowState.windowHost ? 1 : 0;
 }
 
 static e9ui_rect_t
@@ -2707,10 +2712,6 @@ memory_track_ui_buildFrameRow(memory_track_ui_t *ui)
         }
         e9ui_component_t **next = (e9ui_component_t**)alloc_realloc(ui->frameInputs,
                                                                      newCap * sizeof(e9ui_component_t*));
-        if (!next) {
-            e9ui_childDestroy(row, &ui->ctx);
-            return NULL;
-        }
         ui->frameInputs = next;
         ui->frameInputsCap = newCap;
     }
@@ -2831,10 +2832,6 @@ memory_track_ui_buildFilterRow(memory_track_ui_t *ui)
         }
         e9ui_component_t **next = (e9ui_component_t**)alloc_realloc(ui->filterInputs,
                                                                      newCap * sizeof(e9ui_component_t*));
-        if (!next) {
-            e9ui_childDestroy(row, &ui->ctx);
-            return NULL;
-        }
         ui->filterInputs = next;
         ui->filterInputsCap = newCap;
     }
@@ -2866,69 +2863,16 @@ static e9ui_component_t *
 memory_track_ui_buildRoot(memory_track_ui_t *ui)
 {
     e9ui_component_t *root = e9ui_stack_makeVertical();
-    if (!root) {
-        return NULL;
-    }
     e9ui_component_t *stack = e9ui_stack_makeVertical();
-    if (!stack) {
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     e9ui_component_t *controls = memory_track_ui_buildControlRow(ui);
-    if (!controls) {
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     e9ui_component_t *controls_box = e9ui_box_make(controls);
     e9ui_box_setPadding(controls_box, ui->padding);
     e9ui_component_t *filters = memory_track_ui_buildFilterRow(ui);
-    if (!filters) {
-        e9ui_childDestroy(controls_box, &ui->ctx);
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     e9ui_component_t *frames = memory_track_ui_buildFrameRow(ui);
-    if (!frames) {
-        e9ui_childDestroy(controls_box, &ui->ctx);
-        e9ui_childDestroy(filters, &ui->ctx);
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
-
     e9ui_component_t *table = memory_track_ui_tableMake(ui);
-    if (!table) {
-        e9ui_childDestroy(controls_box, &ui->ctx);
-        e9ui_childDestroy(filters, &ui->ctx);
-        e9ui_childDestroy(frames, &ui->ctx);
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     ui->table = table;
     ui->scroll = e9ui_scroll_make(table);
-    if (!ui->scroll) {
-        e9ui_childDestroy(table, &ui->ctx);
-        e9ui_childDestroy(controls_box, &ui->ctx);
-        e9ui_childDestroy(filters, &ui->ctx);
-        e9ui_childDestroy(frames, &ui->ctx);
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     ui->hscroll = e9ui_scroll_make(stack);
-    if (!ui->hscroll) {
-        e9ui_childDestroy(ui->scroll, &ui->ctx);
-        ui->scroll = NULL;
-        e9ui_childDestroy(controls_box, &ui->ctx);
-        e9ui_childDestroy(filters, &ui->ctx);
-        e9ui_childDestroy(frames, &ui->ctx);
-        e9ui_childDestroy(stack, &ui->ctx);
-        e9ui_childDestroy(root, &ui->ctx);
-        return NULL;
-    }
     e9ui_scroll_setContentWidthPx(ui->hscroll, memory_track_ui_contentWidthPx(ui));
     ui->headerRow = controls_box;
     e9ui_stack_addFixed(stack, controls_box);
@@ -3032,7 +2976,7 @@ memory_track_ui_requestClose(memory_track_ui_t *ui, e9ui_context_t *ctx)
     if (!ui) {
         return;
     }
-    (void)e9ui_defer(ctx ? ctx : (e9ui ? &e9ui->ctx : &ui->ctx),
+    (void)e9ui_defer(ctx ? ctx : &e9ui->ctx,
                      memory_track_ui_deferredShutdown,
                      ui);
 }
@@ -3045,7 +2989,7 @@ memory_track_ui_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
     }
     memory_track_overlay_body_state_t *st = (memory_track_overlay_body_state_t *)self->state;
     memory_track_ui_t *ui = st ? st->ui : NULL;
-    if (!ui || !ui->open) {
+    if (!ui || !ui->windowState.open) {
         return;
     }
     ui->ctx = *ctx;
@@ -3131,11 +3075,17 @@ int
 memory_track_ui_init(void)
 {
     memory_track_ui_t *ui = &memory_track_ui_state;
-    if (ui->open) {
+    if (ui->windowState.open) {
         return 1;
     }
-    ui->windowHost = e9ui_windowCreate(memory_track_ui_windowBackend());
-    if (!ui->windowHost) {
+    ui->windowState.winX = e9ui->layout.memTrackWinX;
+    ui->windowState.winY = e9ui->layout.memTrackWinY;
+    ui->windowState.winW = e9ui->layout.memTrackWinW;
+    ui->windowState.winH = e9ui->layout.memTrackWinH;
+    ui->windowState.winHasSaved =
+        e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
+    ui->windowState.windowHost = e9ui_windowCreate(memory_track_ui_windowBackend());
+    if (!ui->windowState.windowHost) {
         return 0;
     }
     ui->needsRefresh = 1;
@@ -3146,17 +3096,9 @@ memory_track_ui_init(void)
     ui->renderer = NULL;
     ui->ctx.font = e9ui->ctx.font;
     e9ui_rect_t overlayRect = { 0, 0, 0, 0 };
-    overlayRect = e9ui_windowResolveOpenRect(&e9ui->ctx,
-                                                       memory_track_ui_windowDefaultRect(&e9ui->ctx),
-                                                       520,
-                                                       420,
-                                                       1,
-                                                       (e9ui->layout.memTrackWinX >= 0 && e9ui->layout.memTrackWinY >= 0) ? 1 : 0,
-                                                       (e9ui->layout.memTrackWinW > 0 && e9ui->layout.memTrackWinH > 0) ? 1 : 0,
-                                                       e9ui->layout.memTrackWinX,
-                                                       e9ui->layout.memTrackWinY,
-                                                       e9ui->layout.memTrackWinW,
-                                                       e9ui->layout.memTrackWinH);
+    overlayRect = e9ui_windowResolveStateOpenRect(&e9ui->ctx,
+                                                  memory_track_ui_windowDefaultRect(&e9ui->ctx),
+                                                  &ui->windowState);
     ui->ctx = e9ui->ctx;
     ui->ctx.font = e9ui->ctx.font;
     int estimatedBodyW = overlayRect.w - e9ui_scale_px(&e9ui->ctx, 8);
@@ -3173,30 +3115,20 @@ memory_track_ui_init(void)
     {
         e9ui_rect_t rect = overlayRect;
         ui->overlayBodyHost = memory_track_ui_makeOverlayBodyHost(ui);
-        if (!ui->overlayBodyHost) {
-            memory_track_ui_shutdown();
-            return 0;
-        }
-        if (!e9ui_windowOpen(ui->windowHost,
+        e9ui_windowOpen(ui->windowState.windowHost,
                                      MEMORY_TRACK_UI_TITLE,
                                      rect,
                                      ui->overlayBodyHost,
                                      memory_track_ui_overlayWindowCloseRequested,
                                      ui,
-                                     &e9ui->ctx)) {
-            ui->root = NULL;
-            e9ui_childDestroy(ui->overlayBodyHost, &e9ui->ctx);
-            ui->overlayBodyHost = NULL;
-            memory_track_ui_shutdown();
-            return 0;
-        }
+			             &e9ui->ctx);
         ui->window = e9ui->ctx.window;
         ui->renderer = e9ui->ctx.renderer;
         ui->ctx = e9ui->ctx;
     }
     ui->needsRebuild = 0;
     memory_track_ui_setError(ui, NULL);
-    ui->open = 1;
+    ui->windowState.open = 1;
     aux_window_register(&memory_track_ui_auxWindowOps, ui);
     return 1;
 }
@@ -3205,7 +3137,7 @@ void
 memory_track_ui_shutdown(void)
 {
     memory_track_ui_t *ui = &memory_track_ui_state;
-    if (!ui->open) {
+    if (!ui->windowState.open) {
         return;
     }
     aux_window_unregister(&memory_track_ui_auxWindowOps, ui);
@@ -3215,20 +3147,18 @@ memory_track_ui_shutdown(void)
     if (ui->filterInputs && ui->filterInputsCount) {
         memory_track_ui_storeFilterTexts(ui);
     }
-    (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                            (e9ui ? &e9ui->ctx : &ui->ctx),
-                                            NULL,
-                                            &e9ui->layout.memTrackWinX,
-                                            &e9ui->layout.memTrackWinY,
-                                            &e9ui->layout.memTrackWinW,
-                                            &e9ui->layout.memTrackWinH);
+    (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
+    e9ui->layout.memTrackWinX = ui->windowState.winX;
+    e9ui->layout.memTrackWinY = ui->windowState.winY;
+    e9ui->layout.memTrackWinW = ui->windowState.winW;
+    e9ui->layout.memTrackWinH = ui->windowState.winH;
     config_saveConfig();
     e9ui_text_cache_clearRenderer(ui->renderer);
     ui->root = NULL;
     ui->overlayBodyHost = NULL;
-    if (ui->windowHost) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+    if (ui->windowState.windowHost) {
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
     }
     ui->renderer = NULL;
     ui->window = NULL;
@@ -3286,7 +3216,7 @@ memory_track_ui_shutdown(void)
     ui->cachedFrameActive = NULL;
     ui->cachedFrameCap = 0;
     ui->cachedBuildFrameNo = 0;
-    ui->open = 0;
+    ui->windowState.open = 0;
     ui->headerRow = NULL;
     ui->hscroll = NULL;
     ui->scroll = NULL;
@@ -3300,7 +3230,7 @@ memory_track_ui_shutdown(void)
 int
 memory_track_ui_isOpen(void)
 {
-    return memory_track_ui_state.open ? 1 : 0;
+    return memory_track_ui_state.windowState.open ? 1 : 0;
 }
 
 void
@@ -3313,16 +3243,14 @@ void
 memory_track_ui_render(void)
 {
     memory_track_ui_t *ui = &memory_track_ui_state;
-    if (!ui->open) {
+    if (!ui->windowState.open) {
         return;
     }
-    if (e9ui_windowCaptureRectChanged(ui->windowHost,
-                                      (e9ui ? &e9ui->ctx : &ui->ctx),
-                                      NULL,
-                                      &e9ui->layout.memTrackWinX,
-                                      &e9ui->layout.memTrackWinY,
-                                      &e9ui->layout.memTrackWinW,
-                                      &e9ui->layout.memTrackWinH)) {
+    if (e9ui_windowCaptureStateRectChanged(&ui->windowState, &e9ui->ctx)) {
+        e9ui->layout.memTrackWinX = ui->windowState.winX;
+        e9ui->layout.memTrackWinY = ui->windowState.winY;
+        e9ui->layout.memTrackWinW = ui->windowState.winW;
+        e9ui->layout.memTrackWinH = ui->windowState.winH;
         config_saveConfig();
     }
 }

@@ -6,15 +6,15 @@
  * See COPYING for license details
  */
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "target.h"
 #include "debugger.h"
 #include "debug.h"
 #include "emu_geo.h"
 #include "neogeo_core_options.h"
 #include "sprite_debug.h"
-
-#include <stdlib.h>
-#include <string.h>
 
 static void
 target_neogeo_stubSetConfigDefaults(e9k_system_config_t *config)

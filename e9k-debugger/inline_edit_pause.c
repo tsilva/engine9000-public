@@ -7,7 +7,6 @@
  */
 
 #include "inline_edit_pause.h"
-
 #include "debugger.h"
 #include "libretro_host.h"
 

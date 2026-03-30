@@ -9,7 +9,6 @@
 #pragma once
 
 #include "e9ui_component.h"
-#include <stddef.h>
 #include "e9ui_context.h"
 
 typedef void (*e9ui_seek_bar_change_cb_t)(float percent, void *user);

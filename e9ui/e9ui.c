@@ -6,6 +6,8 @@
  * See COPYING for license details
  */
 
+#include "e9ui.h"
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
@@ -19,14 +21,12 @@
 #include <limits.h>
 #include <math.h>
 
-#include "e9ui.h"
 #include "config.h"
 #include "hotkeys.h"
 #include "help.h"
 #include "file.h"
 #include "e9ui_theme.h"
 #include "ui_test.h"
-#include "debug.h"
 #include "e9ui_text_cache.h"
 #include "e9ui_theme_defaults.h"
 #include "strutil.h"
@@ -1800,7 +1800,8 @@ e9ui_saveLayout(const char* configPath)
         SDL_GetWindowSize(e9ui->ctx.window, &ww, &wh);
     }
     fprintf(f, "win_x=%d\nwin_y=%d\nwin_w=%d\nwin_h=%d\n", wx, wy, ww, wh);
-    if (e9ui->layout.memTrackWinW > 0 && e9ui->layout.memTrackWinH > 0) {
+    if (e9ui_windowHasSavedPosition(e9ui->layout.memTrackWinX, e9ui->layout.memTrackWinY) &&
+        e9ui_windowHasSavedSize(e9ui->layout.memTrackWinW, e9ui->layout.memTrackWinH)) {
         fprintf(f, "memtrack_win_x=%d\nmemtrack_win_y=%d\nmemtrack_win_w=%d\nmemtrack_win_h=%d\n",
                 e9ui->layout.memTrackWinX, e9ui->layout.memTrackWinY,
                 e9ui->layout.memTrackWinW, e9ui->layout.memTrackWinH);

@@ -7,9 +7,8 @@
  */
 
 #include <SDL.h>
-#include "transition.h"
-#include "debugger.h"
 
+#include "transition.h"
 
 static void
 transition_flip_renderToTexture(e9ui_component_t *comp, SDL_Texture *target,

@@ -15,10 +15,9 @@
 #include "libretro_host.h"
 #include "debugger.h"
 #include "profile.h"
-
 #include "analyse.h"
 #include "linebuf.h"
-#include "sprite_debug.h"
+#include "neogeo_sprite_debug.h"
 #include "machine.h"
 #include "base_map.h"
 #include "source.h"
@@ -36,22 +35,19 @@
 #include "input_record.h"
 #include "smoke_test.h"
 #include "ui_test.h"
-#include "custom_amiga.h"
+#include "amiga_custom.h"
 #include "shader_ui.h"
-#include "custom_log.h"
+#include "amiga_custom_log.h"
 #include "hotkeys.h"
-#include "custom_ui.h"
+#include "amiga_custom_ui.h"
 #include "memory_track_ui.h"
 #include "crt.h"
 #include "settings.h"
 #include "cli.h"
 #include "runtime.h"
 #include "config.h"
-#include "romset.h"
 #include "ui.h"
 #include "emu_geo.h"
-#include "debugger_platform.h"
-#include "neogeo_core_options.h"
 #include "breakpoints.h"
 #include "mega_sprite_debug.h"
 
@@ -615,14 +611,14 @@ debugger_cleanup(void)
   config_saveConfig();
   rom_config_saveOnExit();
   snapshot_saveOnExit();
-  if (sprite_debug_is_open()) {
-    sprite_debug_toggle();
+  if (neogeo_sprite_debug_is_open()) {
+    neogeo_sprite_debug_toggle();
   }
   if (mega_sprite_debug_is_open()) {
     mega_sprite_debug_toggle();
   }
-  custom_log_shutdown();
-  custom_amiga_shutdown();
+  amiga_custom_log_shutdown();
+  amiga_custom_shutdown();
   libretro_host_shutdown();
   emu_geo_shutdown();
   addr2line_stop();
@@ -634,7 +630,7 @@ debugger_cleanup(void)
   dasm_shutdown();
   source_shutdown();
   syntax_highlight_shutdown();
-  custom_ui_shutdown();
+  amiga_custom_ui_shutdown();
   shader_ui_shutdown();
   memory_track_ui_shutdown();
   target_releaseUiResources();
@@ -721,8 +717,8 @@ debugger_ctor(void)
   e9ui->transition.fullscreenMode = e9k_transition_none;
   e9ui->transition.fullscreenModeSet = 0;
   e9ui->transition.cycleIndex = 0;
-  e9ui->layout.memTrackWinX = -1;
-  e9ui->layout.memTrackWinY = -1;
+  e9ui->layout.memTrackWinX = E9UI_WINDOW_COORD_UNSET;
+  e9ui->layout.memTrackWinY = E9UI_WINDOW_COORD_UNSET;
   e9ui->layout.memTrackWinW = 0;
   e9ui->layout.memTrackWinH = 0;
   machine_init(&debugger.machine);

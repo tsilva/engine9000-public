@@ -18,13 +18,38 @@
 #include "debugger_input_bindings.h"
 #include "amiga_uae_options.h"
 #include "neogeo_core_options.h"
-#include "debugger_platform.h"
 #include "core_options.h"
 #include "libretro_host.h"
 #include "system_badge.h"
 #include "alloc.h"
 #include "file.h"
 #include "strutil.h"
+
+typedef struct target_amiga_romselect_extra {
+    e9ui_component_t *df0Select;
+    e9ui_component_t *df1Select;
+    e9ui_component_t *dh0FolderSelect;
+    e9ui_component_t *dh0HdfSelect;
+    struct target_amiga_toolchain_preset_state *toolchainPresetState;
+    int updatingMedia;
+} target_amiga_romselect_extra_t;
+
+typedef struct target_amiga_toolchain_preset_state {
+    e9ui_component_t *toolchainTextbox;
+    e9ui_component_t *vasmCheckbox;
+    e9ui_component_t *gccCheckbox;
+    int updating;
+} target_amiga_toolchain_preset_state_t;
+
+#if defined(_WIN32)
+static const char target_amiga_toolchainPrefixVasm[] = ".\\system\\v-hunk-";
+#else
+static const char target_amiga_toolchainPrefixVasm[] = "./system/v-hunk-";
+#endif
+static const char target_amiga_toolchainPrefixGcc[] = "m68k-amigaos-";
+
+static void
+target_amiga_toolchainPresetSync(target_amiga_toolchain_preset_state_t *st, e9ui_context_t *ctx, const char *prefix);
 
 static const char *
 target_amiga_defaultCorePath(void);
@@ -475,16 +500,6 @@ target_amiga_setConfigDefaults(e9k_system_config_t *config)
     config->amiga.libretro.exePath[0] = '\0';
 }
 
-
-typedef struct target_amiga_romselect_extra {
-    e9ui_component_t *df0Select;
-    e9ui_component_t *df1Select;
-    e9ui_component_t *dh0FolderSelect;
-    e9ui_component_t *dh0HdfSelect;
-    struct target_amiga_toolchain_preset_state *toolchainPresetState;
-    int updatingMedia;
-} target_amiga_romselect_extra_t;
-
 static void
 target_amiga_refreshFloppyRecentsDropdowns(target_amiga_romselect_extra_t *extra)
 {
@@ -499,22 +514,6 @@ target_amiga_refreshFloppyRecentsDropdowns(target_amiga_romselect_extra_t *extra
     }
 }
 
-typedef struct target_amiga_toolchain_preset_state {
-    e9ui_component_t *toolchainTextbox;
-    e9ui_component_t *vasmCheckbox;
-    e9ui_component_t *gccCheckbox;
-    int updating;
-} target_amiga_toolchain_preset_state_t;
-
-#if defined(_WIN32)
-static const char target_amiga_toolchainPrefixVasm[] = ".\\system\\v-hunk-";
-#else
-static const char target_amiga_toolchainPrefixVasm[] = "./system/v-hunk-";
-#endif
-static const char target_amiga_toolchainPrefixGcc[] = "m68k-amigaos-";
-
-static void
-target_amiga_toolchainPresetSync(target_amiga_toolchain_preset_state_t *st, e9ui_context_t *ctx, const char *prefix);
 
 static void
 target_amiga_applyActiveSettingsToCurrentSystem(void)

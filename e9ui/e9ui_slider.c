@@ -6,11 +6,12 @@
  * See COPYING for license details
  */
 
+#include "e9ui.h"
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 
 #include "alloc.h"
-#include "e9ui.h"
 #include "e9ui_seek_bar.h"
 
 typedef struct e9ui_slider_state

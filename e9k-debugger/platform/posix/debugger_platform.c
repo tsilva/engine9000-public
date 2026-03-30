@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <zlib.h>
 
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -105,6 +106,24 @@ debugger_platform_hashPath(const char *path)
         hash *= 1099511628211ull;
     }
     return hash;
+}
+
+int
+debugger_platform_uncompressBuffer(uint8_t *dest, size_t *inOutDestSize, const uint8_t *source, size_t sourceSize)
+{
+    uLongf destSize = 0;
+
+    if (!dest || !inOutDestSize || !source) {
+        return Z_BUF_ERROR;
+    }
+
+    destSize = (uLongf)*inOutDestSize;
+    int zResult = uncompress((Bytef *)dest,
+                             &destSize,
+                             (const Bytef *)source,
+                             (uLong)sourceSize);
+    *inOutDestSize = (size_t)destSize;
+    return zResult;
 }
 
 int

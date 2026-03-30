@@ -19,9 +19,7 @@
 #include "debugger.h"
 #include "e9ui.h"
 #include "e9ui_scroll.h"
-#include "e9ui_text.h"
 #include "libretro_host.h"
-#include "neogeo_core_options.h"
 #include "settings.h"
 #include "system_badge.h"
 

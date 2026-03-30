@@ -26,15 +26,30 @@
 #include "rom_config.h"
 #include "e9ui_scroll.h"
 
-//static
-//TODO    
+#define SETTINGS_ROM_RECENTS_MAX 16
 
+static int settings_pendingRebuild = 0;
+int settings_coreOptionsDirty = 0;
+static int settings_coreOptionsRestartDirty = 0;
+static const char settings_romRecentClearLabel[] = "<CLEAR RECENTS>";
+static const char settings_romRecentClearValue[] = "__e9k_clear_recents__";
+
+typedef struct settings_romrecent_list
+{
+    char entries[SETTINGS_ROM_RECENTS_MAX][PATH_MAX];
+    int count;
+} settings_romrecent_list_t;
+
+static settings_romrecent_list_t settings_romRecents[TARGET_MEGADRIVE + 1];
 
 static void
 settings_rebuildModalBody(e9ui_context_t *ctx);
 
 static e9ui_component_t *
 settings_makeSystemBadge(e9ui_context_t *ctx, target_iface_t* system);
+
+void
+settings_markCoreOptionsDirtyWithRestart(int restartRequired);
 
 static void
 settings_uiDebuggerHotkeys(e9ui_context_t *ctx, void *user)
@@ -106,22 +121,6 @@ settings_enableTextboxEnterNavigation(e9ui_component_t *comp)
     }
 }
 
-static int settings_pendingRebuild = 0;
-int settings_coreOptionsDirty = 0;
-static int settings_coreOptionsRestartDirty = 0;
-
-#define SETTINGS_ROM_RECENTS_MAX 16
-
-static const char settings_romRecentClearLabel[] = "<CLEAR RECENTS>";
-static const char settings_romRecentClearValue[] = "__e9k_clear_recents__";
-
-typedef struct settings_romrecent_list
-{
-    char entries[SETTINGS_ROM_RECENTS_MAX][PATH_MAX];
-    int count;
-} settings_romrecent_list_t;
-
-static settings_romrecent_list_t settings_romRecents[TARGET_MEGADRIVE + 1];
 
 static int
 settings_romRecentsTargetIndexForIface(const target_iface_t *system)
@@ -329,9 +328,6 @@ settings_romSelectHandleClearRecents(settings_romselect_state_t *st, const char 
 }
 
 void
-settings_markCoreOptionsDirtyWithRestart(int restartRequired);
-
-void
 settings_markCoreOptionsDirty(void)
 {
     settings_markCoreOptionsDirtyWithRestart(1);
@@ -374,8 +370,6 @@ settings_pathExistsFile(const char *path)
     return S_ISREG(statBuffer.st_mode) ? 1 : 0;
 }
 
-// static
-// TODO
 int
 settings_pathExistsDir(const char *path)
 {
@@ -390,7 +384,6 @@ settings_pathExistsDir(const char *path)
 }
 
 
-//static
 void
 settings_copyPath(char *dest, size_t capacity, const char *src)
 {
@@ -508,12 +501,6 @@ settings_audioBufferNormalized(int value)
 {
     return value > 0 ? value : 50;
 }
-
-// TODO
-//static
-
-// static
-// TODO
 
 static int
 settings_needsRestart(void)
@@ -645,12 +632,6 @@ settings_measureTargetBodyHeight(target_iface_t *system, e9ui_context_t *ctx, in
     target_settings_modal_t modal = {0};
     system->settingsBuildModal(ctx, &modal);
     int height = settings_componentPreferredHeight(modal.body, ctx, availW);
-    if (modal.body) {
-        e9ui_childDestroy(modal.body, ctx);
-    }
-    if (modal.footerWarning) {
-        e9ui_childDestroy(modal.footerWarning, ctx);
-    }
     return height;
 }
 
@@ -1332,17 +1313,10 @@ settings_buildModalBody(e9ui_context_t *ctx)
     e9ui_component_t *rowHeader = NULL;
     int rowHeaderBadgeWPx = e9ui_scale_px(ctx, 139);
     int rowHeaderGapPx = e9ui_scale_px(ctx, 12);
-    if (badge && rowCoreCenter) {
-        rowHeader = e9ui_hstack_make();
-        if (rowHeader) {
-            e9ui_hstack_addFixed(rowHeader, badge, rowHeaderBadgeWPx);
-            e9ui_hstack_addFixed(rowHeader, e9ui_spacer_make(rowHeaderGapPx), rowHeaderGapPx);
-            e9ui_hstack_addFlex(rowHeader, rowCoreCenter);
-        } else {
-            e9ui_childDestroy(badge, ctx);
-            badge = NULL;
-        }
-    }
+    rowHeader = e9ui_hstack_make();
+    e9ui_hstack_addFixed(rowHeader, badge, rowHeaderBadgeWPx);
+    e9ui_hstack_addFixed(rowHeader, e9ui_spacer_make(rowHeaderGapPx), rowHeaderGapPx);
+    e9ui_hstack_addFlex(rowHeader, rowCoreCenter);
 
     int funSelected = (e9ui->transition.mode != e9k_transition_none);
     e9ui_component_t *cbLogs = e9ui_checkbox_make("LOGS",

@@ -6,13 +6,15 @@
  * See COPYING for license details
  */
 
-#include "amiga_custom_regs.h"
 
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "amiga_custom_regs.h"
+
 
 /* Bitfield decode text sourced from:
  * e9k-debugger/elowar/amigadev.elowar.com/read/ADCD_2.1/Hardware_Manual_guide/

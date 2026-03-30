@@ -8,25 +8,22 @@
 
 #include <errno.h>
 #include <limits.h>
-#include "libretro.h"
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "debug.h"
 #include <stdbool.h>
 
+#include "debug.h"
+#include "libretro.h"
 #include "libretro_host.h"
 #include "debugger.h"
 #include "input_record.h"
 #include "alloc.h"
 #include "state_wrap.h"
 
-#ifndef E9K_HACK_AMI_SPRITE_VIS
-#define E9K_HACK_AMI_SPRITE_VIS 0
-#endif
 
 
 typedef void (*retro_set_environment_fn_t)(retro_environment_t);
@@ -104,11 +101,9 @@ typedef int (*e9k_debug_ami_get_blitter_debug_fn_t)(void);
 typedef size_t (*e9k_debug_ami_blitter_vis_read_points_fn_t)(e9k_debug_ami_blitter_vis_point_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
 typedef size_t (*e9k_debug_ami_blitter_vis_read_stats_fn_t)(e9k_debug_ami_blitter_vis_stats_t *out, size_t cap);
 typedef size_t (*e9k_debug_ami_blitter_vis_read_word_tags_fn_t)(uint32_t addr, uint32_t *out, size_t cap);
-#if E9K_HACK_AMI_SPRITE_VIS
 typedef void (*e9k_debug_ami_set_sprite_vis_fn_t)(int enabled);
 typedef int (*e9k_debug_ami_get_sprite_vis_fn_t)(void);
 typedef size_t (*e9k_debug_ami_sprite_vis_read_points_fn_t)(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
-#endif
 typedef const e9k_debug_ami_dma_debug_frame_view_t *(*e9k_debug_ami_dma_debug_get_frame_view_fn_t)(uint32_t frameSelect);
 typedef const e9k_debug_ami_copper_debug_frame_view_t *(*e9k_debug_ami_copper_debug_get_frame_view_fn_t)(uint32_t frameSelect);
 typedef int (*e9k_debug_ami_get_video_line_count_fn_t)(void);
@@ -258,11 +253,9 @@ typedef struct  {
     e9k_debug_ami_blitter_vis_read_points_fn_t debugAmiBlitterVisReadPoints;
     e9k_debug_ami_blitter_vis_read_stats_fn_t debugAmiBlitterVisReadStats;
     e9k_debug_ami_blitter_vis_read_word_tags_fn_t debugAmiBlitterVisReadWordTags;
-#if E9K_HACK_AMI_SPRITE_VIS
     e9k_debug_ami_set_sprite_vis_fn_t debugAmiSetSpriteVis;
     e9k_debug_ami_get_sprite_vis_fn_t debugAmiGetSpriteVis;
     e9k_debug_ami_sprite_vis_read_points_fn_t debugAmiSpriteVisReadPoints;
-#endif
     e9k_debug_ami_dma_debug_get_frame_view_fn_t debugAmiDmaDebugGetFrameView;
     e9k_debug_ami_copper_debug_get_frame_view_fn_t debugAmiCopperDebugGetFrameView;
     e9k_debug_ami_get_video_line_count_fn_t debugAmiGetVideoLineCount;
@@ -2943,7 +2936,6 @@ libretro_host_debugAmiReadBlitterVisWordTags(uint32_t addr, uint32_t *out, size_
     return libretro_host.debugAmiBlitterVisReadWordTags(addr, out, cap);
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 bool
 libretro_host_debugAmiSetSpriteVis(int enabled)
 {
@@ -2995,7 +2987,6 @@ libretro_host_debugAmiReadSpriteVisPoints(e9k_debug_ami_sprite_vis_point_t *out,
     }
     return libretro_host.debugAmiSpriteVisReadPoints(out, cap, out_width, out_height);
 }
-#endif
 
 const e9k_debug_ami_dma_debug_frame_view_t *
 libretro_host_debugAmiGetDmaDebugFrameView(uint32_t frameSelect)

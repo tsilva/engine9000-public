@@ -16,7 +16,6 @@
 #include "analyse.h"
 #include "profile_hotspot.h"
 #include "profile_empty.h"
-#include "debugger.h"
 #include "e9ui.h"
 
 typedef enum profile_list_role {

@@ -6,14 +6,13 @@
  * See COPYING for license details
  */
 
-#include "megadrive_core_options.h"
-
 #include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "alloc.h"
 #include "libretro_host.h"
+#include "megadrive_core_options.h"
 
 typedef struct megadrive_core_options_kv {
     char *key;

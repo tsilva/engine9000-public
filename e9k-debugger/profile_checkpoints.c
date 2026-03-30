@@ -13,7 +13,6 @@
 #include "profile_checkpoints.h"
 #include "profile_list.h"
 #include "libretro_host.h"
-#include "debugger.h"
 #include "e9ui.h"
 #include "hotkeys.h"
 

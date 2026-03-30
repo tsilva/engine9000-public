@@ -17,7 +17,6 @@
 #include "source_cpr.h"
 #include "dasm.h"
 #include "libretro_host.h"
-#include "debug.h"
 #include "strutil.h"
 #include "amiga_custom_regs.h"
 

@@ -8,9 +8,9 @@
 
 #include <SDL.h>
 #include <stdlib.h>
+
 #include "transition.h"
 #include "alloc.h"
-#include "debugger.h"
 
 static void
 transition_doom_renderToTexture(e9ui_component_t *comp, SDL_Texture *target,

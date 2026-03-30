@@ -14,9 +14,9 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#include "e9ui.h"
 #include "e9ui_scrollbar.h"
 #include "e9ui_step_buttons.h"
+#include "machine.h"
 #include "source_pane.h"
 
 typedef struct source_pane_line_metrics {
@@ -147,8 +147,63 @@ source_pane_resolveFont(const e9ui_context_t *ctx);
 SDL_Rect
 source_pane_getContentArea(e9ui_component_t *self, e9ui_context_t *ctx, int padPx);
 
+void
+source_pane_trackPosition(source_pane_state_t *st);
+
+void
+source_pane_source_view_updateSourceLocation(source_pane_state_t *st, int allowWhileRunning);
+
+void
+source_pane_syncLockButtonVisual(source_pane_state_t *st);
+
 int
 source_pane_shouldFreezeAsmWhileRunning(const source_pane_state_t *st);
+
+int
+source_pane_asm_view_isAsmLikeMode(source_pane_mode_t mode);
+
+int
+source_pane_asm_view_isCpuAsmLikeMode(source_pane_mode_t mode);
+
+int
+source_pane_asm_view_shouldFreezeWhileRunning(const source_pane_state_t *st);
+
+int
+source_pane_asm_view_areStepButtonsEnabled(const source_pane_state_t *st);
+
+int
+source_pane_asm_view_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ctx,
+                                      source_pane_state_t *st, source_pane_mode_t mode,
+                                      int mx, int my);
+
+void
+source_pane_asm_view_renderAsm(e9ui_component_t *self, e9ui_context_t *ctx);
+
+void
+source_pane_asm_view_renderHex(e9ui_component_t *self, e9ui_context_t *ctx);
+
+int
+source_pane_asm_view_beginInlineHexEditAtPoint(e9ui_component_t *self, e9ui_context_t *ctx,
+                                               source_pane_state_t *st, int mx, int my);
+
+void
+source_pane_asm_view_symbolSelectChanged(e9ui_context_t *ctx, e9ui_component_t *comp,
+                                         const char *value, void *user);
+
+void
+source_pane_asm_view_addressSubmitted(e9ui_context_t *ctx, void *user);
+
+int
+source_pane_parseHex(const char *s, uint32_t *out);
+
+int
+source_pane_parseHex64(const char *s, uint64_t *out);
+
+int
+source_pane_fileMatches(const char *a, const char *b);
+
+void
+source_pane_resolveSourcePath(const char *path, char *out, size_t out_cap);
 
 void
 source_pane_renderStatusMessage(e9ui_context_t *ctx, TTF_Font *font, SDL_Rect area, int padPx,
@@ -183,3 +238,64 @@ source_pane_beginInlineEdit(source_pane_state_t *st, e9ui_context_t *ctx, source
 int
 source_pane_dataEditCursorForPoint(TTF_Font *font, const char *text, e9ui_data_edit_mode_t mode,
                                    int textX, int mx);
+
+int
+source_pane_source_view_beginSourceGutterPress(e9ui_component_t *self, e9ui_context_t *ctx,
+                                               source_pane_state_t *st, int mx, int my);
+
+int
+source_pane_source_view_handleCScrollEvent(e9ui_component_t *self, e9ui_context_t *ctx,
+                                           source_pane_state_t *st, const e9ui_event_t *ev);
+
+void
+source_pane_source_view_clearHover(e9ui_component_t *self, source_pane_state_t *st);
+
+void
+source_pane_source_view_updateHoverTooltip(e9ui_component_t *self, e9ui_context_t *ctx,
+                                           source_pane_state_t *st, const e9ui_event_t *ev);
+
+void
+source_pane_source_view_render(e9ui_component_t *self, e9ui_context_t *ctx);
+
+void
+source_pane_symbols_clearSourceFiles(source_pane_state_t *st);
+
+void
+source_pane_symbols_clearSourceFunctions(source_pane_state_t *st);
+
+void
+source_pane_symbols_clearAsmSymbols(source_pane_state_t *st);
+
+void
+source_pane_symbols_syncFileSelect(e9ui_component_t *comp, source_pane_state_t *st);
+
+void
+source_pane_symbols_syncFunctionSelect(e9ui_component_t *comp, source_pane_state_t *st);
+
+void
+source_pane_symbols_trackCurrentFunction(e9ui_component_t *comp, source_pane_state_t *st,
+                                         const char *path, int line);
+
+void
+source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_t *st);
+
+void
+source_pane_symbols_refreshSourceFunctions(e9ui_component_t *comp, source_pane_state_t *st,
+                                           const char *source_file);
+
+void
+source_pane_symbols_refreshSourceFiles(e9ui_component_t *comp, source_pane_state_t *st);
+
+int
+source_pane_fileline_resolveFileLine(const char *elf, const char *file, int line_no, uint32_t *out_addr);
+
+machine_breakpoint_t *
+source_pane_fileline_findBreakpointForLine(const char *path, int line,
+                                           const machine_breakpoint_t *bps, int count);
+
+int
+source_pane_fileline_removeBreakpointsForLine(const char *path, int line,
+                                              const machine_breakpoint_t *bps, int count);
+
+int
+source_pane_fileline_addBreakpointsForLine(const char *path, int lineNo);

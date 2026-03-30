@@ -7,6 +7,7 @@
  */
 
 #include "e9ui.h"
+
 #include <string.h>
 
 typedef struct e9ui_checkbox_state {

@@ -6,6 +6,7 @@
  * See COPYING for license details
  */
 
+#pragma once
 
 #include "e9ui_context.h"
 

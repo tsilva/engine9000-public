@@ -6,14 +6,13 @@
  * See COPYING for license details
  */
 
-#include "debugger_input_bindings.h"
-
 #include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "debugger_input_bindings.h"
 #include "libretro.h"
 #include "rom_config.h"
 #include "target.h"

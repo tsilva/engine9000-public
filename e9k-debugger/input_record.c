@@ -6,7 +6,6 @@
  * See COPYING for license details
  */
 
-
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -7,7 +7,7 @@
  */
 
 #include "dasm.h"
-#include "debugger.h"
+#include "target.h"
 
 static const dasm_iface_t *
 dasm_active(void)

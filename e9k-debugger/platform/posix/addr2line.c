@@ -6,8 +6,6 @@
  * See COPYING for license details
  */
 
-#include "addr2line.h"
-
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -20,6 +18,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "addr2line.h"
 #include "debugger.h"
 #include "base_map.h"
 #include "file.h"

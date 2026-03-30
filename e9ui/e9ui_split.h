@@ -9,6 +9,7 @@
 #pragma once
 
 #include <SDL.h>
+
 #include "e9ui_component.h"
 
 typedef enum {

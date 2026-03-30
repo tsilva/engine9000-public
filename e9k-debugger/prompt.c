@@ -23,6 +23,28 @@
 #define PROMPT_HISTORY_MAX 10000
 #define PROMPT_HISTORY_MAX_BYTES (8 * 1024 * 1024)
 
+typedef struct prompt_state {
+    char killBuf[PROMPT_MAX];
+    char historyPath[1024];
+    int histNavActive;
+    int histNavIndex;
+    char histSavedLine[PROMPT_MAX];
+    int histSavedLen;
+    int histSavedCursor;
+    int suppressHistoryNavReset;
+    e9ui_component_t *textbox;
+    char **cmpl;
+    int cmplCount;
+    int cmplCap;
+    int cmplVisible;
+    int cmplSel;
+    int cmplPrefixLen;
+    char cmplPrefix[PROMPT_MAX];
+    char cmplRest[PROMPT_MAX];
+    int cmplPageStart;
+    int cmplPageCycleDone;
+} prompt_state_t;
+
 static int
 prompt_appendHistoryLine(const char *path, const char *line)
 {
@@ -128,28 +150,6 @@ static int font_line_height_local(TTF_Font *font) {
     return 16;
 }
 
- 
-typedef struct prompt_state {
-    char killBuf[PROMPT_MAX];
-    char historyPath[1024];
-    int histNavActive;
-    int histNavIndex;
-    char histSavedLine[PROMPT_MAX];
-    int histSavedLen;
-    int histSavedCursor;
-    int suppressHistoryNavReset;
-    e9ui_component_t *textbox;
-    char **cmpl;
-    int cmplCount;
-    int cmplCap;
-    int cmplVisible;
-    int cmplSel;
-    int cmplPrefixLen;
-    char cmplPrefix[PROMPT_MAX];
-    char cmplRest[PROMPT_MAX];
-    int cmplPageStart;
-    int cmplPageCycleDone;
-} prompt_state_t;
 
 static int
 prompt_resolveHistoryPath(char *out, size_t outCap, const char *historyFile)

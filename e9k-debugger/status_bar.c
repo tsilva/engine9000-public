@@ -6,6 +6,11 @@
  * See COPYING for license details
  */
 
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "status_bar.h"
 #include "debug_font.h"
 #include "debugger.h"
@@ -14,11 +19,6 @@
 #include "e9ui_text_cache.h"
 #include "gl_composite.h"
 #include "ui_test.h"
-
-#include <SDL.h>
-#include <SDL_ttf.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 typedef struct status_bar_state {
     int prefH;

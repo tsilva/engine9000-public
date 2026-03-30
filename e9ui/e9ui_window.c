@@ -6,12 +6,13 @@
  * See COPYING for license details
  */
 
+#include "e9ui.h"
+
 #include <SDL.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "alloc.h"
-#include "e9ui.h"
 #include "e9ui_window.h"
 
 typedef struct e9ui_window_overlay_state
@@ -1235,6 +1236,18 @@ e9ui_windowClampRectSize(e9ui_rect_t *rect,
 }
 
 int
+e9ui_windowHasSavedPosition(int x, int y)
+{
+    return (x != E9UI_WINDOW_COORD_UNSET && y != E9UI_WINDOW_COORD_UNSET) ? 1 : 0;
+}
+
+int
+e9ui_windowHasSavedSize(int w, int h)
+{
+    return (w > 0 && h > 0) ? 1 : 0;
+}
+
+int
 e9ui_windowCaptureRectChanged(e9ui_window_t *window,
                               const e9ui_context_t *ctx,
                               int *hasSaved,
@@ -1268,12 +1281,12 @@ e9ui_windowCaptureRectChanged(e9ui_window_t *window,
 
 int
 e9ui_windowCaptureRectSnapshot(const e9ui_window_t *window,
-                                  const e9ui_context_t *ctx,
-                                  int *hasSaved,
-                                  int *x,
-                                  int *y,
-                                  int *w,
-                                  int *h)
+                               const e9ui_context_t *ctx,
+                               int *hasSaved,
+                               int *x,
+                               int *y,
+                               int *w,
+                               int *h)
 {
     if (!x || !y || !w || !h) {
         return 0;
@@ -1287,19 +1300,98 @@ e9ui_windowCaptureRectSnapshot(const e9ui_window_t *window,
     return 1;
 }
 
+int
+e9ui_windowCaptureStateRectChanged(e9ui_window_state_t *state,
+                                   const e9ui_context_t *ctx)
+{
+    if (!state) {
+        return 0;
+    }
+    return e9ui_windowCaptureRectChanged(state->windowHost,
+                                         ctx,
+                                         &state->winHasSaved,
+                                         &state->winX,
+                                         &state->winY,
+                                         &state->winW,
+                                         &state->winH);
+}
+
+int
+e9ui_windowCaptureStateRectSnapshot(e9ui_window_state_t *state,
+                                    const e9ui_context_t *ctx)
+{
+    if (!state) {
+        return 0;
+    }
+    return e9ui_windowCaptureRectSnapshot(state->windowHost,
+                                          ctx,
+                                          &state->winHasSaved,
+                                          &state->winX,
+                                          &state->winY,
+                                          &state->winW,
+                                          &state->winH);
+}
+
+void
+e9ui_windowPersistRect(FILE *file,
+                       const char *prefix,
+                       const e9ui_window_t *window,
+                       const e9ui_context_t *ctx,
+                       int *hasSaved,
+                       int *x,
+                       int *y,
+                       int *w,
+                       int *h)
+{
+    if (!file || !prefix || !prefix[0] || !hasSaved || !x || !y || !w || !h) {
+        return;
+    }
+    if (window && ctx) {
+        (void)e9ui_windowCaptureRectSnapshot(window, ctx, hasSaved, x, y, w, h);
+    }
+    *hasSaved = e9ui_windowHasSavedPosition(*x, *y);
+    if (!*hasSaved || !e9ui_windowHasSavedSize(*w, *h)) {
+        return;
+    }
+    fprintf(file, "%s.win_x=%d\n", prefix, *x);
+    fprintf(file, "%s.win_y=%d\n", prefix, *y);
+    fprintf(file, "%s.win_w=%d\n", prefix, *w);
+    fprintf(file, "%s.win_h=%d\n", prefix, *h);
+}
+
+void
+e9ui_windowPersistStateRect(FILE *file,
+                            const char *prefix,
+                            e9ui_window_state_t *state,
+                            const e9ui_context_t *ctx)
+{
+    if (!state) {
+        return;
+    }
+    e9ui_windowPersistRect(file,
+                           prefix,
+                           state->open ? state->windowHost : NULL,
+                           ctx,
+                           &state->winHasSaved,
+                           &state->winX,
+                           &state->winY,
+                           &state->winW,
+                           &state->winH);
+}
+
 e9ui_rect_t
 e9ui_windowResolveOpenRect(const e9ui_context_t *ctx,
-                                    e9ui_rect_t defaultRect,
-                                    int minWidthPx,
-                                    int minHeightPx,
-                                    int centerWhenNoSaved,
-                                    int hasPos,
-                                    int hasSize,
-                                    int x,
-                                    int y,
-                                    int w,
-                                    int h)
+                           e9ui_rect_t defaultRect,
+                           int minWidthPx,
+                           int minHeightPx,
+                           int centerWhenNoSaved,
+                           int x,
+                           int y,
+                           int w,
+                           int h)
 {
+    int hasPos = e9ui_windowHasSavedPosition(x, y);
+    int hasSize = e9ui_windowHasSavedSize(w, h);
     e9ui_rect_t rect = e9ui_windowRestoreRect(ctx, defaultRect, hasPos, hasSize, x, y, w, h);
     if (minWidthPx > 0 || minHeightPx > 0) {
         e9ui_windowClampRectSize(&rect, ctx, minWidthPx, minHeightPx);
@@ -1311,6 +1403,46 @@ e9ui_windowResolveOpenRect(const e9ui_context_t *ctx,
         rect.y = (winH - rect.h) / 2;
     }
     return rect;
+}
+
+e9ui_rect_t
+e9ui_windowResolveStateOpenRect(const e9ui_context_t *ctx,
+                                e9ui_rect_t defaultRect,
+                                const e9ui_window_state_t *state)
+{
+    int x = E9UI_WINDOW_COORD_UNSET;
+    int y = E9UI_WINDOW_COORD_UNSET;
+    int w = 0;
+    int h = 0;
+    int minWidthPx = 0;
+    int minHeightPx = 0;
+    int centerWhenNoSaved = 0;
+    if (state) {
+        x = state->winX;
+        y = state->winY;
+        w = state->winW;
+        h = state->winH;
+        minWidthPx = state->openMinWidthPx;
+        minHeightPx = state->openMinHeightPx;
+        centerWhenNoSaved = state->openCenterWhenNoSaved ? 1 : 0;
+        if (!e9ui_windowHasSavedSize(w, h)) {
+            if (state->openMinWidthNoSavedSizePx > minWidthPx) {
+                minWidthPx = state->openMinWidthNoSavedSizePx;
+            }
+            if (state->openMinHeightNoSavedSizePx > minHeightPx) {
+                minHeightPx = state->openMinHeightNoSavedSizePx;
+            }
+        }
+    }
+    return e9ui_windowResolveOpenRect(ctx,
+                                      defaultRect,
+                                      minWidthPx,
+                                      minHeightPx,
+                                      centerWhenNoSaved,
+                                      x,
+                                      y,
+                                      w,
+                                      h);
 }
 
 int

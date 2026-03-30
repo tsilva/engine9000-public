@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <SDL.h>
+
+typedef SDL_Event e9ui_event_t;
+
 typedef struct e9ui_rect {
     int x;
     int y;
@@ -15,7 +19,5 @@ typedef struct e9ui_rect {
     int h;
 } e9ui_rect_t;
 
-#include <SDL.h>
-typedef SDL_Event e9ui_event_t;
 
 

@@ -7,7 +7,7 @@
  */
 
 #include "e9ui.h"
-#include "platform.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#include "platform.h"
 
 typedef struct textbox_state {
     char               *text;

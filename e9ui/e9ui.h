@@ -10,6 +10,7 @@
 
 #include <SDL_image.h>
 #include <limits.h>
+
 #include "alloc.h"
 #include "e9ui_component.h"
 #include "e9ui_context.h"
@@ -33,6 +34,7 @@
 #include "e9ui_labeled_textbox.h"
 #include "e9ui_labeled_checkbox.h"
 #include "e9ui_labeled_select.h"
+#include "e9ui_range_bar.h"
 #include "e9ui_seek_bar.h"
 #include "e9ui_slider.h"
 #include "e9ui_modal.h"
@@ -46,7 +48,6 @@
 #include "e9ui_theme_defaults.h"
 #include "e9ui_theme_presets.h"
 #include "e9ui_theme.h"
-
 #include "file.h"
 #include "debug.h"
 

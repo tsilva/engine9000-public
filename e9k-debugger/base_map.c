@@ -12,7 +12,6 @@
 #include <string.h>
 
 #include "base_map.h"
-#include "debug.h"
 
 #define BASE_MAP_ADDR_MASK 0x00ffffffu
 #define BASE_MAP_ADDR_SPACE 0x01000000u

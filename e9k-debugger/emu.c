@@ -11,8 +11,8 @@
 #include "gl_composite.h"
 #include "alloc.h"
 #include "libretro_host.h"
+#include "e9ui_range_bar.h"
 #include "e9ui_seek_bar.h"
-#include "range_bar.h"
 #include "debug.h"
 #include "state_buffer.h"
 #include "debugger.h"
@@ -22,7 +22,7 @@
 #include "e9ui_button.h"
 #include "e9ui_scroll.h"
 #include "shader_ui.h"
-#include "emu_geo.h"
+
 #define EMU_RANGE_BAR_MAX 4
 #define EMU_OVERLAY_BUTTON_MICRO_THRESHOLD_W 480
 #define EMU_OVERLAY_BUTTON_NANO_THRESHOLD_W 350
@@ -685,7 +685,7 @@ emu_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t 
                 }
                 rangeBar = e9ui_child_find(self, state->rangeBarMeta[i]);
                 if (rangeBar &&
-                    (range_bar_isDragging(rangeBar) || !e9ui_getHidden(rangeBar)) &&
+                    (e9ui_range_bar_isDragging(rangeBar) || !e9ui_getHidden(rangeBar)) &&
                     rangeBar->handleEvent && rangeBar->handleEvent(rangeBar, ctx, ev)) {
                     return 1;
                 }
@@ -942,7 +942,7 @@ emu_viewRender(e9ui_component_t *self, e9ui_context_t *ctx)
             }
             rangeBar = e9ui_child_find(self, state->rangeBarMeta[i]);
             if (rangeBar) {
-                range_bar_layoutInParent(rangeBar, ctx, vidBounds);
+                e9ui_range_bar_layoutInParent(rangeBar, ctx, vidBounds);
                 e9ui_setAutoHideClip(rangeBar, &self->bounds);
                 if (emu_rangeBarSync(rangeBar, i) &&
                     !e9ui_getHidden(rangeBar) && rangeBar->render) {
@@ -1309,19 +1309,19 @@ emu_makeComponent(void)
             if (!desc.metaKey || !*desc.metaKey) {
                 continue;
             }
-            rangeBar = range_bar_make();
+            rangeBar = e9ui_range_bar_make();
             if (!rangeBar) {
                 continue;
             }
-            range_bar_setSide(rangeBar, (range_bar_side_t)desc.side);
-            range_bar_setMargins(rangeBar, desc.marginTop, desc.marginBottom, desc.marginSide);
-            range_bar_setWidth(rangeBar, desc.width);
-            range_bar_setHoverMargin(rangeBar, desc.hoverMargin);
+            e9ui_range_bar_setSide(rangeBar, (e9ui_range_bar_side_t)desc.side);
+            e9ui_range_bar_setMargins(rangeBar, desc.marginTop, desc.marginBottom, desc.marginSide);
+            e9ui_range_bar_setWidth(rangeBar, desc.width);
+            e9ui_range_bar_setHoverMargin(rangeBar, desc.hoverMargin);
             state->rangeBarBindings[i].index = i;
-            range_bar_setCallback(rangeBar, emu_rangeBarChanged, &state->rangeBarBindings[i]);
-            range_bar_setDragCallback(rangeBar, emu_rangeBarDragging, &state->rangeBarBindings[i]);
-            range_bar_setTooltipCallback(rangeBar, emu_rangeBarTooltip, &state->rangeBarBindings[i]);
-            e9ui_setAutoHide(rangeBar, 1, range_bar_getHoverMargin(rangeBar));
+            e9ui_range_bar_setCallback(rangeBar, emu_rangeBarChanged, &state->rangeBarBindings[i]);
+            e9ui_range_bar_setDragCallback(rangeBar, emu_rangeBarDragging, &state->rangeBarBindings[i]);
+            e9ui_range_bar_setTooltipCallback(rangeBar, emu_rangeBarTooltip, &state->rangeBarBindings[i]);
+            e9ui_setAutoHide(rangeBar, 1, e9ui_range_bar_getHoverMargin(rangeBar));
             state->rangeBarMeta[i] = alloc_strdup(desc.metaKey);
             e9ui_child_add(view, rangeBar, state->rangeBarMeta[i]);
         }

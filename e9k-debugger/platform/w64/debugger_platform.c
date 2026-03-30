@@ -6,11 +6,6 @@
  * See COPYING for license details
  */
 
-#include "platform/w64/debugger_platform.h"
-#include "debugger.h"
-#include "tinyfiledialogs.h"
-#include "ui_test.h"
-
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -20,6 +15,12 @@
 #include <io.h>
 #include <windows.h>
 #include <errno.h>
+#include <zlib.h>
+
+#include "platform/w64/debugger_platform.h"
+#include "debugger.h"
+#include "tinyfiledialogs.h"
+#include "ui_test.h"
 
 static const char debugger_testConfigName[] = ".e9k-debugger.cfg";
 static const char debugger_testTempConfigPrefix[] = "e9k-debugger-test-";
@@ -92,6 +93,27 @@ debugger_platform_hashPath(const char *path)
         hash *= 1099511628211ull;
     }
     return hash;
+}
+
+int
+debugger_platform_uncompressBuffer(uint8_t *dest, size_t *inOutDestSize, const uint8_t *source, size_t sourceSize)
+{
+    uint32_t destSize = 0;
+
+    if (!dest || !inOutDestSize || !source) {
+        return Z_BUF_ERROR;
+    }
+    if (*inOutDestSize > UINT32_MAX || sourceSize > UINT32_MAX) {
+        return Z_BUF_ERROR;
+    }
+
+    destSize = (uint32_t)*inOutDestSize;
+    int zResult = uncompress((unsigned char *)dest,
+                             &destSize,
+                             (const unsigned char *)source,
+                             (uint32_t)sourceSize);
+    *inOutDestSize = (size_t)destSize;
+    return zResult;
 }
 
 int

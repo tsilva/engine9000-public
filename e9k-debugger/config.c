@@ -9,14 +9,14 @@
 #include "config.h"
 #include "amiga_memview.h"
 #include "crt.h"
-#include "custom_amiga.h"
-#include "custom_log.h"
-#include "custom_ui.h"
+#include "amiga_custom.h"
+#include "amiga_custom_log.h"
+#include "amiga_custom_ui.h"
 #include "debugger.h"
 #include "e9ui.h"
 #include "hex_convert.h"
 #include "hotkeys.h"
-#include "sprite_debug.h"
+#include "neogeo_sprite_debug.h"
 #include "mega_sprite_debug.h"
 #include "shader_ui.h"
 #include "settings.h"
@@ -166,11 +166,11 @@ config_persistConfig(FILE *f)
     fprintf(f, "comp.config.core_system=%d\n", target->coreIndex);
     hotkeys_persistConfig(f);
     crt_persistConfig(f);
-    sprite_debug_persistConfig(f);
+    neogeo_sprite_debug_persistConfig(f);
     mega_sprite_debug_persistConfig(f);
-    custom_ui_persistConfig(f);
-    custom_log_persistConfig(f);
-    custom_amiga_persistConfig(f);
+    amiga_custom_ui_persistConfig(f);
+    amiga_custom_log_persistConfig(f);
+    amiga_custom_persistConfig(f);
     amiga_memview_persistConfig(f);
     shader_ui_persistConfig(f);
     hex_convert_persistConfig(f);
@@ -331,7 +331,7 @@ config_loadConfigFile(const char *path)
         }
         if (strncmp(key, "comp.sprite_debug.", 18) == 0) {
             const char *prop = key + 18;
-            sprite_debug_loadConfigProperty(prop, value);
+            neogeo_sprite_debug_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.mega_sprite_debug.", 23) == 0) {
@@ -341,17 +341,17 @@ config_loadConfigFile(const char *path)
         }
         if (strncmp(key, "comp.custom_ui.", 15) == 0) {
             const char *prop = key + 15;
-            custom_ui_loadConfigProperty(prop, value);
+            amiga_custom_ui_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.custom_log.", 16) == 0) {
             const char *prop = key + 16;
-            custom_log_loadConfigProperty(prop, value);
+            amiga_custom_log_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.custom_amiga.", 18) == 0) {
             const char *prop = key + 18;
-            custom_amiga_loadConfigProperty(prop, value);
+            amiga_custom_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.amiga_memview.", 19) == 0) {

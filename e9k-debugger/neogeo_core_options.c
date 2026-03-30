@@ -6,8 +6,6 @@
  * See COPYING for license details
  */
 
-#include "neogeo_core_options.h"
-
 #include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
@@ -15,6 +13,7 @@
 
 #include "alloc.h"
 #include "libretro_host.h"
+#include "neogeo_core_options.h"
 
 typedef struct neogeo_core_options_kv {
     char *key;

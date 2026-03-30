@@ -14,22 +14,17 @@
 
 #include "debugger.h"
 #include "debugger_input_bindings.h"
-#include "debug.h"
 #include "e9ui.h"
-#include "range_bar.h"
+#include "e9ui_range_bar.h"
 #include "amiga_memview.h"
-#include "custom_amiga.h"
-#include "custom_log.h"
-#include "custom_ui.h"
+#include "amiga_custom.h"
+#include "amiga_custom_log.h"
+#include "amiga_custom_ui.h"
 #include "amiga_custom_regs.h"
-#include "amiga_uae_options.h"
 #include "libretro.h"
 #include "libretro_host.h"
 #include "ui.h"
 
-#ifndef E9K_HACK_AMI_SPRITE_VIS
-#define E9K_HACK_AMI_SPRITE_VIS 0
-#endif
 
 #define EMU_AMI_BLITTER_VIS_POINTS_CAP_DEFAULT (2304u * 1620u)
 #define EMU_AMI_BLITTER_VIS_LINE_TABLE_CAP_MAX (1u << 20)
@@ -51,6 +46,7 @@
 #define EMU_AMI_DMA_RECORD_DISK 8u
 #define EMU_AMI_DMA_RECORD_CONFLICT 9u
 #define EMU_AMI_COPPER_HIT_MARGIN_SCALE 3
+
 typedef struct emu_ami_blitter_vis_line_stat {
     uint32_t blitId;
     uint32_t y;
@@ -117,7 +113,6 @@ typedef struct emu_ami_blitter_vis_cache {
     e9k_debug_ami_blitter_vis_stats_t latestStats;
 } emu_ami_blitter_vis_cache_t;
 
-#if E9K_HACK_AMI_SPRITE_VIS
 typedef struct emu_ami_sprite_vis_cache {
     SDL_Texture *texture;
     SDL_Renderer *renderer;
@@ -132,7 +127,6 @@ typedef struct emu_ami_sprite_vis_cache {
     e9k_debug_ami_sprite_vis_point_t *points;
     size_t pointsCap;
 } emu_ami_sprite_vis_cache_t;
-#endif
 
 typedef struct emu_ami_dma_debug_cache {
     SDL_Texture *texture;
@@ -160,9 +154,7 @@ typedef struct emu_ami_copper_legend_entry {
 } emu_ami_copper_legend_entry_t;
 
 static emu_ami_blitter_vis_cache_t emu_ami_blitterVisCache = {0};
-#if E9K_HACK_AMI_SPRITE_VIS
 static emu_ami_sprite_vis_cache_t emu_ami_spriteVisCache = {0};
-#endif
 static emu_ami_dma_debug_cache_t emu_ami_dmaDebugCache = {0};
 static emu_ami_copper_debug_cache_t emu_ami_copperDebugCache = {0};
 static int emu_ami_copperDebugForcedDma = 0;
@@ -183,13 +175,11 @@ emu_ami_blitterVisHoveredIdAtPoint(const SDL_Rect *dst,
                                    int overlayMode,
                                    size_t fetchedCount);
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static uint32_t
 emu_ami_spriteVisColorFromIndex(uint32_t spriteIndex);
 
 static uint32_t
 emu_ami_spriteVisAttachedColorFromIndex(uint32_t spriteIndex);
-#endif
 
 static int
 emu_ami_isCopperDebugEnabled(void);
@@ -272,7 +262,6 @@ emu_ami_copperLegendReserveHeight(int height)
     return reserve;
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static int
 emu_ami_isSpriteVisEnabled(void)
 {
@@ -286,7 +275,6 @@ emu_ami_hasAttachedSpriteLegend(void)
 {
     return emu_ami_isSpriteVisEnabled() && emu_ami_spriteVisCache.attachedPairMask != 0u;
 }
-#endif
 
 static int
 emu_ami_getLegendSlotCount(void)
@@ -296,14 +284,12 @@ emu_ami_getLegendSlotCount(void)
     if (emu_ami_isCopperDebugEnabled()) {
         count++;
     }
-#if E9K_HACK_AMI_SPRITE_VIS
     if (emu_ami_isSpriteVisEnabled()) {
         count++;
     }
     if (emu_ami_hasAttachedSpriteLegend()) {
         count++;
     }
-#endif
     return count;
 }
 
@@ -591,7 +577,6 @@ emu_ami_renderCopperLegend(e9ui_context_t *ctx, const SDL_Rect *videoDst)
                          emu_ami_getLegendSlotCount());
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static void
 emu_ami_renderSpriteLegend(e9ui_context_t *ctx, const SDL_Rect *videoDst)
 {
@@ -624,7 +609,6 @@ emu_ami_renderSpriteLegend(e9ui_context_t *ctx, const SDL_Rect *videoDst)
     }
     emu_ami_renderLegend(ctx, videoDst, attachedEntries, attachedCount, slotIndex + 1, emu_ami_getLegendSlotCount());
 }
-#endif
 
 static const char *
 emu_ami_mouseCaptureOptionKey(void)
@@ -731,7 +715,7 @@ emu_ami_rangeBarSetPercentFromCoreLines(e9ui_component_t *bar, int startLine, in
         startPercent = endPercent;
         endPercent = temp;
     }
-    range_bar_setRangePercent(bar, startPercent, endPercent);
+    e9ui_range_bar_setRangePercent(bar, startPercent, endPercent);
     return 1;
 }
 
@@ -774,10 +758,10 @@ emu_ami_rangeBarDescribe(size_t index, emu_range_bar_desc_t *outDesc)
     memset(outDesc, 0, sizeof(*outDesc));
     if (index == 0) {
         outDesc->metaKey = "range_bar_left";
-        outDesc->side = (int)range_bar_sideLeft;
+        outDesc->side = (int)e9ui_range_bar_sideLeft;
     } else if (index == 1) {
         outDesc->metaKey = "range_bar_right";
-        outDesc->side = (int)range_bar_sideRight;
+        outDesc->side = (int)e9ui_range_bar_sideRight;
     } else {
         return 0;
     }
@@ -799,11 +783,11 @@ emu_ami_rangeBarChanged(size_t index, float startPercent, float endPercent)
         return;
     }
     if (index == 1) {
-        custom_ui_setCopperLimitRange(startLine, endLine);
+        amiga_custom_ui_setCopperLimitRange(startLine, endLine);
         return;
     }
     if (index == 0) {
-        custom_ui_setBplptrLineLimitRange(startLine, endLine);
+        amiga_custom_ui_setBplptrLineLimitRange(startLine, endLine);
     }
 }
 
@@ -845,18 +829,18 @@ emu_ami_rangeBarSync(size_t index, e9ui_component_t *bar)
     if (!bar) {
         return 0;
     }
-    if (!custom_ui_isOpen()) {
+    if (!amiga_custom_ui_isOpen()) {
         e9ui_setHidden(bar, 1);
         return 0;
     }
     if (index == 1) {
-        enabled = custom_ui_getCopperLimitEnabled();
-        if (!custom_ui_getCopperLimitRange(&startLine, &endLine)) {
+        enabled = amiga_custom_ui_getCopperLimitEnabled();
+        if (!amiga_custom_ui_getCopperLimitRange(&startLine, &endLine)) {
             enabled = 0;
         }
     } else if (index == 0) {
-        enabled = custom_ui_getBplptrBlockEnabled();
-        if (!custom_ui_getBplptrLineLimitRange(&startLine, &endLine)) {
+        enabled = amiga_custom_ui_getBplptrBlockEnabled();
+        if (!amiga_custom_ui_getBplptrLineLimitRange(&startLine, &endLine)) {
             enabled = 0;
         }
     } else {
@@ -881,7 +865,7 @@ emu_ami_onCustomLogFrame(const e9k_debug_ami_custom_log_entry_t *entries,
                          void *user)
 {
     (void)user;
-    custom_log_captureFrame(entries, count, dropped, frameNo);
+    amiga_custom_log_captureFrame(entries, count, dropped, frameNo);
 }
 
 static void
@@ -912,7 +896,6 @@ emu_ami_destroy(void)
     free(emu_ami_blitterVisCache.lineTable);
     free(emu_ami_blitterVisCache.lineList);
     memset(&emu_ami_blitterVisCache, 0, sizeof(emu_ami_blitterVisCache));
-#if E9K_HACK_AMI_SPRITE_VIS
     if (emu_ami_spriteVisCache.texture) {
         SDL_DestroyTexture(emu_ami_spriteVisCache.texture);
         emu_ami_spriteVisCache.texture = NULL;
@@ -921,7 +904,6 @@ emu_ami_destroy(void)
     free(emu_ami_spriteVisCache.spriteIds);
     free(emu_ami_spriteVisCache.points);
     memset(&emu_ami_spriteVisCache, 0, sizeof(emu_ami_spriteVisCache));
-#endif
     if (emu_ami_dmaDebugCache.texture) {
         SDL_DestroyTexture(emu_ami_dmaDebugCache.texture);
         emu_ami_dmaDebugCache.texture = NULL;
@@ -996,7 +978,6 @@ emu_ami_blitterVisHoveredIdAtPoint(const SDL_Rect *dst,
     return 0u;
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static uint32_t
 emu_ami_spriteVisColorFromIndex(uint32_t spriteIndex)
 {
@@ -1028,7 +1009,6 @@ emu_ami_spriteVisAttachedColorFromIndex(uint32_t spriteIndex)
 
     return (uint32_t)(0xb0u << 24) | rgb;
 }
-#endif
 
 static uint32_t
 emu_ami_dmaDebugArgb(uint8_t r, uint8_t g, uint8_t b)
@@ -1825,7 +1805,7 @@ emu_ami_renderBlitterVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
         frameCounter = ++emu_ami_blitterVisCache.overlayFrameCounter;
     }
     if (overlayMode) {
-        int uiDecay = custom_ui_getBlitterVisDecay();
+        int uiDecay = amiga_custom_ui_getBlitterVisDecay();
         if (uiDecay < 0) {
             uiDecay = 0;
         }
@@ -2046,7 +2026,6 @@ emu_ami_renderBlitterVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
     SDL_RenderCopy(ctx->renderer, emu_ami_blitterVisCache.texture, NULL, dst);
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static void
 emu_ami_renderSpriteVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
 {
@@ -2175,7 +2154,6 @@ emu_ami_renderSpriteVisOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
     SDL_SetTextureBlendMode(emu_ami_spriteVisCache.texture, SDL_BLENDMODE_BLEND);
     SDL_RenderCopy(ctx->renderer, emu_ami_spriteVisCache.texture, NULL, dst);
 }
-#endif
 
 static int
 emu_ami_dmaDebugNormalizeLineDhpos(int dhpos, int lineStartDhpos, int dhposWrap)
@@ -3248,7 +3226,6 @@ emu_ami_renderCopperTooltipOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
     emu_ami_renderCopperTooltip(ctx, &hoveredRect, tooltip, showSwatch, swatchColor);
 }
 
-#if E9K_HACK_AMI_SPRITE_VIS
 static int
 emu_ami_findSpriteVisPixelAtPoint(const SDL_Rect *dst,
                                   int mouseX,
@@ -3372,7 +3349,6 @@ emu_ami_renderSpriteVisTooltipOverlay(e9ui_context_t *ctx, SDL_Rect *dst)
     emu_ami_renderCopperTooltip(ctx, &hoveredRect, tooltip, 1, swatchColor);
     return 1;
 }
-#endif
 
 static int
 emu_ami_handleOverlayEvent(e9ui_context_t *ctx, const SDL_Rect *dst, const e9ui_event_t *ev)
@@ -3558,10 +3534,10 @@ emu_ami_toggleCustom(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
     (void)user;
-    if (custom_ui_isOpen()) {
-        custom_ui_shutdown();
+    if (amiga_custom_ui_isOpen()) {
+        amiga_custom_ui_shutdown();
     } else {
-        (void)custom_ui_init();
+        (void)amiga_custom_ui_init();
     }
 }
 
@@ -3570,10 +3546,10 @@ emu_ami_toggleCustomLog(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
     (void)user;
-    if (custom_log_isOpen()) {
-        custom_log_shutdown();
+    if (amiga_custom_log_isOpen()) {
+        amiga_custom_log_shutdown();
     } else {
-        (void)custom_log_init();
+        (void)amiga_custom_log_init();
     }
 }
 
@@ -3582,10 +3558,10 @@ emu_ami_toggleCustomAmiga(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
     (void)user;
-    if (custom_amiga_isOpen()) {
-        custom_amiga_shutdown();
+    if (amiga_custom_isOpen()) {
+        amiga_custom_shutdown();
     } else {
-        (void)custom_amiga_init();
+        (void)amiga_custom_init();
     }
 }
 
@@ -3674,23 +3650,17 @@ emu_ami_render(e9ui_context_t *ctx, SDL_Rect* dst)
     emu_ami_renderDmaDebugOverlay(ctx, dst);
     emu_ami_renderCopperDebugOverlay(ctx, dst);
     emu_ami_renderBlitterVisOverlay(ctx, dst);
-#if E9K_HACK_AMI_SPRITE_VIS
     emu_ami_renderSpriteVisOverlay(ctx, dst);
-#endif
     emu_ami_renderCopperLegend(ctx, dst);
-#if E9K_HACK_AMI_SPRITE_VIS
     emu_ami_renderSpriteLegend(ctx, dst);
-#endif
 }
 
 static void
 emu_ami_renderForeground(e9ui_context_t *ctx, SDL_Rect *dst)
 {
-#if E9K_HACK_AMI_SPRITE_VIS
     if (emu_ami_renderSpriteVisTooltipOverlay(ctx, dst)) {
         return;
     }
-#endif
     emu_ami_renderCopperTooltipOverlay(ctx, dst);
 }
 

@@ -7,8 +7,10 @@
  */
 
 #include "e9ui.h"
+
 #include <stdio.h>
 #include <sys/stat.h>
+
 #include "platform.h"
 
 typedef struct e9ui_fileselect_state {

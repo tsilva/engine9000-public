@@ -6,17 +6,17 @@
  * See COPYING for license details
  */
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "target.h"
 #include "amiga_memview.h"
 #include "custom_amiga.h"
 #include "custom_log.h"
-#include "custom_ui.h"
+#include "amiga_custom_ui.h"
 #include "debugger.h"
 #include "debug.h"
 #include "source_cpr.h"
-
-#include <stdlib.h>
-#include <string.h>
 
 static void
 target_amiga_stubSetConfigDefaults(e9k_system_config_t *config)

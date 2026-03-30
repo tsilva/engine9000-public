@@ -7,11 +7,9 @@
  */
 
 #include <limits.h>
-
 #include <SDL_image.h>
 
 #include "system_badge.h"
-
 #include "debug.h"
 #include "file.h"
 

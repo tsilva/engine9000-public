@@ -24,6 +24,17 @@
 #include "input_record.h"
 #include "libretro_host.h"
 
+typedef struct ui_test_raw_frame_header_v2 {
+    char magic[8];
+    uint32_t version;
+    uint32_t width;
+    uint32_t height;
+    uint32_t stride;
+    uint32_t dataSize;
+    uint32_t flags;
+    uint32_t reserved;
+} ui_test_raw_frame_header_v2_t;
+
 static char ui_test_folder[PATH_MAX];
 static int ui_test_enabled = 0;
 static ui_test_mode_t ui_test_mode = UI_TEST_MODE_NONE;
@@ -44,17 +55,6 @@ static uint8_t *ui_test_rawCompressedBuf = NULL;
 static size_t ui_test_rawCompressedCap = 0;
 static const char ui_test_sessionConfigName[] = ".e9k-debugger.cfg";
 static const char ui_test_rawMagicV2[8] = { 'E', '9', 'K', 'R', 'A', 'Z', '0', '1' };
-
-typedef struct ui_test_raw_frame_header_v2 {
-    char magic[8];
-    uint32_t version;
-    uint32_t width;
-    uint32_t height;
-    uint32_t stride;
-    uint32_t dataSize;
-    uint32_t flags;
-    uint32_t reserved;
-} ui_test_raw_frame_header_v2_t;
 
 static void
 ui_test_clearTempConfigOnFirstRun(void);
@@ -366,6 +366,8 @@ ui_test_isEnabled(void)
 static void
 ui_test_copyPath(char *dest, size_t cap, const char *src)
 {
+    size_t len = 0;
+
     if (!dest || cap == 0) {
         return;
     }
@@ -373,8 +375,12 @@ ui_test_copyPath(char *dest, size_t cap, const char *src)
         dest[0] = '\0';
         return;
     }
-    strncpy(dest, src, cap - 1);
-    dest[cap - 1] = '\0';
+    len = strlen(src);
+    if (len >= cap) {
+        len = cap - 1;
+    }
+    memcpy(dest, src, len);
+    dest[len] = '\0';
 }
 
 static int
@@ -788,11 +794,11 @@ ui_test_loadFrameRaw(const char *path, const uint8_t **outPixels, size_t *outPit
         }
 
         if ((header.flags & 1u) != 0u) {
-            uLongf destSize = (uLongf)bytes;
-            int zResult = uncompress((Bytef *)ui_test_expectedRawFrameBuf,
-                                     &destSize,
-                                     (const Bytef *)ui_test_rawCompressedBuf,
-                                     (uLong)dataSize);
+            size_t destSize = bytes;
+            int zResult = debugger_platform_uncompressBuffer(ui_test_expectedRawFrameBuf,
+                                                             &destSize,
+                                                             ui_test_rawCompressedBuf,
+                                                             dataSize);
             if (zResult != Z_OK || (size_t)destSize != bytes) {
                 fclose(fp);
                 return 0;

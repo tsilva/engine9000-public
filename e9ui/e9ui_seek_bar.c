@@ -6,13 +6,14 @@
  * See COPYING for license details
  */
 
+#include "e9ui.h"
+
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "e9ui_seek_bar.h"
-#include "e9ui.h"
 #include "alloc.h"
 #include "state_buffer.h"
 #include "e9ui_text_cache.h"

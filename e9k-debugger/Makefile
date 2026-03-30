@@ -49,8 +49,6 @@ CFLAGS += -DE9K_ENABLE_AMIGA=$(E9K_ENABLE_AMIGA)
 CFLAGS += -DE9K_ENABLE_MEGADRIVE=$(E9K_ENABLE_MEGADRIVE)
 CFLAGS += -DE9K_ENABLE_NEOGEO=$(E9K_ENABLE_NEOGEO)
 CFLAGS += -DE9K_ENABLE_GL_COMPOSITE=$(E9K_ENABLE_GL_COMPOSITE)
-CFLAGS += -DE9K_HACK_AMI_SPRITE_VIS=1
-CFLAGS += -DE9K_HACK_AMI_PALETTE_VIS=1
 CFLAGS += -DE9UI_ENABLE_GAMEPAD -DE9UI_ENABLE_DEBUG_FONT
 CFLAGS += $(INCLUDES)
 
@@ -86,15 +84,13 @@ RELEASE_SYSTEM_FILES = v-hunk-addr2line.exe v-hunk-objdump.exe ami9000.dll geo90
 W64_CFLAGS = $(LTO_FLAGS) -O2 -Wall -Wextra -std=c99 -MMD -MP
 W64_CFLAGS += $(BASE_INCLUDES)
 W64_CFLAGS +=  -D_THREAD_SAFE
-W64_CFLAGS += -DUI_TEST_DISABLED
 W64_CFLAGS += -DE9K_ENABLE_AMIGA=$(E9K_ENABLE_AMIGA)
 W64_CFLAGS += -DE9K_ENABLE_MEGADRIVE=$(E9K_ENABLE_MEGADRIVE)
 W64_CFLAGS += -DE9K_ENABLE_NEOGEO=$(E9K_ENABLE_NEOGEO)
 W64_CFLAGS += -DE9K_ENABLE_GL_COMPOSITE=$(E9K_ENABLE_GL_COMPOSITE)
-W64_CFLAGS += -DE9K_HACK_AMI_SPRITE_VIS=1
-W64_CFLAGS += -DE9K_HACK_AMI_PALETTE_VIS=1
 W64_CFLAGS += -DE9UI_ENABLE_GAMEPAD -DE9UI_ENABLE_DEBUG_FONT
 W64_CFLAGS += $(W64_EXTRA_CFLAGS)
+W64_CFLAGS += -I../ami9000/libretro-common/include/compat/zlib
 W64_LIBS    = -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lSDL2_image -lreadline -lole32 -lcomdlg32 -lpng -lz -lopengl32
 W64_LIBS   += $(W64_EXTRA_LIBS)
 W64_LDFLAGS = -s $(LTO_FLAGS) -mconsole
@@ -117,7 +113,7 @@ E9UI_DIR = ../e9ui
 
 E9UI_SRCS=e9ui_textbox.c e9ui_data_edit.c e9ui_text_cache.c e9ui_text_select.c e9ui_text.c e9ui_scroll.c e9ui_scrollbar.c e9ui_step_buttons.c e9ui.c e9ui_split.c e9ui_split_stack.c e9ui_stack.c\
 	  e9ui_image.c e9ui_box.c e9ui_hstack.c e9ui_button.c e9ui_checkbox.c e9ui_flow.c e9ui_header_flow.c e9ui_spacer.c e9ui_vspacer.c e9ui_separator.c\
-          e9ui_badge.c e9ui_overlay.c e9ui_center.c e9ui_fileselect.c e9ui_labeled_textbox.c e9ui_labeled_checkbox.c e9ui_labeled_select.c e9ui_seek_bar.c e9ui_slider.c e9ui_event.c \
+          e9ui_badge.c e9ui_overlay.c e9ui_center.c e9ui_fileselect.c e9ui_labeled_textbox.c e9ui_labeled_checkbox.c e9ui_labeled_select.c e9ui_range_bar.c e9ui_seek_bar.c e9ui_slider.c e9ui_event.c \
 	  e9ui_theme.c e9ui_link.c e9ui_modal.c e9ui_child.c e9ui_window.c 
 
 PLATFORM_POSIX_SRCS = platform/posix/addr2line.c platform/posix/analyse.c platform/posix/profile_view.c platform/posix/signal.c platform/posix/debugger_platform.c
@@ -125,14 +121,14 @@ PLATFORM_LINUX_SRCS = platform/posix/clipboard.c
 PLATFORM_W64_SRCS = platform/w64/addr2line.c platform/w64/analyse.c platform/w64/profile_view.c platform/w64/signal.c platform/w64/debugger_platform.c platform/w64/clipboard.c
 PLATFORM_MACOS_SRCS = platform/macos/clipboard.m platform/macos/tinyfiledialogs.m
 
-SRCS = main.c source_pane.c source.c hunk_fileline_cache.c dasm.c dasm_geo.c dasm_ami.c elfutil.c console_cmd.c print_eval.c print_debuginfo_readelf.c print_debuginfo_readelf_frames.c print_debuginfo_objdump_stabs.c prompt.c console.c registers.c memory.c stack.c breakpoints.c trainer.c linebuf.c debug_font.c debug.c machine.c base_map.c profile.c profile_list.c profile_hotspot.c profile_checkpoints.c input_record.c hotkeys.c smoke_test.c ui_test.c snapshot.c rom_config.c romset.c settings.c target.c core_options.c core_config.c debugger_input_bindings.c cli.c runtime.c config.c ui.c debugger.c help.c emu.c range_bar.c system_badge.c libretro_host.c clipboard.c state_wrap.c state_buffer.c tinyfiledialogs.c transition.c transition_doom.c transition_slide.c transition_explode.c transition_flip.c transition_rbar.c crt.c shader_ui.c memory_track_ui.c aux_window.c shader_base.c shader_advanced.c shader_bloom.c train.c protect.c status_bar.c hex_convert.c inline_edit_pause.c
+SRCS = main.c source_pane.c source_pane_symbols.c source_pane_fileline.c source_pane_source_view.c source_pane_asm_view.c source.c hunk_fileline_cache.c dasm.c dasm_geo.c dasm_ami.c elfutil.c console_cmd.c print_eval.c print_debuginfo_readelf.c print_debuginfo_readelf_frames.c print_debuginfo_objdump_stabs.c prompt.c console.c registers.c memory.c stack.c breakpoints.c trainer.c linebuf.c debug_font.c debug.c machine.c base_map.c profile.c profile_list.c profile_hotspot.c profile_checkpoints.c input_record.c hotkeys.c smoke_test.c ui_test.c snapshot.c rom_config.c romset.c settings.c target.c core_options.c core_config.c debugger_input_bindings.c cli.c runtime.c config.c ui.c debugger.c help.c emu.c system_badge.c libretro_host.c clipboard.c state_wrap.c state_buffer.c tinyfiledialogs.c transition.c transition_doom.c transition_slide.c transition_explode.c transition_flip.c transition_rbar.c crt.c shader_ui.c memory_track_ui.c aux_window.c shader_base.c shader_advanced.c shader_bloom.c train.c protect.c status_bar.c hex_convert.c inline_edit_pause.c
 ifeq ($(E9K_ENABLE_AMIGA),1)
-SRCS += source_cpr.c settings_amiga.c amiga_uae_options.c amiga_custom_regs.c amiga_custom_regs_tooltip.c emu_ami.c custom_ui.c custom_log.c custom_amiga.c amiga_memview.c target_amiga.c
+SRCS += source_cpr.c settings_amiga.c amiga_uae_options.c amiga_custom_regs.c amiga_custom_regs_tooltip.c emu_ami.c amiga_custom_ui.c amiga_custom_ui_common.c amiga_custom_ui_blitter.c amiga_custom_ui_copper.c amiga_custom_ui_dma.c amiga_custom_ui_sprite.c amiga_custom_ui_bitplane.c amiga_custom_ui_bplptr.c amiga_custom_ui_audio.c amiga_custom_log.c amiga_custom.c amiga_memview.c target_amiga.c
 else
 SRCS += target_amiga_stub.c
 endif
 ifeq ($(E9K_ENABLE_NEOGEO),1)
-SRCS += neogeo_core_options.c target_neogeo.c emu_geo.c sprite_debug.c
+SRCS += neogeo_core_options.c target_neogeo.c emu_geo.c neogeo_sprite_debug.c
 else
 SRCS += target_neogeo_stub.c
 endif
@@ -170,7 +166,7 @@ SRCS += $(TREE_SITTER_C_DIR)/src/parser.c
 endif
 endif
 
-W64_SRCS = $(filter-out $(PLATFORM_POSIX_SRCS) $(PLATFORM_LINUX_SRCS) $(PLATFORM_MACOS_SRCS) ui_test.c,$(SRCS)) $(PLATFORM_W64_SRCS) $(addprefix lib9000/, $(LIB9000_SRCS))
+W64_SRCS = $(filter-out $(PLATFORM_POSIX_SRCS) $(PLATFORM_LINUX_SRCS) $(PLATFORM_MACOS_SRCS),$(SRCS)) $(PLATFORM_W64_SRCS) $(addprefix lib9000/, $(LIB9000_SRCS))
 SRCS_C = $(filter %.c,$(SRCS)) $(addprefix lib9000/, $(LIB9000_SRCS))
 SRCS_M = $(filter %.m,$(SRCS))
 E9UI_OBJS = $(addprefix $(BUILD_DIR)/e9ui/,$(E9UI_SRCS:%.c=%.o))

@@ -6,7 +6,6 @@
  * See COPYING for license details
  */
 
-#include "addr2line.h"
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -17,6 +16,7 @@
 #include <string.h>
 #include <windows.h>
 
+#include "addr2line.h"
 #include "debugger.h"
 #include "base_map.h"
 #include "file.h"

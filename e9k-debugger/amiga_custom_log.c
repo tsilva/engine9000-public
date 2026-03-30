@@ -16,7 +16,7 @@
 #include "aux_window.h"
 #include "config.h"
 #include "breakpoints.h"
-#include "custom_log.h"
+#include "amiga_custom_log.h"
 #include "debug.h"
 #include "debugger.h"
 #include "e9ui.h"
@@ -25,52 +25,52 @@
 #include "amiga_custom_regs.h"
 #include "ui.h"
 
-#define CUSTOM_LOG_TITLE "ENGINE9000 DEBUGGER - CHIPSET LOG"
-#define CUSTOM_LOG_PAD 10
-#define CUSTOM_LOG_ROW_PAD_Y 2
-#define CUSTOM_LOG_COL_GAP 12
-#define CUSTOM_LOG_LINE_COL_W 112
-#define CUSTOM_LOG_NAME_COL_W 128
-#define CUSTOM_LOG_SRC_COL_W 75
-#define CUSTOM_LOG_ADDR_COL_W 120
-#define CUSTOM_LOG_VALUE_COL_W 109
-#define CUSTOM_LOG_FILTER_COUNT 6
-#define CUSTOM_LOG_FILTER_TEXT_MAX 128
-#define CUSTOM_LOG_FILTER_VPAD 3
-#define CUSTOM_LOG_FILTER_GAP_Y 6
+#define AMIGA_CUSTOM_LOG_TITLE "ENGINE9000 DEBUGGER - CHIPSET LOG"
+#define AMIGA_CUSTOM_LOG_PAD 10
+#define AMIGA_CUSTOM_LOG_ROW_PAD_Y 2
+#define AMIGA_CUSTOM_LOG_COL_GAP 12
+#define AMIGA_CUSTOM_LOG_LINE_COL_W 112
+#define AMIGA_CUSTOM_LOG_NAME_COL_W 128
+#define AMIGA_CUSTOM_LOG_SRC_COL_W 75
+#define AMIGA_CUSTOM_LOG_ADDR_COL_W 120
+#define AMIGA_CUSTOM_LOG_VALUE_COL_W 109
+#define AMIGA_CUSTOM_LOG_FILTER_COUNT 6
+#define AMIGA_CUSTOM_LOG_FILTER_TEXT_MAX 128
+#define AMIGA_CUSTOM_LOG_FILTER_VPAD 3
+#define AMIGA_CUSTOM_LOG_FILTER_GAP_Y 6
 
-typedef enum custom_log_filter_index {
-    custom_log_filter_line = 0,
-    custom_log_filter_name = 1,
-    custom_log_filter_src = 2,
-    custom_log_filter_addr = 3,
-    custom_log_filter_value = 4,
-    custom_log_filter_desc = 5
-} custom_log_filter_index_t;
+typedef enum amiga_custom_log_filter_index {
+    amiga_custom_log_filter_line = 0,
+    amiga_custom_log_filter_name = 1,
+    amiga_custom_log_filter_src = 2,
+    amiga_custom_log_filter_addr = 3,
+    amiga_custom_log_filter_value = 4,
+    amiga_custom_log_filter_desc = 5
+} amiga_custom_log_filter_index_t;
 
-typedef struct custom_log_state custom_log_state_t;
+typedef struct amiga_custom_log_state amiga_custom_log_state_t;
 
-typedef struct custom_log_filter_cb {
-    custom_log_state_t *ui;
+typedef struct amiga_custom_log_filter_cb {
+    amiga_custom_log_state_t *ui;
     int filterIndex;
-} custom_log_filter_cb_t;
+} amiga_custom_log_filter_cb_t;
 
-typedef struct custom_log_overlay_body_state {
-    custom_log_state_t *ui;
-} custom_log_overlay_body_state_t;
+typedef struct amiga_custom_log_overlay_body_state {
+    amiga_custom_log_state_t *ui;
+} amiga_custom_log_overlay_body_state_t;
 
-typedef struct custom_log_layout {
+typedef struct amiga_custom_log_layout {
     int winW;
     int winH;
     int lineHeight;
     int filterHeight;
     int rowsY;
     int rowsH;
-    int colX[CUSTOM_LOG_FILTER_COUNT];
-    int colW[CUSTOM_LOG_FILTER_COUNT];
-} custom_log_layout_t;
+    int colX[AMIGA_CUSTOM_LOG_FILTER_COUNT];
+    int colW[AMIGA_CUSTOM_LOG_FILTER_COUNT];
+} amiga_custom_log_layout_t;
 
-typedef struct custom_log_row_hit {
+typedef struct amiga_custom_log_row_hit {
     SDL_Rect nameRect;
     SDL_Rect addrRect;
     SDL_Rect valueRect;
@@ -78,30 +78,24 @@ typedef struct custom_log_row_hit {
     uint16_t regOffset;
     uint16_t regValue;
     uint8_t sourceIsCopper;
-} custom_log_row_hit_t;
+} amiga_custom_log_row_hit_t;
 
-typedef struct custom_log_scroll_model {
+typedef struct amiga_custom_log_scroll_model {
     int visibleRows;
     int filteredCount;
     int topFilteredRow;
     int topRawRow;
-} custom_log_scroll_model_t;
+} amiga_custom_log_scroll_model_t;
 
-struct custom_log_state {
-    int open;
+struct amiga_custom_log_state {
+    e9ui_window_state_t windowState;
     int warnedMissingOption;
-    e9ui_window_t *windowHost;
     SDL_Window *window;
     SDL_Renderer *renderer;
     e9ui_context_t ctx;
     e9ui_component_t *filterRoot;
-    e9ui_component_t *filterTextboxes[CUSTOM_LOG_FILTER_COUNT];
-    custom_log_filter_cb_t filterCbs[CUSTOM_LOG_FILTER_COUNT];
-    int winX;
-    int winY;
-    int winW;
-    int winH;
-    int winHasSaved;
+    e9ui_component_t *filterTextboxes[AMIGA_CUSTOM_LOG_FILTER_COUNT];
+    amiga_custom_log_filter_cb_t filterCbs[AMIGA_CUSTOM_LOG_FILTER_COUNT];
     int scrollRow;
     e9k_debug_ami_custom_log_entry_t *entries;
     size_t entryCount;
@@ -110,37 +104,43 @@ struct custom_log_state {
     uint64_t frameNo;
     uint64_t framesCaptured;
     uint64_t allocFailures;
-    char filters[CUSTOM_LOG_FILTER_COUNT][CUSTOM_LOG_FILTER_TEXT_MAX];
-    custom_log_row_hit_t *rowHits;
+    char filters[AMIGA_CUSTOM_LOG_FILTER_COUNT][AMIGA_CUSTOM_LOG_FILTER_TEXT_MAX];
+    amiga_custom_log_row_hit_t *rowHits;
     size_t rowHitCount;
     size_t rowHitCap;
     e9ui_scrollbar_state_t scrollbar;
 };
 
-static custom_log_state_t custom_log_state = {0};
+static amiga_custom_log_state_t amiga_custom_log_state = {
+    .windowState.winX = E9UI_WINDOW_COORD_UNSET,
+    .windowState.winY = E9UI_WINDOW_COORD_UNSET,
+    .windowState.openMinWidthPx = 420,
+    .windowState.openMinHeightPx = 260,
+    .windowState.openCenterWhenNoSaved = 1,
+};
 
-static const aux_window_ops_t custom_log_auxWindowOps = {
-    .setFocus = custom_log_setMainWindowFocused,
-    .render = custom_log_render,
+static const aux_window_ops_t amiga_custom_log_auxWindowOps = {
+    .setFocus = amiga_custom_log_setMainWindowFocused,
+    .render = amiga_custom_log_render,
 };
 
 static e9ui_window_backend_t
-custom_log_windowBackend(void)
+amiga_custom_log_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
 
 static e9ui_component_t *
-custom_log_makeOverlayBodyHost(custom_log_state_t *ui);
+amiga_custom_log_makeOverlayBodyHost(amiga_custom_log_state_t *ui);
 
 static void
-custom_log_overlayWindowCloseRequested(e9ui_window_t *window, void *user);
+amiga_custom_log_overlayWindowCloseRequested(e9ui_window_t *window, void *user);
 
 static int
-custom_log_entryMatchesFilters(const custom_log_state_t *ui, const e9k_debug_ami_custom_log_entry_t *entry);
+amiga_custom_log_entryMatchesFilters(const amiga_custom_log_state_t *ui, const e9k_debug_ami_custom_log_entry_t *entry);
 
 static int
-custom_log_parseInt(const char *value, int *out)
+amiga_custom_log_parseInt(const char *value, int *out)
 {
     if (!value || !out) {
         return 0;
@@ -158,7 +158,7 @@ custom_log_parseInt(const char *value, int *out)
 }
 
 static int
-custom_log_measureLineHeight(void)
+amiga_custom_log_measureLineHeight(void)
 {
     TTF_Font *font = e9ui->ctx.font;
     int lineHeight = font ? TTF_FontHeight(font) : 0;
@@ -169,7 +169,7 @@ custom_log_measureLineHeight(void)
 }
 
 static e9ui_rect_t
-custom_log_windowDefaultRect(const e9ui_context_t *ctx)
+amiga_custom_log_windowDefaultRect(const e9ui_context_t *ctx)
 {
     e9ui_rect_t rect = {
         e9ui_scale_px(ctx, 96),
@@ -181,7 +181,7 @@ custom_log_windowDefaultRect(const e9ui_context_t *ctx)
 }
 
 static int
-custom_log_componentContains(const e9ui_component_t *root, const e9ui_component_t *needle)
+amiga_custom_log_componentContains(const e9ui_component_t *root, const e9ui_component_t *needle)
 {
     if (!root || !needle) {
         return 0;
@@ -194,7 +194,7 @@ custom_log_componentContains(const e9ui_component_t *root, const e9ui_component_
         if (!container || !container->component) {
             continue;
         }
-        if (custom_log_componentContains(container->component, needle)) {
+        if (amiga_custom_log_componentContains(container->component, needle)) {
             return 1;
         }
     }
@@ -202,7 +202,7 @@ custom_log_componentContains(const e9ui_component_t *root, const e9ui_component_
 }
 
 static int
-custom_log_measureFilterHeight(const custom_log_state_t *ui, int contentW)
+amiga_custom_log_measureFilterHeight(const amiga_custom_log_state_t *ui, int contentW)
 {
     if (ui && ui->filterRoot && ui->filterRoot->preferredHeight) {
         int height = ui->filterRoot->preferredHeight(ui->filterRoot, (e9ui_context_t *)&ui->ctx, contentW);
@@ -210,11 +210,11 @@ custom_log_measureFilterHeight(const custom_log_state_t *ui, int contentW)
             return height;
         }
     }
-    return custom_log_measureLineHeight() + CUSTOM_LOG_FILTER_VPAD * 2;
+    return amiga_custom_log_measureLineHeight() + AMIGA_CUSTOM_LOG_FILTER_VPAD * 2;
 }
 
 static int
-custom_log_computeLayout(const custom_log_state_t *ui, custom_log_layout_t *out)
+amiga_custom_log_computeLayout(const amiga_custom_log_state_t *ui, amiga_custom_log_layout_t *out)
 {
     if (!ui || !ui->renderer || !out) {
         return 0;
@@ -230,21 +230,21 @@ custom_log_computeLayout(const custom_log_state_t *ui, custom_log_layout_t *out)
     if (winW <= 0 || winH <= 0) {
         return 0;
     }
-    int lineHeight = custom_log_measureLineHeight();
-    int contentX = CUSTOM_LOG_PAD + 6;
-    int contentW = winW - CUSTOM_LOG_PAD * 2 - 12;
-    int filterHeight = custom_log_measureFilterHeight(ui, contentW);
-    int rowsY = CUSTOM_LOG_PAD + filterHeight + CUSTOM_LOG_FILTER_GAP_Y;
-    int rowsH = winH - CUSTOM_LOG_PAD - rowsY;
+    int lineHeight = amiga_custom_log_measureLineHeight();
+    int contentX = AMIGA_CUSTOM_LOG_PAD + 6;
+    int contentW = winW - AMIGA_CUSTOM_LOG_PAD * 2 - 12;
+    int filterHeight = amiga_custom_log_measureFilterHeight(ui, contentW);
+    int rowsY = AMIGA_CUSTOM_LOG_PAD + filterHeight + AMIGA_CUSTOM_LOG_FILTER_GAP_Y;
+    int rowsH = winH - AMIGA_CUSTOM_LOG_PAD - rowsY;
     if (rowsH < lineHeight) {
         rowsH = lineHeight;
     }
-    int colLineW = CUSTOM_LOG_LINE_COL_W;
-    int colNameW = CUSTOM_LOG_NAME_COL_W;
-    int colSrcW = CUSTOM_LOG_SRC_COL_W;
-    int colAddrW = CUSTOM_LOG_ADDR_COL_W;
-    int colValueW = CUSTOM_LOG_VALUE_COL_W;
-    int colDescW = contentW - colLineW - colNameW - colSrcW - colAddrW - colValueW - CUSTOM_LOG_COL_GAP * 5;
+    int colLineW = AMIGA_CUSTOM_LOG_LINE_COL_W;
+    int colNameW = AMIGA_CUSTOM_LOG_NAME_COL_W;
+    int colSrcW = AMIGA_CUSTOM_LOG_SRC_COL_W;
+    int colAddrW = AMIGA_CUSTOM_LOG_ADDR_COL_W;
+    int colValueW = AMIGA_CUSTOM_LOG_VALUE_COL_W;
+    int colDescW = contentW - colLineW - colNameW - colSrcW - colAddrW - colValueW - AMIGA_CUSTOM_LOG_COL_GAP * 5;
     if (colDescW < 48) {
         colDescW = 48;
     }
@@ -255,26 +255,26 @@ custom_log_computeLayout(const custom_log_state_t *ui, custom_log_layout_t *out)
     out->filterHeight = filterHeight;
     out->rowsY = rowsY;
     out->rowsH = rowsH;
-    out->colX[custom_log_filter_line] = contentX;
-    out->colW[custom_log_filter_line] = colLineW;
-    out->colX[custom_log_filter_name] = out->colX[custom_log_filter_line] + colLineW + CUSTOM_LOG_COL_GAP;
-    out->colW[custom_log_filter_name] = colNameW;
-    out->colX[custom_log_filter_src] = out->colX[custom_log_filter_name] + colNameW + CUSTOM_LOG_COL_GAP;
-    out->colW[custom_log_filter_src] = colSrcW;
-    out->colX[custom_log_filter_addr] = out->colX[custom_log_filter_src] + colSrcW + CUSTOM_LOG_COL_GAP;
-    out->colW[custom_log_filter_addr] = colAddrW;
-    out->colX[custom_log_filter_value] = out->colX[custom_log_filter_addr] + colAddrW + CUSTOM_LOG_COL_GAP;
-    out->colW[custom_log_filter_value] = colValueW;
-    out->colX[custom_log_filter_desc] = out->colX[custom_log_filter_value] + colValueW + CUSTOM_LOG_COL_GAP;
-    out->colW[custom_log_filter_desc] = colDescW;
+    out->colX[amiga_custom_log_filter_line] = contentX;
+    out->colW[amiga_custom_log_filter_line] = colLineW;
+    out->colX[amiga_custom_log_filter_name] = out->colX[amiga_custom_log_filter_line] + colLineW + AMIGA_CUSTOM_LOG_COL_GAP;
+    out->colW[amiga_custom_log_filter_name] = colNameW;
+    out->colX[amiga_custom_log_filter_src] = out->colX[amiga_custom_log_filter_name] + colNameW + AMIGA_CUSTOM_LOG_COL_GAP;
+    out->colW[amiga_custom_log_filter_src] = colSrcW;
+    out->colX[amiga_custom_log_filter_addr] = out->colX[amiga_custom_log_filter_src] + colSrcW + AMIGA_CUSTOM_LOG_COL_GAP;
+    out->colW[amiga_custom_log_filter_addr] = colAddrW;
+    out->colX[amiga_custom_log_filter_value] = out->colX[amiga_custom_log_filter_addr] + colAddrW + AMIGA_CUSTOM_LOG_COL_GAP;
+    out->colW[amiga_custom_log_filter_value] = colValueW;
+    out->colX[amiga_custom_log_filter_desc] = out->colX[amiga_custom_log_filter_value] + colValueW + AMIGA_CUSTOM_LOG_COL_GAP;
+    out->colW[amiga_custom_log_filter_desc] = colDescW;
     return 1;
 }
 
 static int
-custom_log_computeVisibleRows(const custom_log_state_t *ui)
+amiga_custom_log_computeVisibleRows(const amiga_custom_log_state_t *ui)
 {
-    custom_log_layout_t layout;
-    if (!custom_log_computeLayout(ui, &layout)) {
+    amiga_custom_log_layout_t layout;
+    if (!amiga_custom_log_computeLayout(ui, &layout)) {
         return 1;
     }
     int rows = layout.rowsH / layout.lineHeight;
@@ -285,12 +285,12 @@ custom_log_computeVisibleRows(const custom_log_state_t *ui)
 }
 
 static int
-custom_log_hasActiveFilters(const custom_log_state_t *ui)
+amiga_custom_log_hasActiveFilters(const amiga_custom_log_state_t *ui)
 {
     if (!ui) {
         return 0;
     }
-    for (int i = 0; i < CUSTOM_LOG_FILTER_COUNT; ++i) {
+    for (int i = 0; i < AMIGA_CUSTOM_LOG_FILTER_COUNT; ++i) {
         if (ui->filters[i][0] != '\0') {
             return 1;
         }
@@ -299,12 +299,12 @@ custom_log_hasActiveFilters(const custom_log_state_t *ui)
 }
 
 static int
-custom_log_filteredCount(const custom_log_state_t *ui)
+amiga_custom_log_filteredCount(const amiga_custom_log_state_t *ui)
 {
     if (!ui || ui->entryCount == 0) {
         return 0;
     }
-    if (!custom_log_hasActiveFilters(ui)) {
+    if (!amiga_custom_log_hasActiveFilters(ui)) {
         if (ui->entryCount > (size_t)INT_MAX) {
             return INT_MAX;
         }
@@ -312,7 +312,7 @@ custom_log_filteredCount(const custom_log_state_t *ui)
     }
     int count = 0;
     for (size_t i = 0; i < ui->entryCount; ++i) {
-        if (custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
+        if (amiga_custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
             if (count < INT_MAX) {
                 count++;
             }
@@ -322,7 +322,7 @@ custom_log_filteredCount(const custom_log_state_t *ui)
 }
 
 static int
-custom_log_rawRowForFilteredIndex(const custom_log_state_t *ui, int filteredIndex)
+amiga_custom_log_rawRowForFilteredIndex(const amiga_custom_log_state_t *ui, int filteredIndex)
 {
     if (!ui || ui->entryCount == 0) {
         return 0;
@@ -330,7 +330,7 @@ custom_log_rawRowForFilteredIndex(const custom_log_state_t *ui, int filteredInde
     if (filteredIndex < 0) {
         filteredIndex = 0;
     }
-    if (!custom_log_hasActiveFilters(ui)) {
+    if (!amiga_custom_log_hasActiveFilters(ui)) {
         int maxIndex = (ui->entryCount > 0) ? (int)(ui->entryCount - 1) : 0;
         if (filteredIndex > maxIndex) {
             filteredIndex = maxIndex;
@@ -340,7 +340,7 @@ custom_log_rawRowForFilteredIndex(const custom_log_state_t *ui, int filteredInde
     int matchIndex = 0;
     int lastMatch = -1;
     for (size_t i = 0; i < ui->entryCount; ++i) {
-        if (!custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
+        if (!amiga_custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
             continue;
         }
         lastMatch = (int)i;
@@ -353,7 +353,7 @@ custom_log_rawRowForFilteredIndex(const custom_log_state_t *ui, int filteredInde
 }
 
 static int
-custom_log_filteredIndexForRawRow(const custom_log_state_t *ui, int rawRow)
+amiga_custom_log_filteredIndexForRawRow(const amiga_custom_log_state_t *ui, int rawRow)
 {
     if (!ui || ui->entryCount == 0) {
         return 0;
@@ -364,7 +364,7 @@ custom_log_filteredIndexForRawRow(const custom_log_state_t *ui, int rawRow)
     if ((size_t)rawRow > ui->entryCount) {
         rawRow = (int)ui->entryCount;
     }
-    if (!custom_log_hasActiveFilters(ui)) {
+    if (!amiga_custom_log_hasActiveFilters(ui)) {
         int maxIndex = (ui->entryCount > 0) ? (int)(ui->entryCount - 1) : 0;
         if (rawRow > maxIndex) {
             rawRow = maxIndex;
@@ -373,7 +373,7 @@ custom_log_filteredIndexForRawRow(const custom_log_state_t *ui, int rawRow)
     }
     int filteredIndex = 0;
     for (size_t i = 0; i < ui->entryCount; ++i) {
-        if (!custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
+        if (!amiga_custom_log_entryMatchesFilters(ui, &ui->entries[i])) {
             continue;
         }
         if ((int)i >= rawRow) {
@@ -385,7 +385,7 @@ custom_log_filteredIndexForRawRow(const custom_log_state_t *ui, int rawRow)
 }
 
 static void
-custom_log_buildScrollModel(const custom_log_state_t *ui, int visibleRows, custom_log_scroll_model_t *out)
+amiga_custom_log_buildScrollModel(const amiga_custom_log_state_t *ui, int visibleRows, amiga_custom_log_scroll_model_t *out)
 {
     if (!out) {
         return;
@@ -399,13 +399,13 @@ custom_log_buildScrollModel(const custom_log_state_t *ui, int visibleRows, custo
         visibleRows = 1;
     }
     out->visibleRows = visibleRows;
-    out->filteredCount = custom_log_filteredCount(ui);
+    out->filteredCount = amiga_custom_log_filteredCount(ui);
     if (out->filteredCount <= 0) {
         out->topFilteredRow = 0;
         out->topRawRow = 0;
         return;
     }
-    int topFiltered = custom_log_filteredIndexForRawRow(ui, ui->scrollRow);
+    int topFiltered = amiga_custom_log_filteredIndexForRawRow(ui, ui->scrollRow);
     int maxTop = e9ui_scrollbar_maxScroll(out->filteredCount, visibleRows);
     if (topFiltered < 0) {
         topFiltered = 0;
@@ -414,17 +414,17 @@ custom_log_buildScrollModel(const custom_log_state_t *ui, int visibleRows, custo
         topFiltered = maxTop;
     }
     out->topFilteredRow = topFiltered;
-    out->topRawRow = custom_log_rawRowForFilteredIndex(ui, topFiltered);
+    out->topRawRow = amiga_custom_log_rawRowForFilteredIndex(ui, topFiltered);
 }
 
 static void
-custom_log_setTopFilteredRow(custom_log_state_t *ui, int visibleRows, int topFilteredRow)
+amiga_custom_log_setTopFilteredRow(amiga_custom_log_state_t *ui, int visibleRows, int topFilteredRow)
 {
     if (!ui) {
         return;
     }
-    custom_log_scroll_model_t model;
-    custom_log_buildScrollModel(ui, visibleRows, &model);
+    amiga_custom_log_scroll_model_t model;
+    amiga_custom_log_buildScrollModel(ui, visibleRows, &model);
     if (model.filteredCount <= 0) {
         ui->scrollRow = 0;
         return;
@@ -436,11 +436,11 @@ custom_log_setTopFilteredRow(custom_log_state_t *ui, int visibleRows, int topFil
     if (topFilteredRow > maxTop) {
         topFilteredRow = maxTop;
     }
-    ui->scrollRow = custom_log_rawRowForFilteredIndex(ui, topFilteredRow);
+    ui->scrollRow = amiga_custom_log_rawRowForFilteredIndex(ui, topFilteredRow);
 }
 
 static void
-custom_log_clampScroll(custom_log_state_t *ui, int visibleRows)
+amiga_custom_log_clampScroll(amiga_custom_log_state_t *ui, int visibleRows)
 {
     if (!ui) {
         return;
@@ -448,20 +448,20 @@ custom_log_clampScroll(custom_log_state_t *ui, int visibleRows)
     if (ui->scrollRow < 0) {
         ui->scrollRow = 0;
     }
-    custom_log_scroll_model_t model;
-    custom_log_buildScrollModel(ui, visibleRows, &model);
+    amiga_custom_log_scroll_model_t model;
+    amiga_custom_log_buildScrollModel(ui, visibleRows, &model);
     ui->scrollRow = model.topRawRow;
 }
 
 static void
-custom_log_adjustScroll(custom_log_state_t *ui, int deltaRows)
+amiga_custom_log_adjustScroll(amiga_custom_log_state_t *ui, int deltaRows)
 {
     if (!ui || deltaRows == 0) {
         return;
     }
-    int visibleRows = custom_log_computeVisibleRows(ui);
-    custom_log_scroll_model_t model;
-    custom_log_buildScrollModel(ui, visibleRows, &model);
+    int visibleRows = amiga_custom_log_computeVisibleRows(ui);
+    amiga_custom_log_scroll_model_t model;
+    amiga_custom_log_buildScrollModel(ui, visibleRows, &model);
     long next = (long)model.topFilteredRow + (long)deltaRows;
     if (next < 0) {
         next = 0;
@@ -469,11 +469,11 @@ custom_log_adjustScroll(custom_log_state_t *ui, int deltaRows)
     if (next > INT_MAX) {
         next = INT_MAX;
     }
-    custom_log_setTopFilteredRow(ui, visibleRows, (int)next);
+    amiga_custom_log_setTopFilteredRow(ui, visibleRows, (int)next);
 }
 
 static int
-custom_log_arrowScrollAmount(SDL_Keymod mods, int visibleRows)
+amiga_custom_log_arrowScrollAmount(SDL_Keymod mods, int visibleRows)
 {
     int amount = 1;
     if ((mods & KMOD_CTRL) != 0 || (mods & KMOD_GUI) != 0) {
@@ -490,15 +490,15 @@ custom_log_arrowScrollAmount(SDL_Keymod mods, int visibleRows)
 }
 
 static const char *
-custom_log_filterLabel(int index)
+amiga_custom_log_filterLabel(int index)
 {
     switch (index) {
-    case custom_log_filter_line: return "LINE";
-    case custom_log_filter_name: return "NAME";
-    case custom_log_filter_src: return "SRC";
-    case custom_log_filter_addr: return "ADDR";
-    case custom_log_filter_value: return "VALUE";
-    case custom_log_filter_desc: return "DESC";
+    case amiga_custom_log_filter_line: return "LINE";
+    case amiga_custom_log_filter_name: return "NAME";
+    case amiga_custom_log_filter_src: return "SRC";
+    case amiga_custom_log_filter_addr: return "ADDR";
+    case amiga_custom_log_filter_value: return "VALUE";
+    case amiga_custom_log_filter_desc: return "DESC";
     default:
         break;
     }
@@ -506,20 +506,20 @@ custom_log_filterLabel(int index)
 }
 
 static int
-custom_log_filterColumnWidth(int index)
+amiga_custom_log_filterColumnWidth(int index)
 {
     switch (index) {
-    case custom_log_filter_line:
-        return CUSTOM_LOG_LINE_COL_W;
-    case custom_log_filter_name:
-        return CUSTOM_LOG_NAME_COL_W;
-    case custom_log_filter_src:
-        return CUSTOM_LOG_SRC_COL_W;
-    case custom_log_filter_addr:
-        return CUSTOM_LOG_ADDR_COL_W;
-    case custom_log_filter_value:
-        return CUSTOM_LOG_VALUE_COL_W;
-    case custom_log_filter_desc:
+    case amiga_custom_log_filter_line:
+        return AMIGA_CUSTOM_LOG_LINE_COL_W;
+    case amiga_custom_log_filter_name:
+        return AMIGA_CUSTOM_LOG_NAME_COL_W;
+    case amiga_custom_log_filter_src:
+        return AMIGA_CUSTOM_LOG_SRC_COL_W;
+    case amiga_custom_log_filter_addr:
+        return AMIGA_CUSTOM_LOG_ADDR_COL_W;
+    case amiga_custom_log_filter_value:
+        return AMIGA_CUSTOM_LOG_VALUE_COL_W;
+    case amiga_custom_log_filter_desc:
     default:
         break;
     }
@@ -527,14 +527,14 @@ custom_log_filterColumnWidth(int index)
 }
 
 static void
-custom_log_filterTextboxChanged(e9ui_context_t *ctx, void *user)
+amiga_custom_log_filterTextboxChanged(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
-    custom_log_filter_cb_t *cb = (custom_log_filter_cb_t *)user;
+    amiga_custom_log_filter_cb_t *cb = (amiga_custom_log_filter_cb_t *)user;
     if (!cb || !cb->ui) {
         return;
     }
-    if (cb->filterIndex < 0 || cb->filterIndex >= CUSTOM_LOG_FILTER_COUNT) {
+    if (cb->filterIndex < 0 || cb->filterIndex >= AMIGA_CUSTOM_LOG_FILTER_COUNT) {
         return;
     }
     e9ui_component_t *textbox = cb->ui->filterTextboxes[cb->filterIndex];
@@ -542,11 +542,11 @@ custom_log_filterTextboxChanged(e9ui_context_t *ctx, void *user)
     if (!text) {
         text = "";
     }
-    snprintf(cb->ui->filters[cb->filterIndex], CUSTOM_LOG_FILTER_TEXT_MAX, "%s", text);
+    snprintf(cb->ui->filters[cb->filterIndex], AMIGA_CUSTOM_LOG_FILTER_TEXT_MAX, "%s", text);
 }
 
 static e9ui_component_t *
-custom_log_buildFilterRoot(custom_log_state_t *ui)
+amiga_custom_log_buildFilterRoot(amiga_custom_log_state_t *ui)
 {
     if (!ui) {
         return NULL;
@@ -555,40 +555,33 @@ custom_log_buildFilterRoot(custom_log_state_t *ui)
     if (!row) {
         return NULL;
     }
-    for (int i = 0; i < CUSTOM_LOG_FILTER_COUNT; ++i) {
+    for (int i = 0; i < AMIGA_CUSTOM_LOG_FILTER_COUNT; ++i) {
         ui->filterCbs[i].ui = ui;
         ui->filterCbs[i].filterIndex = i;
-        e9ui_component_t *textbox = e9ui_textbox_make(CUSTOM_LOG_FILTER_TEXT_MAX - 1,
+        e9ui_component_t *textbox = e9ui_textbox_make(AMIGA_CUSTOM_LOG_FILTER_TEXT_MAX - 1,
                                                       NULL,
-                                                      custom_log_filterTextboxChanged,
+                                                      amiga_custom_log_filterTextboxChanged,
                                                       &ui->filterCbs[i]);
-        if (!textbox) {
-            e9ui_childDestroy(row, &ui->ctx);
-            return NULL;
-        }
-        e9ui_textbox_setPlaceholder(textbox, custom_log_filterLabel(i));
+
+        e9ui_textbox_setPlaceholder(textbox, amiga_custom_log_filterLabel(i));
         e9ui_textbox_setText(textbox, ui->filters[i]);
         ui->filterTextboxes[i] = textbox;
-        int width = custom_log_filterColumnWidth(i);
+        int width = amiga_custom_log_filterColumnWidth(i);
         if (width > 0) {
             e9ui_hstack_addFixed(row, textbox, width);
         } else {
             e9ui_hstack_addFlex(row, textbox);
         }
-        if (i + 1 < CUSTOM_LOG_FILTER_COUNT) {
-            e9ui_component_t *gap = e9ui_spacer_make(CUSTOM_LOG_COL_GAP);
-            if (!gap) {
-                e9ui_childDestroy(row, &ui->ctx);
-                return NULL;
-            }
-            e9ui_hstack_addFixed(row, gap, CUSTOM_LOG_COL_GAP);
+        if (i + 1 < AMIGA_CUSTOM_LOG_FILTER_COUNT) {
+            e9ui_component_t *gap = e9ui_spacer_make(AMIGA_CUSTOM_LOG_COL_GAP);
+            e9ui_hstack_addFixed(row, gap, AMIGA_CUSTOM_LOG_COL_GAP);
         }
     }
     return row;
 }
 
 static int
-custom_log_containsInsensitive(const char *text, const char *needle)
+amiga_custom_log_containsInsensitive(const char *text, const char *needle)
 {
     if (!text || !needle) {
         return 0;
@@ -618,13 +611,13 @@ custom_log_containsInsensitive(const char *text, const char *needle)
 }
 
 static uint32_t
-custom_log_normalizeAddress(uint32_t addr)
+amiga_custom_log_normalizeAddress(uint32_t addr)
 {
     return addr & 0x00ffffffu;
 }
 
 static int
-custom_log_entryMatchesFilters(const custom_log_state_t *ui, const e9k_debug_ami_custom_log_entry_t *entry)
+amiga_custom_log_entryMatchesFilters(const amiga_custom_log_state_t *ui, const e9k_debug_ami_custom_log_entry_t *entry)
 {
     if (!ui || !entry) {
         return 0;
@@ -644,32 +637,32 @@ custom_log_entryMatchesFilters(const custom_log_state_t *ui, const e9k_debug_ami
     char addrBuf[16];
     char valueBuf[16];
     snprintf(lineBuf, sizeof(lineBuf), "%03u", (unsigned)entry->vpos);
-    snprintf(addrBuf, sizeof(addrBuf), "%06x", (unsigned)custom_log_normalizeAddress(entry->sourceAddr));
+    snprintf(addrBuf, sizeof(addrBuf), "%06x", (unsigned)amiga_custom_log_normalizeAddress(entry->sourceAddr));
     snprintf(valueBuf, sizeof(valueBuf), "%04x", (unsigned)(entry->value & 0xffffu));
 
-    if (!custom_log_containsInsensitive(lineBuf, ui->filters[custom_log_filter_line])) {
+    if (!amiga_custom_log_containsInsensitive(lineBuf, ui->filters[amiga_custom_log_filter_line])) {
         return 0;
     }
-    if (!custom_log_containsInsensitive(name, ui->filters[custom_log_filter_name])) {
+    if (!amiga_custom_log_containsInsensitive(name, ui->filters[amiga_custom_log_filter_name])) {
         return 0;
     }
-    if (!custom_log_containsInsensitive(src, ui->filters[custom_log_filter_src])) {
+    if (!amiga_custom_log_containsInsensitive(src, ui->filters[amiga_custom_log_filter_src])) {
         return 0;
     }
-    if (!custom_log_containsInsensitive(addrBuf, ui->filters[custom_log_filter_addr])) {
+    if (!amiga_custom_log_containsInsensitive(addrBuf, ui->filters[amiga_custom_log_filter_addr])) {
         return 0;
     }
-    if (!custom_log_containsInsensitive(valueBuf, ui->filters[custom_log_filter_value])) {
+    if (!amiga_custom_log_containsInsensitive(valueBuf, ui->filters[amiga_custom_log_filter_value])) {
         return 0;
     }
-    if (!custom_log_containsInsensitive(desc, ui->filters[custom_log_filter_desc])) {
+    if (!amiga_custom_log_containsInsensitive(desc, ui->filters[amiga_custom_log_filter_desc])) {
         return 0;
     }
     return 1;
 }
 
 static int
-custom_log_ensureRowHitCapacity(custom_log_state_t *ui, size_t needed)
+amiga_custom_log_ensureRowHitCapacity(amiga_custom_log_state_t *ui, size_t needed)
 {
     if (!ui) {
         return 0;
@@ -685,7 +678,7 @@ custom_log_ensureRowHitCapacity(custom_log_state_t *ui, size_t needed)
         }
         nextCap *= 2u;
     }
-    custom_log_row_hit_t *next = (custom_log_row_hit_t *)realloc(ui->rowHits, nextCap * sizeof(*next));
+    amiga_custom_log_row_hit_t *next = (amiga_custom_log_row_hit_t *)realloc(ui->rowHits, nextCap * sizeof(*next));
     if (!next) {
         return 0;
     }
@@ -695,13 +688,13 @@ custom_log_ensureRowHitCapacity(custom_log_state_t *ui, size_t needed)
 }
 
 static int
-custom_log_findAddressHit(const custom_log_state_t *ui, int x, int y, custom_log_row_hit_t *outHit)
+amiga_custom_log_findAddressHit(const amiga_custom_log_state_t *ui, int x, int y, amiga_custom_log_row_hit_t *outHit)
 {
     if (!ui) {
         return 0;
     }
     for (size_t i = 0; i < ui->rowHitCount; ++i) {
-        const custom_log_row_hit_t *hit = &ui->rowHits[i];
+        const amiga_custom_log_row_hit_t *hit = &ui->rowHits[i];
         if (x >= hit->addrRect.x && x < hit->addrRect.x + hit->addrRect.w &&
             y >= hit->addrRect.y && y < hit->addrRect.y + hit->addrRect.h) {
             if (outHit) {
@@ -714,13 +707,13 @@ custom_log_findAddressHit(const custom_log_state_t *ui, int x, int y, custom_log
 }
 
 static int
-custom_log_findNameHit(const custom_log_state_t *ui, int x, int y, custom_log_row_hit_t *outHit)
+amiga_custom_log_findNameHit(const amiga_custom_log_state_t *ui, int x, int y, amiga_custom_log_row_hit_t *outHit)
 {
     if (!ui) {
         return 0;
     }
     for (size_t i = 0; i < ui->rowHitCount; ++i) {
-        const custom_log_row_hit_t *hit = &ui->rowHits[i];
+        const amiga_custom_log_row_hit_t *hit = &ui->rowHits[i];
         if (x >= hit->nameRect.x && x < hit->nameRect.x + hit->nameRect.w &&
             y >= hit->nameRect.y && y < hit->nameRect.y + hit->nameRect.h) {
             if (outHit) {
@@ -733,13 +726,13 @@ custom_log_findNameHit(const custom_log_state_t *ui, int x, int y, custom_log_ro
 }
 
 static int
-custom_log_findValueHit(const custom_log_state_t *ui, int x, int y, custom_log_row_hit_t *outHit)
+amiga_custom_log_findValueHit(const amiga_custom_log_state_t *ui, int x, int y, amiga_custom_log_row_hit_t *outHit)
 {
     if (!ui) {
         return 0;
     }
     for (size_t i = 0; i < ui->rowHitCount; ++i) {
-        const custom_log_row_hit_t *hit = &ui->rowHits[i];
+        const amiga_custom_log_row_hit_t *hit = &ui->rowHits[i];
         if (x >= hit->valueRect.x && x < hit->valueRect.x + hit->valueRect.w &&
             y >= hit->valueRect.y && y < hit->valueRect.y + hit->valueRect.h) {
             if (outHit) {
@@ -752,14 +745,14 @@ custom_log_findValueHit(const custom_log_state_t *ui, int x, int y, custom_log_r
 }
 
 static int
-custom_log_isPaletteRegOffset(uint16_t regOffset)
+amiga_custom_log_isPaletteRegOffset(uint16_t regOffset)
 {
     uint16_t normalized = (uint16_t)(regOffset & 0x01feu);
     return normalized >= 0x0180u && normalized <= 0x01beu;
 }
 
 static SDL_Color
-custom_log_paletteSwatchColor(uint16_t value)
+amiga_custom_log_paletteSwatchColor(uint16_t value)
 {
     uint8_t r = (uint8_t)(((value >> 8) & 0x0fu) * 17u);
     uint8_t g = (uint8_t)(((value >> 4) & 0x0fu) * 17u);
@@ -769,7 +762,7 @@ custom_log_paletteSwatchColor(uint16_t value)
 }
 
 static void
-custom_log_addOrEnableBreakpoint(uint32_t addr)
+amiga_custom_log_addOrEnableBreakpoint(uint32_t addr)
 {
     uint32_t bpAddr = addr & 0x00ffffffu;
     int changed = 0;
@@ -804,7 +797,7 @@ custom_log_addOrEnableBreakpoint(uint32_t addr)
 }
 
 static void
-custom_log_drawTextClipped(custom_log_state_t *ui,
+amiga_custom_log_drawTextClipped(amiga_custom_log_state_t *ui,
                            TTF_Font *font,
                            int x,
                            int y,
@@ -839,7 +832,7 @@ custom_log_drawTextClipped(custom_log_state_t *ui,
 }
 
 static void
-custom_log_drawTooltip(custom_log_state_t *ui,
+amiga_custom_log_drawTooltip(amiga_custom_log_state_t *ui,
                        TTF_Font *font,
                        int mouseX,
                        int mouseY,
@@ -851,11 +844,11 @@ custom_log_drawTooltip(custom_log_state_t *ui,
         return;
     }
 
-    enum { CUSTOM_LOG_TOOLTIP_MAX_LINES = 64 };
-    const char *lines[CUSTOM_LOG_TOOLTIP_MAX_LINES];
+    enum { AMIGA_CUSTOM_LOG_TOOLTIP_MAX_LINES = 64 };
+    const char *lines[AMIGA_CUSTOM_LOG_TOOLTIP_MAX_LINES];
     int lineCount = 0;
     const char *cursor = text;
-    while (*cursor && lineCount < CUSTOM_LOG_TOOLTIP_MAX_LINES) {
+    while (*cursor && lineCount < AMIGA_CUSTOM_LOG_TOOLTIP_MAX_LINES) {
         lines[lineCount++] = cursor;
         const char *next = strchr(cursor, '\n');
         if (!next) {
@@ -867,13 +860,13 @@ custom_log_drawTooltip(custom_log_state_t *ui,
         return;
     }
 
-    int lineHeight = custom_log_measureLineHeight();
+    int lineHeight = amiga_custom_log_measureLineHeight();
     if (lineHeight <= 0) {
         lineHeight = 16;
     }
 
     int maxTextW = 0;
-    int lineWidths[CUSTOM_LOG_TOOLTIP_MAX_LINES];
+    int lineWidths[AMIGA_CUSTOM_LOG_TOOLTIP_MAX_LINES];
     char lineBuf[256];
     for (int i = 0; i < lineCount; ++i) {
         const char *lineStart = lines[i];
@@ -950,7 +943,7 @@ custom_log_drawTooltip(custom_log_state_t *ui,
         }
         memcpy(lineBuf, lineStart, lineLen);
         lineBuf[lineLen] = '\0';
-        custom_log_drawTextClipped(ui,
+        amiga_custom_log_drawTextClipped(ui,
                                    font,
                                    tooltipX + padX,
                                    tooltipY + padY + i * lineHeight,
@@ -971,9 +964,9 @@ custom_log_drawTooltip(custom_log_state_t *ui,
 }
 
 static void
-custom_log_applyEnabledOption(int enabled)
+amiga_custom_log_applyEnabledOption(int enabled)
 {
-    custom_log_state_t *ui = &custom_log_state;
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
     if (libretro_host_debugSetDebugOption(E9K_DEBUG_OPTION_AMIGA_CUSTOM_LOGGER,
                                           enabled ? 1u : 0u,
                                           NULL)) {
@@ -987,15 +980,15 @@ custom_log_applyEnabledOption(int enabled)
 }
 
 int
-custom_log_init(void)
+amiga_custom_log_init(void)
 {
-    custom_log_state_t *ui = &custom_log_state;
-    if (ui->open) {
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
+    if (ui->windowState.open) {
         return 1;
     }
 
-    ui->windowHost = e9ui_windowCreate(custom_log_windowBackend());
-    if (!ui->windowHost) {
+    ui->windowState.windowHost = e9ui_windowCreate(amiga_custom_log_windowBackend());
+    if (!ui->windowState.windowHost) {
         return 0;
     }
     memset(&ui->ctx, 0, sizeof(ui->ctx));
@@ -1004,90 +997,63 @@ custom_log_init(void)
     ui->scrollRow = 0;
     ui->filterRoot = NULL;
     memset(ui->filters, 0, sizeof(ui->filters));
-    for (int i = 0; i < CUSTOM_LOG_FILTER_COUNT; ++i) {
+    for (int i = 0; i < AMIGA_CUSTOM_LOG_FILTER_COUNT; ++i) {
         ui->filterTextboxes[i] = NULL;
     }
-    ui->filterRoot = custom_log_buildFilterRoot(ui);
+    ui->filterRoot = amiga_custom_log_buildFilterRoot(ui);
     if (!ui->filterRoot) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
         ui->renderer = NULL;
         ui->window = NULL;
         memset(&ui->ctx, 0, sizeof(ui->ctx));
         return 0;
     }
     {
-        e9ui_rect_t rect = e9ui_windowResolveOpenRect(&e9ui->ctx,
-                                                               custom_log_windowDefaultRect(&e9ui->ctx),
-                                                               420,
-                                                               260,
-                                                               1,
-                                                               ui->winHasSaved ? 1 : 0,
-                                                               (ui->winHasSaved && ui->winW > 0 && ui->winH > 0) ? 1 : 0,
-                                                               ui->winX,
-                                                               ui->winY,
-                                                               ui->winW,
-                                                               ui->winH);
-        e9ui_component_t *overlayBodyHost = custom_log_makeOverlayBodyHost(ui);
-        if (!overlayBodyHost) {
-            e9ui_childDestroy(ui->filterRoot, &e9ui->ctx);
-            ui->filterRoot = NULL;
-            e9ui_windowDestroy(ui->windowHost);
-            ui->windowHost = NULL;
-            return 0;
-        }
-        if (!e9ui_windowOpen(ui->windowHost,
-                                     CUSTOM_LOG_TITLE,
+        e9ui_rect_t rect = e9ui_windowResolveStateOpenRect(&e9ui->ctx,
+                                                           amiga_custom_log_windowDefaultRect(&e9ui->ctx),
+                                                           &ui->windowState);
+        e9ui_component_t *overlayBodyHost = amiga_custom_log_makeOverlayBodyHost(ui);
+        e9ui_windowOpen(ui->windowState.windowHost,
+                                     AMIGA_CUSTOM_LOG_TITLE,
                                      rect,
                                      overlayBodyHost,
-                                     custom_log_overlayWindowCloseRequested,
+                                     amiga_custom_log_overlayWindowCloseRequested,
                                      ui,
-                                     &e9ui->ctx)) {
-            ui->filterRoot = NULL;
-            e9ui_childDestroy(overlayBodyHost, &e9ui->ctx);
-            e9ui_windowDestroy(ui->windowHost);
-            ui->windowHost = NULL;
-            return 0;
-        }
+			             &e9ui->ctx);        
         ui->window = e9ui->ctx.window;
         ui->renderer = e9ui->ctx.renderer;
         ui->ctx = e9ui->ctx;
     }
 
-    ui->open = 1;
-    aux_window_register(&custom_log_auxWindowOps, ui);
-    custom_log_applyEnabledOption(1);
+    ui->windowState.open = 1;
+    aux_window_register(&amiga_custom_log_auxWindowOps, ui);
+    amiga_custom_log_applyEnabledOption(1);
     return 1;
 }
 
 void
-custom_log_shutdown(void)
+amiga_custom_log_shutdown(void)
 {
-    custom_log_state_t *ui = &custom_log_state;
-    if (!ui->open) {
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
+    if (!ui->windowState.open) {
         return;
     }
 
-    aux_window_unregister(&custom_log_auxWindowOps, ui);
-    (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                            (e9ui ? &e9ui->ctx : &ui->ctx),
-                                            &ui->winHasSaved,
-                                            &ui->winX,
-                                            &ui->winY,
-                                            &ui->winW,
-                                            &ui->winH);
+    aux_window_unregister(&amiga_custom_log_auxWindowOps, ui);
+    (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
     config_saveConfig();
-    custom_log_applyEnabledOption(0);
+    amiga_custom_log_applyEnabledOption(0);
     if (ui->filterRoot) {
         ui->filterRoot = NULL;
     }
-    for (int i = 0; i < CUSTOM_LOG_FILTER_COUNT; ++i) {
+    for (int i = 0; i < AMIGA_CUSTOM_LOG_FILTER_COUNT; ++i) {
         ui->filterTextboxes[i] = NULL;
     }
     e9ui_text_cache_clearRenderer(ui->renderer);
-    if (ui->windowHost) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+    if (ui->windowState.windowHost) {
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
     }
     ui->renderer = NULL;
     ui->window = NULL;
@@ -1100,7 +1066,7 @@ custom_log_shutdown(void)
         ui->rowHits = NULL;
     }
 
-    ui->open = 0;
+    ui->windowState.open = 0;
     ui->warnedMissingOption = 0;
     ui->scrollRow = 0;
     ui->entryCount = 0;
@@ -1116,29 +1082,29 @@ custom_log_shutdown(void)
 }
 
 void
-custom_log_toggle(void)
+amiga_custom_log_toggle(void)
 {
-    if (custom_log_isOpen()) {
-        custom_log_shutdown();
+    if (amiga_custom_log_isOpen()) {
+        amiga_custom_log_shutdown();
         return;
     }
-    (void)custom_log_init();
+    (void)amiga_custom_log_init();
 }
 
 int
-custom_log_isOpen(void)
+amiga_custom_log_isOpen(void)
 {
-    return custom_log_state.open ? 1 : 0;
+    return amiga_custom_log_state.windowState.open ? 1 : 0;
 }
 
 void
-custom_log_setMainWindowFocused(int focused)
+amiga_custom_log_setMainWindowFocused(int focused)
 {
     (void)focused;
 }
 
 static int
-custom_log_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
+amiga_custom_log_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
 {
     (void)self;
     (void)ctx;
@@ -1147,7 +1113,7 @@ custom_log_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ct
 }
 
 static void
-custom_log_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
+amiga_custom_log_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
     (void)ctx;
     if (!self) {
@@ -1157,7 +1123,7 @@ custom_log_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_r
 }
 
 static int
-custom_log_overlayTranslateEventLocal(e9ui_component_t *self, const e9ui_event_t *ev, e9ui_event_t *out)
+amiga_custom_log_overlayTranslateEventLocal(e9ui_component_t *self, const e9ui_event_t *ev, e9ui_event_t *out)
 {
     if (!self || !ev || !out) {
         return 0;
@@ -1185,7 +1151,7 @@ custom_log_overlayTranslateEventLocal(e9ui_component_t *self, const e9ui_event_t
 }
 
 static void
-custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
+amiga_custom_log_renderFrame(amiga_custom_log_state_t *ui, int presentFrame)
 {
     if (!ui || !ui->renderer) {
         return;
@@ -1198,8 +1164,8 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
         return;
     }
 
-    custom_log_layout_t layout;
-    if (!custom_log_computeLayout(ui, &layout)) {
+    amiga_custom_log_layout_t layout;
+    if (!amiga_custom_log_computeLayout(ui, &layout)) {
         if (presentFrame) {
             SDL_RenderPresent(ui->renderer);
         }
@@ -1212,26 +1178,26 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
 
     int winW = layout.winW;
     int lineHeight = layout.lineHeight;
-    int visibleRows = custom_log_computeVisibleRows(ui);
-    custom_log_clampScroll(ui, visibleRows);
-    custom_log_scroll_model_t scrollModel;
-    custom_log_buildScrollModel(ui, visibleRows, &scrollModel);
+    int visibleRows = amiga_custom_log_computeVisibleRows(ui);
+    amiga_custom_log_clampScroll(ui, visibleRows);
+    amiga_custom_log_scroll_model_t scrollModel;
+    amiga_custom_log_buildScrollModel(ui, visibleRows, &scrollModel);
     ui->rowHitCount = 0;
     if (visibleRows > 0) {
-        (void)custom_log_ensureRowHitCapacity(ui, (size_t)visibleRows);
+        (void)amiga_custom_log_ensureRowHitCapacity(ui, (size_t)visibleRows);
     }
     ui->ctx.font = font;
     ui->ctx.focusRoot = ui->filterRoot;
     ui->ctx.focusFullscreen = NULL;
     if (ui->filterRoot && ui->filterRoot->layout) {
-        int filterX = layout.colX[custom_log_filter_line];
-        int filterW = layout.colX[custom_log_filter_desc] + layout.colW[custom_log_filter_desc] - filterX;
+        int filterX = layout.colX[amiga_custom_log_filter_line];
+        int filterW = layout.colX[amiga_custom_log_filter_desc] + layout.colW[amiga_custom_log_filter_desc] - filterX;
         if (filterW < 0) {
             filterW = 0;
         }
         e9ui_rect_t filterBounds = {
             filterX,
-            CUSTOM_LOG_PAD,
+            AMIGA_CUSTOM_LOG_PAD,
             filterW,
             layout.filterHeight
         };
@@ -1242,9 +1208,9 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
     }
 
     SDL_Rect rowsClip = {
-        CUSTOM_LOG_PAD,
+        AMIGA_CUSTOM_LOG_PAD,
         layout.rowsY,
-        winW - CUSTOM_LOG_PAD * 2,
+        winW - AMIGA_CUSTOM_LOG_PAD * 2,
         layout.rowsH
     };
     if (rowsClip.w > 0 && rowsClip.h > 0) {
@@ -1257,14 +1223,14 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
     while (scanIndex < ui->entryCount && drawnRows < visibleRows) {
         const e9k_debug_ami_custom_log_entry_t *entry = &ui->entries[scanIndex];
         scanIndex++;
-        if (!custom_log_entryMatchesFilters(ui, entry)) {
+        if (!amiga_custom_log_entryMatchesFilters(ui, entry)) {
             continue;
         }
 
         int y = layout.rowsY + drawnRows * lineHeight;
         if ((drawnRows & 1) != 0) {
             SDL_SetRenderDrawColor(ui->renderer, 16, 16, 20, 255);
-            SDL_Rect rowBg = { CUSTOM_LOG_PAD, y, winW - CUSTOM_LOG_PAD * 2, lineHeight };
+            SDL_Rect rowBg = { AMIGA_CUSTOM_LOG_PAD, y, winW - AMIGA_CUSTOM_LOG_PAD * 2, lineHeight };
             SDL_RenderFillRect(ui->renderer, &rowBg);
         }
         uint16_t regOffset = (uint16_t)(entry->reg & 0x1feu);
@@ -1280,7 +1246,7 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
         SDL_Color srcColor = entry->sourceIsCopper
             ? (SDL_Color){ 110, 212, 118, 255 }
             : (SDL_Color){ 222, 92, 92, 255 };
-        uint32_t normalizedAddr = custom_log_normalizeAddress(entry->sourceAddr);
+        uint32_t normalizedAddr = amiga_custom_log_normalizeAddress(entry->sourceAddr);
         machine_breakpoint_t *bp = machine_findBreakpointByAddr(&debugger.machine, normalizedAddr);
         SDL_Color addrColor = (bp && bp->enabled)
             ? (SDL_Color){ 110, 212, 118, 255 }
@@ -1300,38 +1266,38 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
         snprintf(addrBuf, sizeof(addrBuf), "%06x", (unsigned)normalizedAddr);
         snprintf(valueBuf, sizeof(valueBuf), "%04x", (unsigned)(entry->value & 0xffffu));
 
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_line], y, layout.colW[custom_log_filter_line],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_line], y, layout.colW[amiga_custom_log_filter_line],
                                    lineBuf, rowColor);
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_name], y, layout.colW[custom_log_filter_name],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_name], y, layout.colW[amiga_custom_log_filter_name],
                                    name, regColor);
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_src], y, layout.colW[custom_log_filter_src],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_src], y, layout.colW[amiga_custom_log_filter_src],
                                    src, srcColor);
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_addr], y, layout.colW[custom_log_filter_addr],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_addr], y, layout.colW[amiga_custom_log_filter_addr],
                                    addrBuf, addrColor);
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_value], y, layout.colW[custom_log_filter_value],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_value], y, layout.colW[amiga_custom_log_filter_value],
                                    valueBuf, rowColor);
-        custom_log_drawTextClipped(ui, font,
-                                   layout.colX[custom_log_filter_desc], y, layout.colW[custom_log_filter_desc],
+        amiga_custom_log_drawTextClipped(ui, font,
+                                   layout.colX[amiga_custom_log_filter_desc], y, layout.colW[amiga_custom_log_filter_desc],
                                    desc, regColor);
 
         if (ui->rowHitCount < ui->rowHitCap) {
-            custom_log_row_hit_t *hit = &ui->rowHits[ui->rowHitCount++];
-            hit->nameRect.x = layout.colX[custom_log_filter_name];
+            amiga_custom_log_row_hit_t *hit = &ui->rowHits[ui->rowHitCount++];
+            hit->nameRect.x = layout.colX[amiga_custom_log_filter_name];
             hit->nameRect.y = y;
-            hit->nameRect.w = layout.colW[custom_log_filter_name];
+            hit->nameRect.w = layout.colW[amiga_custom_log_filter_name];
             hit->nameRect.h = lineHeight;
-            hit->addrRect.x = layout.colX[custom_log_filter_addr];
+            hit->addrRect.x = layout.colX[amiga_custom_log_filter_addr];
             hit->addrRect.y = y;
-            hit->addrRect.w = layout.colW[custom_log_filter_addr];
+            hit->addrRect.w = layout.colW[amiga_custom_log_filter_addr];
             hit->addrRect.h = lineHeight;
-            hit->valueRect.x = layout.colX[custom_log_filter_value];
+            hit->valueRect.x = layout.colX[amiga_custom_log_filter_value];
             hit->valueRect.y = y;
-            hit->valueRect.w = layout.colW[custom_log_filter_value];
+            hit->valueRect.w = layout.colW[amiga_custom_log_filter_value];
             hit->valueRect.h = lineHeight;
             hit->sourceAddr = normalizedAddr;
             hit->regOffset = regOffset;
@@ -1360,23 +1326,23 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
                               scrollModel.topFilteredRow);
     }
 
-    custom_log_row_hit_t hoverRow;
-    if (custom_log_findValueHit(ui, ui->ctx.mouseX, ui->ctx.mouseY, &hoverRow)) {
+    amiga_custom_log_row_hit_t hoverRow;
+    if (amiga_custom_log_findValueHit(ui, ui->ctx.mouseX, ui->ctx.mouseY, &hoverRow)) {
         const char *tooltip = amiga_custom_regs_valueTooltipForOffset(hoverRow.regOffset, hoverRow.regValue);
-        int showSwatch = custom_log_isPaletteRegOffset(hoverRow.regOffset);
-        SDL_Color swatchColor = custom_log_paletteSwatchColor(hoverRow.regValue);
-        custom_log_drawTooltip(ui,
+        int showSwatch = amiga_custom_log_isPaletteRegOffset(hoverRow.regOffset);
+        SDL_Color swatchColor = amiga_custom_log_paletteSwatchColor(hoverRow.regValue);
+        amiga_custom_log_drawTooltip(ui,
                                font,
                                ui->ctx.mouseX,
                                ui->ctx.mouseY,
                                tooltip,
                                showSwatch,
                                swatchColor);
-    } else if (custom_log_findNameHit(ui, ui->ctx.mouseX, ui->ctx.mouseY, &hoverRow)) {
+    } else if (amiga_custom_log_findNameHit(ui, ui->ctx.mouseX, ui->ctx.mouseY, &hoverRow)) {
         char tooltip[64];
         uint32_t regAddr = amiga_custom_regs_addressFromOffset(hoverRow.regOffset) & 0x00ffffffu;
         snprintf(tooltip, sizeof(tooltip), "Address: 0x%06X", (unsigned)regAddr);
-        custom_log_drawTooltip(ui,
+        amiga_custom_log_drawTooltip(ui,
                                font,
                                ui->ctx.mouseX,
                                ui->ctx.mouseY,
@@ -1391,18 +1357,18 @@ custom_log_renderFrame(custom_log_state_t *ui, int presentFrame)
 }
 
 static int
-custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev)
+amiga_custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev)
 {
     if (!self || !ctx || !ev || !self->state) {
         return 0;
     }
-    custom_log_overlay_body_state_t *st = (custom_log_overlay_body_state_t *)self->state;
-    custom_log_state_t *ui = st ? st->ui : NULL;
-    if (!ui || !ui->open) {
+    amiga_custom_log_overlay_body_state_t *st = (amiga_custom_log_overlay_body_state_t *)self->state;
+    amiga_custom_log_state_t *ui = st ? st->ui : NULL;
+    if (!ui || !ui->windowState.open) {
         return 0;
     }
     e9ui_event_t localEv;
-    if (!custom_log_overlayTranslateEventLocal(self, ev, &localEv)) {
+    if (!amiga_custom_log_overlayTranslateEventLocal(self, ev, &localEv)) {
         return 0;
     }
     ui->ctx = *ctx;
@@ -1420,7 +1386,7 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
         int accel = (mods & KMOD_GUI) || (mods & KMOD_CTRL);
         if (!accel && localEv.key.keysym.sym == SDLK_TAB) {
             e9ui_component_t *focus = e9ui_getFocus(ctx);
-            int focusInFilters = (focus && custom_log_componentContains(ui->filterRoot, focus)) ? 1 : 0;
+            int focusInFilters = (focus && amiga_custom_log_componentContains(ui->filterRoot, focus)) ? 1 : 0;
             if (focusInFilters || !focus) {
                 int reverse = (mods & KMOD_SHIFT) ? 1 : 0;
                 e9ui_component_t *next = e9ui_focusFindNext(ui->filterRoot, focusInFilters ? focus : NULL, reverse);
@@ -1453,16 +1419,16 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
     if (localEv.type == SDL_MOUSEMOTION ||
         (localEv.type == SDL_MOUSEBUTTONDOWN && localEv.button.button == SDL_BUTTON_LEFT) ||
         (localEv.type == SDL_MOUSEBUTTONUP && localEv.button.button == SDL_BUTTON_LEFT)) {
-        custom_log_layout_t layout;
-        if (custom_log_computeLayout(ui, &layout)) {
-            int visibleRows = custom_log_computeVisibleRows(ui);
-            custom_log_clampScroll(ui, visibleRows);
-            custom_log_scroll_model_t scrollModel;
-            custom_log_buildScrollModel(ui, visibleRows, &scrollModel);
+        amiga_custom_log_layout_t layout;
+        if (amiga_custom_log_computeLayout(ui, &layout)) {
+            int visibleRows = amiga_custom_log_computeVisibleRows(ui);
+            amiga_custom_log_clampScroll(ui, visibleRows);
+            amiga_custom_log_scroll_model_t scrollModel;
+            amiga_custom_log_buildScrollModel(ui, visibleRows, &scrollModel);
             e9ui_rect_t scrollBounds = {
-                CUSTOM_LOG_PAD,
+                AMIGA_CUSTOM_LOG_PAD,
                 layout.rowsY,
-                layout.winW - CUSTOM_LOG_PAD * 2,
+                layout.winW - AMIGA_CUSTOM_LOG_PAD * 2,
                 layout.rowsH
             };
             int scrollX = 0;
@@ -1478,7 +1444,7 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
                                            &scrollX,
                                            &scrollY,
                                            &ui->scrollbar)) {
-                custom_log_setTopFilteredRow(ui, visibleRows, scrollY);
+                amiga_custom_log_setTopFilteredRow(ui, visibleRows, scrollY);
                 return 1;
             }
         }
@@ -1489,18 +1455,18 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
             wheelY = -wheelY;
         }
         if (wheelY != 0) {
-            custom_log_adjustScroll(ui, wheelY);
+            amiga_custom_log_adjustScroll(ui, wheelY);
         }
         return 1;
     }
     if (localEv.type == SDL_MOUSEBUTTONDOWN && localEv.button.button == SDL_BUTTON_LEFT) {
-        custom_log_row_hit_t hitRow;
-        if (custom_log_findAddressHit(ui, localEv.button.x, localEv.button.y, &hitRow)) {
-            uint32_t sourceAddr = custom_log_normalizeAddress(hitRow.sourceAddr);
+        amiga_custom_log_row_hit_t hitRow;
+        if (amiga_custom_log_findAddressHit(ui, localEv.button.x, localEv.button.y, &hitRow)) {
+            uint32_t sourceAddr = amiga_custom_log_normalizeAddress(hitRow.sourceAddr);
             if (hitRow.sourceIsCopper) {
                 ui_centerCprSourceOnAddress(sourceAddr);
             } else {
-                custom_log_addOrEnableBreakpoint(sourceAddr);
+                amiga_custom_log_addOrEnableBreakpoint(sourceAddr);
             }
             return 1;
         }
@@ -1508,28 +1474,28 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
     if (localEv.type == SDL_KEYDOWN) {
         SDL_Keycode key = localEv.key.keysym.sym;
         SDL_Keymod mods = localEv.key.keysym.mod;
-        int visibleRows = custom_log_computeVisibleRows(ui);
-        int step = custom_log_arrowScrollAmount(mods, visibleRows);
+        int visibleRows = amiga_custom_log_computeVisibleRows(ui);
+        int step = amiga_custom_log_arrowScrollAmount(mods, visibleRows);
         switch (key) {
         case SDLK_UP:
-            custom_log_adjustScroll(ui, -step);
+            amiga_custom_log_adjustScroll(ui, -step);
             return 1;
         case SDLK_DOWN:
-            custom_log_adjustScroll(ui, step);
+            amiga_custom_log_adjustScroll(ui, step);
             return 1;
         case SDLK_PAGEUP:
-            custom_log_adjustScroll(ui, -visibleRows);
+            amiga_custom_log_adjustScroll(ui, -visibleRows);
             return 1;
         case SDLK_PAGEDOWN:
-            custom_log_adjustScroll(ui, visibleRows);
+            amiga_custom_log_adjustScroll(ui, visibleRows);
             return 1;
         case SDLK_HOME:
             ui->scrollRow = 0;
-            custom_log_clampScroll(ui, visibleRows);
+            amiga_custom_log_clampScroll(ui, visibleRows);
             return 1;
         case SDLK_END:
             ui->scrollRow = INT_MAX;
-            custom_log_clampScroll(ui, visibleRows);
+            amiga_custom_log_clampScroll(ui, visibleRows);
             return 1;
         default:
             break;
@@ -1539,14 +1505,14 @@ custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
 }
 
 static void
-custom_log_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
+amiga_custom_log_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 {
     if (!self || !ctx || !self->state || !ctx->renderer) {
         return;
     }
-    custom_log_overlay_body_state_t *st = (custom_log_overlay_body_state_t *)self->state;
-    custom_log_state_t *ui = st ? st->ui : NULL;
-    if (!ui || !ui->open) {
+    amiga_custom_log_overlay_body_state_t *st = (amiga_custom_log_overlay_body_state_t *)self->state;
+    amiga_custom_log_state_t *ui = st ? st->ui : NULL;
+    if (!ui || !ui->windowState.open) {
         return;
     }
     SDL_Rect prevViewport;
@@ -1584,7 +1550,7 @@ custom_log_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
     ui->ctx.mouseY = ctx->mouseY - self->bounds.y;
     ui->ctx.mousePrevX = ctx->mousePrevX - self->bounds.x;
     ui->ctx.mousePrevY = ctx->mousePrevY - self->bounds.y;
-    custom_log_renderFrame(ui, 0);
+    amiga_custom_log_renderFrame(ui, 0);
 
     SDL_RenderSetViewport(ctx->renderer, &prevViewport);
     if (hadClip) {
@@ -1593,7 +1559,7 @@ custom_log_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 }
 
 static e9ui_component_t *
-custom_log_makeOverlayBodyHost(custom_log_state_t *ui)
+amiga_custom_log_makeOverlayBodyHost(amiga_custom_log_state_t *ui)
 {
     if (!ui) {
         return NULL;
@@ -1602,120 +1568,100 @@ custom_log_makeOverlayBodyHost(custom_log_state_t *ui)
     if (!host) {
         return NULL;
     }
-    custom_log_overlay_body_state_t *st = (custom_log_overlay_body_state_t *)alloc_calloc(1, sizeof(*st));
+    amiga_custom_log_overlay_body_state_t *st = (amiga_custom_log_overlay_body_state_t *)alloc_calloc(1, sizeof(*st));
     if (!st) {
         alloc_free(host);
         return NULL;
     }
     st->ui = ui;
-    host->name = "custom_log_overlay_body";
+    host->name = "amiga_custom_log_overlay_body";
     host->state = st;
-    host->preferredHeight = custom_log_overlayBodyPreferredHeight;
-    host->layout = custom_log_overlayBodyLayout;
-    host->render = custom_log_overlayBodyRender;
-    host->handleEvent = custom_log_overlayBodyHandleEvent;
+    host->preferredHeight = amiga_custom_log_overlayBodyPreferredHeight;
+    host->layout = amiga_custom_log_overlayBodyLayout;
+    host->render = amiga_custom_log_overlayBodyRender;
+    host->handleEvent = amiga_custom_log_overlayBodyHandleEvent;
     if (ui->filterRoot) {
-        e9ui_child_add(host, ui->filterRoot, alloc_strdup("custom_log_filter_root"));
+        e9ui_child_add(host, ui->filterRoot, alloc_strdup("amiga_custom_log_filter_root"));
     }
     return host;
 }
 
 static void
-custom_log_overlayWindowCloseRequested(e9ui_window_t *window, void *user)
+amiga_custom_log_overlayWindowCloseRequested(e9ui_window_t *window, void *user)
 {
     (void)window;
-    custom_log_state_t *ui = (custom_log_state_t *)user;
+    amiga_custom_log_state_t *ui = (amiga_custom_log_state_t *)user;
     if (!ui) {
         return;
     }
-    custom_log_shutdown();
+    amiga_custom_log_shutdown();
 }
 
 void
-custom_log_render(void)
+amiga_custom_log_render(void)
 {
-    custom_log_state_t *ui = &custom_log_state;
-    if (!ui->open) {
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
+    if (!ui->windowState.open) {
         return;
     }
-    if (e9ui_windowCaptureRectChanged(ui->windowHost,
-                                      (e9ui ? &e9ui->ctx : &ui->ctx),
-                                      &ui->winHasSaved,
-                                      &ui->winX,
-                                      &ui->winY,
-                                      &ui->winW,
-                                      &ui->winH)) {
+    if (e9ui_windowCaptureStateRectChanged(&ui->windowState, &e9ui->ctx)) {
         config_saveConfig();
     }
 }
 
 void
-custom_log_persistConfig(FILE *file)
+amiga_custom_log_persistConfig(FILE *file)
 {
-    custom_log_state_t *ui = &custom_log_state;
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
     if (!file) {
         return;
     }
-    if (ui->open) {
-        (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                                (e9ui ? &e9ui->ctx : &ui->ctx),
-                                                &ui->winHasSaved,
-                                                &ui->winX,
-                                                &ui->winY,
-                                                &ui->winW,
-                                                &ui->winH);
-    }
-    if (!ui->winHasSaved) {
-        return;
-    }
-    fprintf(file, "comp.custom_log.win_x=%d\n", ui->winX);
-    fprintf(file, "comp.custom_log.win_y=%d\n", ui->winY);
-    fprintf(file, "comp.custom_log.win_w=%d\n", ui->winW);
-    fprintf(file, "comp.custom_log.win_h=%d\n", ui->winH);
+    e9ui_windowPersistStateRect(file, "comp.custom_log", &ui->windowState, &e9ui->ctx);
 }
 
 int
-custom_log_loadConfigProperty(const char *prop, const char *value)
+amiga_custom_log_loadConfigProperty(const char *prop, const char *value)
 {
-    custom_log_state_t *ui = &custom_log_state;
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
     if (!prop || !value) {
         return 0;
     }
     int intValue = 0;
     if (strcmp(prop, "win_x") == 0) {
-        if (!custom_log_parseInt(value, &intValue)) {
+        if (!amiga_custom_log_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winX = intValue;
+        ui->windowState.winX = intValue;
     } else if (strcmp(prop, "win_y") == 0) {
-        if (!custom_log_parseInt(value, &intValue)) {
+        if (!amiga_custom_log_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winY = intValue;
+        ui->windowState.winY = intValue;
     } else if (strcmp(prop, "win_w") == 0) {
-        if (!custom_log_parseInt(value, &intValue)) {
+        if (!amiga_custom_log_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winW = intValue;
+        ui->windowState.winW = intValue;
     } else if (strcmp(prop, "win_h") == 0) {
-        if (!custom_log_parseInt(value, &intValue)) {
+        if (!amiga_custom_log_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winH = intValue;
+        ui->windowState.winH = intValue;
     } else {
         return 0;
     }
-    ui->winHasSaved = 1;
+    ui->windowState.winHasSaved =
+        e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
     return 1;
 }
 
 void
-custom_log_captureFrame(const e9k_debug_ami_custom_log_entry_t *entries,
+amiga_custom_log_captureFrame(const e9k_debug_ami_custom_log_entry_t *entries,
                         size_t count,
                         uint32_t dropped,
                         uint64_t frameNo)
 {
-    custom_log_state_t *ui = &custom_log_state;
+    amiga_custom_log_state_t *ui = &amiga_custom_log_state;
     ui->frameNo = frameNo;
     ui->dropped = dropped;
     ui->framesCaptured++;

@@ -10,7 +10,7 @@
 
 #include <SDL.h>
 
-#include "debugger.h"
+#include "target.h"
 
 SDL_Texture *
 system_badge_getTexture(SDL_Renderer *renderer, target_iface_t *system, int *outW, int *outH);

@@ -7,6 +7,7 @@
  */
 
 #include "e9ui.h"
+
 #include "e9ui_scrollbar.h"
 
 typedef struct e9ui_scrollbar_bar_rects {

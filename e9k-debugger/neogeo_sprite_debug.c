@@ -14,9 +14,8 @@
 #include <string.h>
 
 #include "aux_window.h"
-#include "sprite_debug.h"
+#include "neogeo_sprite_debug.h"
 #include "alloc.h"
-#include "debugger.h"
 #include "config.h"
 #include "e9ui.h"
 
@@ -42,8 +41,8 @@
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 224
 
-typedef struct sprite_debug_state {
-    e9ui_window_t *windowHost;
+typedef struct neogeo_sprite_debug_state {
+    e9ui_window_state_t windowState;
     SDL_Window *window;
     SDL_Renderer *renderer;
     e9ui_component_t *overlayBodyHost;
@@ -54,59 +53,59 @@ typedef struct sprite_debug_state {
     int tex_h;
     int logicalW;
     int logicalH;
-    int winX;
-    int winY;
-    int winW;
-    int winH;
-    int winHasSaved;
     uint32_t hist_grad[DBG_HIST_WIDTH];
     int hist_grad_ready;
     uint32_t last_hash;
     int cached_valid;
-    int open;
     int hist_x0_anchor;
     e9k_debug_sprite_state_t lastState;
     int hasLastState;
-} sprite_debug_state_t;
+} neogeo_sprite_debug_state_t;
 
-static sprite_debug_state_t s_dbg = {0};
-static int sprite_debug_histogramEnabled = 1;
-
-typedef struct sprite_debug_overlay_body_state {
+typedef struct neogeo_sprite_debug_overlay_body_state {
     int unused;
-} sprite_debug_overlay_body_state_t;
+} neogeo_sprite_debug_overlay_body_state_t;
+
+static neogeo_sprite_debug_state_t s_dbg = {
+    .windowState.winX = E9UI_WINDOW_COORD_UNSET,
+    .windowState.winY = E9UI_WINDOW_COORD_UNSET,
+    .windowState.openMinWidthPx = 420,
+    .windowState.openMinHeightPx = 360,
+    .windowState.openCenterWhenNoSaved = 1,
+};
+static int neogeo_sprite_debug_histogramEnabled = 1;
 
 static e9ui_window_backend_t
-sprite_debug_windowBackend(void)
+neogeo_sprite_debug_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
 
 int
-sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
+neogeo_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
 {
-    if (!kev || !s_dbg.open) {
+    if (!kev || !s_dbg.windowState.open) {
         return 0;
     }
     if (kev->repeat != 0) {
         return 0;
     }
     if (kev->keysym.sym == SDLK_ESCAPE) {
-        if (sprite_debug_is_open()) {
-            sprite_debug_toggle();
+        if (neogeo_sprite_debug_is_open()) {
+            neogeo_sprite_debug_toggle();
         }
         return 1;
     }
     return 0;
 }
 
-static const aux_window_ops_t sprite_debug_auxWindowOps = {
-    .setFocus = sprite_debug_setMainWindowFocused,
-    .handleKeydown = sprite_debug_handleKeydown,
+static const aux_window_ops_t neogeo_sprite_debug_auxWindowOps = {
+    .setFocus = neogeo_sprite_debug_setMainWindowFocused,
+    .handleKeydown = neogeo_sprite_debug_handleKeydown,
 };
 
 static int
-sprite_debug_parseInt(const char *value, int *out)
+neogeo_sprite_debug_parseInt(const char *value, int *out)
 {
     if (!value || !out) {
         return 0;
@@ -124,7 +123,7 @@ sprite_debug_parseInt(const char *value, int *out)
 }
 
 static void
-sprite_debug_presentTexture(int base_w, int base_h, int presentFrame)
+neogeo_sprite_debug_presentTexture(int base_w, int base_h, int presentFrame)
 {
     SDL_Rect viewport = { 0, 0, 0, 0 };
     SDL_RenderGetViewport(s_dbg.renderer, &viewport);
@@ -162,7 +161,7 @@ sprite_debug_presentTexture(int base_w, int base_h, int presentFrame)
     SDL_RenderFillRect(s_dbg.renderer, &clearRect);
     SDL_Rect src = { 0, 0, base_w, base_h };
     SDL_RenderCopy(s_dbg.renderer, s_dbg.texture, &src, &dst);
-    if (sprite_debug_histogramEnabled) {
+    if (neogeo_sprite_debug_histogramEnabled) {
         int hist_x = base_w + DBG_GAP;
         int hist_w = DBG_HIST_WIDTH;
         SDL_Rect hist_src = { hist_x, 0, hist_w, base_h };
@@ -178,7 +177,7 @@ sprite_debug_presentTexture(int base_w, int base_h, int presentFrame)
 }
 
 static e9ui_rect_t
-sprite_debug_windowDefaultRect(const e9ui_context_t *ctx)
+neogeo_sprite_debug_windowDefaultRect(const e9ui_context_t *ctx)
 {
     e9ui_rect_t rect = {
         e9ui_scale_px(ctx, 96),
@@ -190,7 +189,7 @@ sprite_debug_windowDefaultRect(const e9ui_context_t *ctx)
 }
 
 static int
-sprite_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
+neogeo_sprite_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
 {
     (void)self;
     (void)ctx;
@@ -199,7 +198,7 @@ sprite_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *
 }
 
 static void
-sprite_debug_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
+neogeo_sprite_debug_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
     (void)ctx;
     if (!self) {
@@ -209,15 +208,15 @@ sprite_debug_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui
 }
 
 static void
-sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int presentFrame);
+neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int presentFrame);
 
 static void
-sprite_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
+neogeo_sprite_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 {
     if (!self || !ctx || !ctx->renderer) {
         return;
     }
-    if (!s_dbg.open || !s_dbg.hasLastState) {
+    if (!s_dbg.windowState.open || !s_dbg.hasLastState) {
         return;
     }
     SDL_Rect prevViewport;
@@ -247,7 +246,7 @@ sprite_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
     }
     s_dbg.window = ctx->window;
     s_dbg.renderer = ctx->renderer;
-    sprite_debug_renderFrameInternal(&s_dbg.lastState, 0);
+    neogeo_sprite_debug_renderFrameInternal(&s_dbg.lastState, 0);
     SDL_RenderSetViewport(ctx->renderer, &prevViewport);
     if (hadClip) {
         SDL_RenderSetClipRect(ctx->renderer, &prevClip);
@@ -255,45 +254,45 @@ sprite_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 }
 
 static void
-sprite_debug_overlayBodyDtor(e9ui_component_t *self, e9ui_context_t *ctx)
+neogeo_sprite_debug_overlayBodyDtor(e9ui_component_t *self, e9ui_context_t *ctx)
 {
     (void)ctx;
     if (!self) {
         return;
     }
-    sprite_debug_overlay_body_state_t *st = (sprite_debug_overlay_body_state_t *)self->state;
+    neogeo_sprite_debug_overlay_body_state_t *st = (neogeo_sprite_debug_overlay_body_state_t *)self->state;
     alloc_free(st);
     self->state = NULL;
 }
 
 static e9ui_component_t *
-sprite_debug_makeOverlayBodyHost(void)
+neogeo_sprite_debug_makeOverlayBodyHost(void)
 {
     e9ui_component_t *host = (e9ui_component_t *)alloc_calloc(1, sizeof(*host));
     if (!host) {
         return NULL;
     }
-    sprite_debug_overlay_body_state_t *st =
-        (sprite_debug_overlay_body_state_t *)alloc_calloc(1, sizeof(*st));
+    neogeo_sprite_debug_overlay_body_state_t *st =
+        (neogeo_sprite_debug_overlay_body_state_t *)alloc_calloc(1, sizeof(*st));
     if (!st) {
         alloc_free(host);
         return NULL;
     }
-    host->name = "sprite_debug_overlay_body";
+    host->name = "neogeo_sprite_debug_overlay_body";
     host->state = st;
-    host->preferredHeight = sprite_debug_overlayBodyPreferredHeight;
-    host->layout = sprite_debug_overlayBodyLayout;
-    host->render = sprite_debug_overlayBodyRender;
-    host->dtor = sprite_debug_overlayBodyDtor;
+    host->preferredHeight = neogeo_sprite_debug_overlayBodyPreferredHeight;
+    host->layout = neogeo_sprite_debug_overlayBodyLayout;
+    host->render = neogeo_sprite_debug_overlayBodyRender;
+    host->dtor = neogeo_sprite_debug_overlayBodyDtor;
     return host;
 }
 
 static void
-sprite_debug_overlayWindowCloseRequested(e9ui_window_t *window, void *user)
+neogeo_sprite_debug_overlayWindowCloseRequested(e9ui_window_t *window, void *user)
 {
     (void)window;
     (void)user;
-    sprite_debug_toggle();
+    neogeo_sprite_debug_toggle();
 }
 
 static const uint8_t g_lut_hshrink[0x10][0x10] = {
@@ -496,57 +495,38 @@ sprite_dbgFillRectCoord(uint32_t *pixels, int pitch, int ext_w, int ext_h,
 }
 
 void
-sprite_debug_toggle(void)
+neogeo_sprite_debug_toggle(void)
 {
-    if (!s_dbg.open) {
-        s_dbg.windowHost = e9ui_windowCreate(sprite_debug_windowBackend());
-        if (!s_dbg.windowHost) {
+    if (!s_dbg.windowState.open) {
+        s_dbg.windowState.windowHost = e9ui_windowCreate(neogeo_sprite_debug_windowBackend());
+        if (!s_dbg.windowState.windowHost) {
             return;
         }
         int lw = NG_COORD_W;
         int lh = NG_COORD_H;
-        if (sprite_debug_histogramEnabled) {
+        if (neogeo_sprite_debug_histogramEnabled) {
             lw += DBG_GAP + DBG_HIST_WIDTH;
         }
         s_dbg.logicalW = lw;
         s_dbg.logicalH = lh;
-        s_dbg.overlayBodyHost = sprite_debug_makeOverlayBodyHost();
-        if (!s_dbg.overlayBodyHost) {
-            e9ui_windowDestroy(s_dbg.windowHost);
-            s_dbg.windowHost = NULL;
-            return;
-        }
-        e9ui_rect_t rect = e9ui_windowResolveOpenRect(&e9ui->ctx,
-                                                               sprite_debug_windowDefaultRect(&e9ui->ctx),
-                                                               420,
-                                                               360,
-                                                               1,
-                                                               s_dbg.winHasSaved ? 1 : 0,
-                                                               (s_dbg.winHasSaved && s_dbg.winW > 0 && s_dbg.winH > 0) ? 1 : 0,
-                                                               s_dbg.winX,
-                                                               s_dbg.winY,
-                                                               s_dbg.winW,
-                                                               s_dbg.winH);
-        if (!e9ui_windowOpen(s_dbg.windowHost,
+        s_dbg.overlayBodyHost = neogeo_sprite_debug_makeOverlayBodyHost();
+        e9ui_rect_t rect = e9ui_windowResolveStateOpenRect(&e9ui->ctx,
+                                                           neogeo_sprite_debug_windowDefaultRect(&e9ui->ctx),
+                                                           &s_dbg.windowState);
+        e9ui_windowOpen(s_dbg.windowState.windowHost,
                                      "Sprite Debug",
                                      rect,
                                      s_dbg.overlayBodyHost,
-                                     sprite_debug_overlayWindowCloseRequested,
+                                     neogeo_sprite_debug_overlayWindowCloseRequested,
                                      NULL,
-                                     &e9ui->ctx)) {
-            e9ui_childDestroy(s_dbg.overlayBodyHost, &e9ui->ctx);
-            s_dbg.overlayBodyHost = NULL;
-            e9ui_windowDestroy(s_dbg.windowHost);
-            s_dbg.windowHost = NULL;
-            return;
-        }
+			             &e9ui->ctx);
         s_dbg.window = e9ui->ctx.window;
         s_dbg.renderer = e9ui->ctx.renderer;
         s_dbg.hist_x0_anchor = -1;
-        s_dbg.open = 1;
-        aux_window_register(&sprite_debug_auxWindowOps, &s_dbg);
+        s_dbg.windowState.open = 1;
+        aux_window_register(&neogeo_sprite_debug_auxWindowOps, &s_dbg);
     } else {
-        aux_window_unregister(&sprite_debug_auxWindowOps, &s_dbg);
+        aux_window_unregister(&neogeo_sprite_debug_auxWindowOps, &s_dbg);
         if (s_dbg.texture) {
             SDL_DestroyTexture(s_dbg.texture);
             s_dbg.texture = NULL;
@@ -563,13 +543,9 @@ sprite_debug_toggle(void)
         s_dbg.hist_grad_ready = 0;
         s_dbg.cached_valid = 0;
         s_dbg.last_hash = 0;
-        if (s_dbg.windowHost) {
-            e9ui_windowDestroy(s_dbg.windowHost);
-            s_dbg.windowHost = NULL;
-        }
         s_dbg.overlayBodyHost = NULL;
         s_dbg.hist_x0_anchor = -1;
-        s_dbg.open = 0;
+        s_dbg.windowState.open = 0;
         s_dbg.hasLastState = 0;
         s_dbg.window = NULL;
         s_dbg.renderer = NULL;
@@ -577,21 +553,21 @@ sprite_debug_toggle(void)
 }
 
 int
-sprite_debug_is_open(void)
+neogeo_sprite_debug_is_open(void)
 {
-    return s_dbg.open ? 1 : 0;
+    return s_dbg.windowState.open ? 1 : 0;
 }
 
 void
-sprite_debug_setMainWindowFocused(int focused)
+neogeo_sprite_debug_setMainWindowFocused(int focused)
 {
     (void)focused;
 }
 
 void
-sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int presentFrame)
+neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int presentFrame)
 {
-    if (!s_dbg.open || !s_dbg.renderer) {
+    if (!s_dbg.windowState.open || !s_dbg.renderer) {
         return;
     }
     if (!st || !st->vram) {
@@ -609,7 +585,7 @@ sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int present
     const int base_h = NG_COORD_H;
     int ext_w = base_w;
     const int ext_h = base_h;
-    if (sprite_debug_histogramEnabled) {
+    if (neogeo_sprite_debug_histogramEnabled) {
         ext_w += DBG_GAP + DBG_HIST_WIDTH;
     }
     if (s_dbg.tex_w != ext_w || s_dbg.tex_h != ext_h) {
@@ -624,7 +600,7 @@ sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int present
     }
     uint32_t hash = sprite_dbgHashSprites(scb2, scb3, scb4);
     if (s_dbg.cached_valid && hash == s_dbg.last_hash && s_dbg.texture) {
-        sprite_debug_presentTexture(base_w, base_h, presentFrame);
+        neogeo_sprite_debug_presentTexture(base_w, base_h, presentFrame);
         return;
     }
     size_t needed = (size_t)ext_w * (size_t)ext_h;
@@ -761,7 +737,7 @@ sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int present
         }
     }
 
-    if (sprite_debug_histogramEnabled) {
+    if (neogeo_sprite_debug_histogramEnabled) {
         int hist_x0 = NG_COORD_OFFSET_X + NG_COORD_SIZE + DBG_GAP;
         int hist_w = DBG_HIST_WIDTH;
         if (hist_w < 1) {
@@ -849,86 +825,70 @@ sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int present
     }
 
     SDL_UpdateTexture(s_dbg.texture, NULL, pixels, ext_w * (int)sizeof(uint32_t));
-    sprite_debug_presentTexture(base_w, base_h, presentFrame);
+    neogeo_sprite_debug_presentTexture(base_w, base_h, presentFrame);
     s_dbg.cached_valid = 1;
     s_dbg.last_hash = hash;
 }
 
 void
-sprite_debug_render(const e9k_debug_sprite_state_t *st)
+neogeo_sprite_debug_render(const e9k_debug_sprite_state_t *st)
 {
     if (st) {
         s_dbg.lastState = *st;
         s_dbg.hasLastState = 1;
     }
-    if (!s_dbg.open) {
+    if (!s_dbg.windowState.open) {
         return;
     }
-    if (e9ui_windowCaptureRectChanged(s_dbg.windowHost,
-                                      (e9ui ? &e9ui->ctx : NULL),
-                                      &s_dbg.winHasSaved,
-                                      &s_dbg.winX,
-                                      &s_dbg.winY,
-                                      &s_dbg.winW,
-                                      &s_dbg.winH)) {
+    if (e9ui_windowCaptureStateRectChanged(&s_dbg.windowState,
+                                           &e9ui->ctx)) {
         config_saveConfig();
     }
 }
 
 void
-sprite_debug_persistConfig(FILE *file)
+neogeo_sprite_debug_persistConfig(FILE *file)
 {
     if (!file) {
         return;
     }
-    if (s_dbg.open) {
-        (void)e9ui_windowCaptureRectSnapshot(s_dbg.windowHost,
-                                                (e9ui ? &e9ui->ctx : NULL),
-                                                &s_dbg.winHasSaved,
-                                                &s_dbg.winX,
-                                                &s_dbg.winY,
-                                                &s_dbg.winW,
-                                                &s_dbg.winH);
-    }
-    if (!s_dbg.winHasSaved) {
-        return;
-    }
-    fprintf(file, "comp.sprite_debug.win_x=%d\n", s_dbg.winX);
-    fprintf(file, "comp.sprite_debug.win_y=%d\n", s_dbg.winY);
-    fprintf(file, "comp.sprite_debug.win_w=%d\n", s_dbg.winW);
-    fprintf(file, "comp.sprite_debug.win_h=%d\n", s_dbg.winH);
+    e9ui_windowPersistStateRect(file,
+                                "comp.sprite_debug",
+                                &s_dbg.windowState,
+                                &e9ui->ctx);
 }
 
 int
-sprite_debug_loadConfigProperty(const char *prop, const char *value)
+neogeo_sprite_debug_loadConfigProperty(const char *prop, const char *value)
 {
     if (!prop || !value) {
         return 0;
     }
     int intValue = 0;
     if (strcmp(prop, "win_x") == 0) {
-        if (!sprite_debug_parseInt(value, &intValue)) {
+        if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
             return 0;
         }
-        s_dbg.winX = intValue;
+        s_dbg.windowState.winX = intValue;
     } else if (strcmp(prop, "win_y") == 0) {
-        if (!sprite_debug_parseInt(value, &intValue)) {
+        if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
             return 0;
         }
-        s_dbg.winY = intValue;
+        s_dbg.windowState.winY = intValue;
     } else if (strcmp(prop, "win_w") == 0) {
-        if (!sprite_debug_parseInt(value, &intValue)) {
+        if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
             return 0;
         }
-        s_dbg.winW = intValue;
+        s_dbg.windowState.winW = intValue;
     } else if (strcmp(prop, "win_h") == 0) {
-        if (!sprite_debug_parseInt(value, &intValue)) {
+        if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
             return 0;
         }
-        s_dbg.winH = intValue;
+        s_dbg.windowState.winH = intValue;
     } else {
         return 0;
     }
-    s_dbg.winHasSaved = 1;
+    s_dbg.windowState.winHasSaved =
+        e9ui_windowHasSavedPosition(s_dbg.windowState.winX, s_dbg.windowState.winY);
     return 1;
 }

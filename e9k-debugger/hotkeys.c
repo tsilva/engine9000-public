@@ -23,8 +23,6 @@
 #include "debugger.h"
 #include "emu.h"
 #include "ui.h"
-#include "crt.h"
-#include "state_buffer.h"
 #include "prompt.h"
 #include "input_record.h"
 #include "profile_checkpoints.h"
@@ -93,6 +91,12 @@ typedef struct hotkeys_action_registration
     int registryId;
     size_t specIndex;
 } hotkeys_action_registration_t;
+
+typedef enum hotkeys_config_section {
+    hotkeys_config_section_global = 0,
+    hotkeys_config_section_execution,
+    hotkeys_config_section_checkpoints
+} hotkeys_config_section_t;
 
 static const hotkeys_config_spec_t hotkeys_configSpecs[] = {
     { "help", "Help", SDLK_F1, 0 },
@@ -1424,12 +1428,6 @@ hotkeys_configContainerDtor(e9ui_component_t *self, e9ui_context_t *ctx)
     alloc_free(st);
     self->state = NULL;
 }
-
-typedef enum hotkeys_config_section {
-    hotkeys_config_section_global = 0,
-    hotkeys_config_section_execution,
-    hotkeys_config_section_checkpoints
-} hotkeys_config_section_t;
 
 static hotkeys_config_section_t
 hotkeys_configSectionForActionId(const char *actionId)

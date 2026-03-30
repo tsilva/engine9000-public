@@ -11,13 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <SDL.h>
 #include <SDL_ttf.h>
 
 #include "alloc.h"
 #include "amiga_memview.h"
-#include "amiga_uae_options.h"
 #include "aux_window.h"
 #include "config.h"
 #include "debugger.h"
@@ -45,9 +43,7 @@
 #define AMIGA_MEMVIEW_OVERVIEW_RANGE_TEXTURE_H 128
 #define AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES 8
 #define AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE0_BASE 0x000000u
-#define AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE0_SIZE (512u * 1024u)
 #define AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_BASE 0xC00000u
-#define AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_SIZE (512u * 1024u)
 #define AMIGA_MEMVIEW_OVERVIEW_FAST_RANGE_BASE 0x200000u
 #define AMIGA_MEMVIEW_RIGHT_PAD_PX 16
 #define AMIGA_MEMVIEW_TOP_PAD_PX 8
@@ -80,9 +76,6 @@ typedef struct amiga_memview_step_buttons_action_ctx {
 typedef struct amiga_memview_auto {
     uint32_t baseAddr;
     uint32_t rowBytes;
-    int planeIndex;
-    const char *resolutionName;
-    int usedFallback;
 } amiga_memview_auto_t;
 
 typedef struct amiga_memview_overview_range {
@@ -105,8 +98,7 @@ typedef struct amiga_memview_legend_state {
 } amiga_memview_legend_state_t;
 
 struct amiga_memview_state {
-    int open;
-    e9ui_window_t *windowHost;
+    e9ui_window_state_t windowState;
     e9ui_context_t ctx;
     e9ui_component_t *root;
     e9ui_component_t *canvas;
@@ -115,8 +107,6 @@ struct amiga_memview_state {
     e9ui_component_t *widthBox;
     e9ui_component_t *widthSeek;
     e9ui_component_t *zoomSeek;
-    e9ui_component_t *showAddressCheckbox;
-    e9ui_component_t *showOverviewCheckbox;
     uint32_t baseAddr;
     uint32_t rowBytes;
     int zoomLevel;
@@ -153,11 +143,6 @@ struct amiga_memview_state {
     int overviewCacheValid;
     uint64_t overviewCacheFrameCounter;
     amiga_memview_overview_range_t overviewRanges[AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES];
-    int winX;
-    int winY;
-    int winW;
-    int winH;
-    int winHasSaved;
     int baseAddrHasSaved;
     int rowBytesHasSaved;
     int zoomHasSaved;
@@ -170,7 +155,13 @@ struct amiga_memview_state {
     int (*zoomSeekDefaultHandleEvent)(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev);
 };
 
-static amiga_memview_state_t amiga_memview_stateSingleton = {0};
+static amiga_memview_state_t amiga_memview_stateSingleton = {
+    .windowState.winX = E9UI_WINDOW_COORD_UNSET,
+    .windowState.winY = E9UI_WINDOW_COORD_UNSET,
+    .windowState.openMinWidthNoSavedSizePx = 640,
+    .windowState.openMinHeightNoSavedSizePx = 360,
+    .windowState.openCenterWhenNoSaved = 1,
+};
 
 static const aux_window_ops_t amiga_memview_auxWindowOps = {
     .setFocus = amiga_memview_setMainWindowFocused,
@@ -190,7 +181,7 @@ static int
 amiga_memview_measureAddressGutterPx(const e9ui_context_t *ctx, TTF_Font *font);
 
 static void
-amiga_memview_applyCurrentView(amiga_memview_state_t *ui, uint32_t baseAddr, uint32_t rowBytes, int resetScroll);
+amiga_memview_setView(amiga_memview_state_t *ui, uint32_t baseAddr, uint32_t rowBytes, int resetScroll);
 
 static int
 amiga_memview_clampZoomLevel(int zoomLevel);
@@ -398,14 +389,8 @@ amiga_memview_saveWindowState(amiga_memview_state_t *ui)
     if (!ui) {
         return;
     }
-    if (ui->open && ui->windowHost) {
-        (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                             (e9ui ? &e9ui->ctx : &ui->ctx),
-                                             &ui->winHasSaved,
-                                             &ui->winX,
-                                             &ui->winY,
-                                             &ui->winW,
-                                             &ui->winH);
+    if (ui->windowState.open && ui->windowState.windowHost) {
+        (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
     }
     config_saveConfig();
 }
@@ -607,7 +592,7 @@ amiga_memview_widthSeekHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, 
             break;
         }
         if (nextRowBytes != 0u) {
-            amiga_memview_applyCurrentView(ui, ui->baseAddr, nextRowBytes, 1);
+            amiga_memview_setView(ui, ui->baseAddr, nextRowBytes, 1);
             return 1;
         }
     }
@@ -637,7 +622,7 @@ amiga_memview_onZoomSeekChanged(float percent, void *user)
     amiga_memview_saveWindowState(ui);
 }
 
-static int
+static void
 amiga_memview_initSeekBar(e9ui_component_t *seekBar,
                           int (*handleEvent)(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev),
                           void (*changedCallback)(float percent, void *user),
@@ -645,9 +630,6 @@ amiga_memview_initSeekBar(e9ui_component_t *seekBar,
                           void *user,
                           int (**outDefaultHandleEvent)(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev))
 {
-    if (!seekBar || !handleEvent || !changedCallback || !tooltipCallback || !outDefaultHandleEvent) {
-        return 0;
-    }
     seekBar->layout = amiga_memview_seekBarLayout;
     *outDefaultHandleEvent = seekBar->handleEvent;
     seekBar->handleEvent = handleEvent;
@@ -656,7 +638,6 @@ amiga_memview_initSeekBar(e9ui_component_t *seekBar,
     e9ui_seek_bar_setHoverMargin(seekBar, 6);
     e9ui_seek_bar_setCallback(seekBar, changedCallback, user);
     e9ui_seek_bar_setTooltipCallback(seekBar, tooltipCallback, user);
-    return 1;
 }
 
 static int
@@ -935,29 +916,6 @@ amiga_memview_readRange(amiga_memview_state_t *ui, uint32_t baseAddr, uint8_t *d
     return libretro_host_debugReadMemory((uint32_t)readStart, data + dstOffset, readSize) ? 1 : 0;
 }
 
-static const char *
-amiga_memview_resolutionName(uint16_t bplcon0)
-{
-    if ((bplcon0 & (1u << 6)) != 0u) {
-        return "SHRES";
-    }
-    if ((bplcon0 & (1u << 15)) != 0u) {
-        return "HIRES";
-    }
-    return "LORES";
-}
-
-static const char *
-amiga_memview_resolutionNameForBplres(uint8_t bplres)
-{
-    if (bplres >= 2u) {
-        return "SHRES";
-    }
-    if (bplres == 1u) {
-        return "HIRES";
-    }
-    return "LORES";
-}
 
 static uint32_t
 amiga_memview_fetchBytesAuto(uint16_t ddfstrt, uint16_t ddfstop, uint16_t bplcon0)
@@ -1018,7 +976,6 @@ amiga_memview_collectRegisterAuto(amiga_memview_auto_t *outAutos, int maxAutos, 
         uint16_t ddfstop = amiga_memview_regValue(regs, AMIGA_MEMVIEW_REG_DDFSTOP);
         int planeCount = (int)((bplcon0 >> 12) & 0x7u);
         uint32_t fetchBytes = amiga_memview_fetchBytesAuto(ddfstrt, ddfstop, bplcon0);
-        const char *resolutionName = amiga_memview_resolutionName(bplcon0);
 
         for (int i = 0; i < AMIGA_MEMVIEW_BPLPTR_COUNT; ++i) {
             uint32_t ptr = amiga_memview_regPointerValue(regs, i);
@@ -1037,13 +994,10 @@ amiga_memview_collectRegisterAuto(amiga_memview_auto_t *outAutos, int maxAutos, 
             int rowBytes = (int)fetchBytes + moduloBytes;
 
             autoState.baseAddr = amiga_memview_clampBaseAddr(ptr & 0x00ffffffu);
-            autoState.planeIndex = i;
-            autoState.resolutionName = resolutionName;
             if (rowBytes <= 0) {
                 continue;
             }
             autoState.rowBytes = amiga_memview_clampRowBytes((uint32_t)rowBytes);
-            autoState.usedFallback = 0;
 
             autoCount = amiga_memview_appendAutoIfUnique(outAutos, autoCount, maxAutos, &autoState);
         }
@@ -1139,9 +1093,6 @@ amiga_memview_collectLineAuto(amiga_memview_auto_t *outAutos, int maxAutos, cons
             amiga_memview_auto_t autoState = *fallback;
             autoState.baseAddr = amiga_memview_clampBaseAddr(baseAddr);
             autoState.rowBytes = amiga_memview_clampRowBytes((uint32_t)rowBytes64);
-            autoState.planeIndex = plane;
-            autoState.resolutionName = amiga_memview_resolutionNameForBplres(line0->bplres);
-            autoState.usedFallback = 0;
             autoCount = amiga_memview_appendAutoIfUnique(outAutos, autoCount, maxAutos, &autoState);
 
             y += h;
@@ -1156,9 +1107,6 @@ amiga_memview_collectAuto(amiga_memview_auto_t *outAutos, int maxAutos)
     amiga_memview_auto_t fallback = {
         .baseAddr = 0u,
         .rowBytes = AMIGA_MEMVIEW_DEFAULT_ROW_BYTES,
-        .planeIndex = -1,
-        .resolutionName = "LORES",
-        .usedFallback = 1,
     };
     int autoCount = 0;
 
@@ -1205,7 +1153,6 @@ amiga_memview_applyAuto(amiga_memview_state_t *ui, int resetScroll)
 {
     amiga_memview_auto_t autos[AMIGA_MEMVIEW_AUTO_CANDIDATE_MAX];
     amiga_memview_auto_t *autoState = NULL;
-    int autoCount = 0;
     int autoIndex = 0;
     int refreshList = 0;
 
@@ -1222,6 +1169,8 @@ amiga_memview_applyAuto(amiga_memview_state_t *ui, int resetScroll)
         }
     }
     if (refreshList) {
+        int autoCount = 0;
+
         autoCount = amiga_memview_collectAuto(autos, AMIGA_MEMVIEW_AUTO_CANDIDATE_MAX);
         if (autoCount <= 0) {
             return;
@@ -1229,18 +1178,10 @@ amiga_memview_applyAuto(amiga_memview_state_t *ui, int resetScroll)
         memcpy(ui->autoCandidates, autos, sizeof(amiga_memview_auto_t) * (size_t)autoCount);
         ui->autoCandidateCount = autoCount;
         autoIndex = 0;
-    } else {
-        autoCount = ui->autoCandidateCount;
     }
     ui->autoCandidateIndex = autoIndex;
     autoState = &ui->autoCandidates[autoIndex];
     amiga_memview_setView(ui, autoState->baseAddr, autoState->rowBytes, resetScroll);
-}
-
-static void
-amiga_memview_applyCurrentView(amiga_memview_state_t *ui, uint32_t baseAddr, uint32_t rowBytes, int resetScroll)
-{
-    amiga_memview_setView(ui, baseAddr, rowBytes, resetScroll);
 }
 
 static int
@@ -1320,7 +1261,7 @@ amiga_memview_submitFromTextboxes(amiga_memview_state_t *ui)
     if (!amiga_memview_parseWidthTextbox(ui, &rowBytes)) {
         return;
     }
-    amiga_memview_applyCurrentView(ui, baseAddr, rowBytes, 1);
+    amiga_memview_setView(ui, baseAddr, rowBytes, 1);
 }
 
 static void
@@ -1350,7 +1291,7 @@ amiga_memview_onWidthSeekChanged(float percent, void *user)
     if (rowBytes == ui->rowBytes) {
         return;
     }
-    amiga_memview_applyCurrentView(ui, ui->baseAddr, rowBytes, 1);
+    amiga_memview_setView(ui, ui->baseAddr, rowBytes, 1);
 }
 
 static void
@@ -1931,9 +1872,7 @@ amiga_memview_scrollRows(amiga_memview_state_t *ui, const e9ui_rect_t *bounds, i
         }
     }
 
-    if (clamped == 0u && currentRange < 0) {
-        clamped = amiga_memview_clampBaseForView(ui, bounds, (uint32_t)rawBase);
-    } else if (clamped == 0u && currentRange >= 0) {
+    if (clamped == 0u) {
         clamped = amiga_memview_clampBaseForView(ui, bounds, (uint32_t)rawBase);
     }
 
@@ -2373,170 +2312,6 @@ amiga_memview_appendOverviewRange(amiga_memview_overview_range_t *ranges, int *c
     (*count)++;
 }
 
-static int
-amiga_memview_parseOverviewSizeOptionBytes(const char *key, uint32_t unitBytes, uint32_t *outSizeBytes)
-{
-    const char *value = NULL;
-    unsigned long long parsed = 0u;
-    char *end = NULL;
-
-    if (outSizeBytes) {
-        *outSizeBytes = 0u;
-    }
-    if (!key || !outSizeBytes || unitBytes == 0u) {
-        return 0;
-    }
-
-    value = amiga_uaeGetPuaeOptionValue(key);
-    if (!value || !*value || strcmp(value, "auto") == 0) {
-        return 0;
-    }
-    if (!amiga_memview_parseU64SmartHex(value, &parsed, &end) || !end || *end != '\0') {
-        return 0;
-    }
-    if (parsed == 0u) {
-        *outSizeBytes = 0u;
-        return 1;
-    }
-    if (parsed > (0xffffffffull / (unsigned long long)unitBytes)) {
-        return 0;
-    }
-    *outSizeBytes = (uint32_t)parsed * unitBytes;
-    return 1;
-}
-
-static int
-amiga_memview_modelPresetRamSizes(const char *model, uint32_t *outChipUnits, uint32_t *outBogoUnits, uint32_t *outFastUnits)
-{
-    uint32_t chipUnits = 0u;
-    uint32_t bogoUnits = 0u;
-    uint32_t fastUnits = 0u;
-
-    if (outChipUnits) {
-        *outChipUnits = 0u;
-    }
-    if (outBogoUnits) {
-        *outBogoUnits = 0u;
-    }
-    if (outFastUnits) {
-        *outFastUnits = 0u;
-    }
-    if (!model || !*model) {
-        return 0;
-    }
-
-    if (strcmp(model, "A500") == 0 || strcmp(model, "A2000OG") == 0) {
-        chipUnits = 1u;
-        bogoUnits = 2u;
-        fastUnits = 0u;
-    } else if (strcmp(model, "A500OG") == 0) {
-        chipUnits = 1u;
-        bogoUnits = 0u;
-        fastUnits = 0u;
-    } else if (strcmp(model, "A500PLUS") == 0 || strcmp(model, "A2000") == 0 || strcmp(model, "CDTV") == 0) {
-        chipUnits = 2u;
-        bogoUnits = 0u;
-        fastUnits = 0u;
-    } else if (strcmp(model, "A600") == 0 || strcmp(model, "A1200") == 0 ||
-               strcmp(model, "A4030") == 0 || strcmp(model, "A4040") == 0 ||
-               strcmp(model, "CD32FR") == 0) {
-        chipUnits = 4u;
-        bogoUnits = 0u;
-        fastUnits = 8u;
-    } else if (strcmp(model, "A1200OG") == 0 || strcmp(model, "CD32") == 0) {
-        chipUnits = 4u;
-        bogoUnits = 0u;
-        fastUnits = 0u;
-    } else {
-        return 0;
-    }
-
-    if (outChipUnits) {
-        *outChipUnits = chipUnits;
-    }
-    if (outBogoUnits) {
-        *outBogoUnits = bogoUnits;
-    }
-    if (outFastUnits) {
-        *outFastUnits = fastUnits;
-    }
-    return 1;
-}
-
-static const char *
-amiga_memview_effectiveModelOptionValue(void)
-{
-    const char *model = amiga_uaeGetPuaeOptionValue("puae_model");
-    const char *hdFolder = amiga_uaeGetHardDriveFolderPath();
-    const char *hdHdf = amiga_uaeGetHardDriveHdfPath();
-
-    if (model && *model && strcmp(model, "auto") != 0) {
-        return model;
-    }
-
-    if ((hdFolder && *hdFolder) || (hdHdf && *hdHdf)) {
-        const char *hdModel = amiga_uaeGetPuaeOptionValue("puae_model_hd");
-
-        if (hdModel && *hdModel) {
-            return hdModel;
-        }
-    }
-
-    {
-        const char *fdModel = amiga_uaeGetPuaeOptionValue("puae_model_fd");
-
-        if (fdModel && *fdModel) {
-            return fdModel;
-        }
-    }
-
-    return "A500";
-}
-
-static int
-amiga_memview_collectConfiguredOverviewRanges(amiga_memview_overview_range_t *ranges)
-{
-    uint32_t chipBytes = 0u;
-    uint32_t bogoBytes = 0u;
-    uint32_t fastBytes = 0u;
-    uint32_t chipUnits = 0u;
-    uint32_t bogoUnits = 0u;
-    uint32_t fastUnits = 0u;
-    int count = 0;
-    int foundAny = 0;
-
-    if (!ranges) {
-        return 0;
-    }
-
-    if (amiga_memview_parseOverviewSizeOptionBytes("puae_chipmem_size", 0x00080000u, &chipBytes)) {
-        amiga_memview_appendOverviewRange(ranges, &count, 0x000000u, chipBytes);
-        foundAny = 1;
-    }
-    if (amiga_memview_parseOverviewSizeOptionBytes("puae_bogomem_size", 0x00040000u, &bogoBytes)) {
-        amiga_memview_appendOverviewRange(ranges, &count, AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_BASE, bogoBytes);
-        foundAny = 1;
-    }
-    if (amiga_memview_parseOverviewSizeOptionBytes("puae_fastmem_size", 0x00100000u, &fastBytes)) {
-        amiga_memview_appendOverviewRange(ranges, &count, AMIGA_MEMVIEW_OVERVIEW_FAST_RANGE_BASE, fastBytes);
-        foundAny = 1;
-    }
-
-    if (!foundAny) {
-        if (amiga_memview_modelPresetRamSizes(amiga_memview_effectiveModelOptionValue(),
-                                              &chipUnits,
-                                              &bogoUnits,
-                                              &fastUnits)) {
-            amiga_memview_appendOverviewRange(ranges, &count, 0x000000u, chipUnits * 0x00080000u);
-            amiga_memview_appendOverviewRange(ranges, &count, AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_BASE, bogoUnits * 0x00040000u);
-            amiga_memview_appendOverviewRange(ranges, &count, AMIGA_MEMVIEW_OVERVIEW_FAST_RANGE_BASE, fastUnits * 0x00100000u);
-            foundAny = (count > 0) ? 1 : 0;
-        }
-    }
-
-    return foundAny ? count : 0;
-}
-
 static void
 amiga_memview_sortOverviewRanges(amiga_memview_overview_range_t *ranges, int count)
 {
@@ -2577,9 +2352,7 @@ amiga_memview_initDefaultOverviewRanges(amiga_memview_state_t *ui)
     memset(ui->overviewRanges, 0, sizeof(ui->overviewRanges));
     memset(targetRanges, 0, sizeof(targetRanges));
 
-    write = amiga_memview_collectConfiguredOverviewRanges(ui->overviewRanges);
-
-    if (write == 0 && target && target->memoryTrackGetRanges) {
+    if (target && target->memoryTrackGetRanges) {
         if (target->memoryTrackGetRanges(targetRanges, AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES, &targetCount)) {
             if (targetCount > AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES) {
                 targetCount = AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES;
@@ -2590,19 +2363,12 @@ amiga_memview_initDefaultOverviewRanges(amiga_memview_state_t *ui)
                 if (sizeBytes == 0u) {
                     continue;
                 }
-                ui->overviewRanges[write].baseAddr = targetRanges[i].baseAddr & 0x00ffffffu;
-                ui->overviewRanges[write].sizeBytes = sizeBytes;
-                ++write;
+                amiga_memview_appendOverviewRange(ui->overviewRanges,
+                                                  &write,
+                                                  targetRanges[i].baseAddr,
+                                                  sizeBytes);
             }
         }
-    }
-
-    if (write == 0) {
-        ui->overviewRanges[0].baseAddr = AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE0_BASE;
-        ui->overviewRanges[0].sizeBytes = AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE0_SIZE;
-        ui->overviewRanges[1].baseAddr = AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_BASE;
-        ui->overviewRanges[1].sizeBytes = AMIGA_MEMVIEW_OVERVIEW_DEFAULT_RANGE1_SIZE;
-        write = 2;
     }
 
     amiga_memview_sortOverviewRanges(ui->overviewRanges, write);
@@ -2989,10 +2755,10 @@ amiga_memview_overviewNavigate(amiga_memview_state_t *ui, e9ui_component_t *self
             if (addr > 0x00ffffffu) {
                 addr = 0x00ffffffu;
             }
-            amiga_memview_applyCurrentView(ui,
-                                           amiga_memview_clampBaseForView(ui, &self->bounds, (uint32_t)addr),
-                                           ui->rowBytes,
-                                           0);
+            amiga_memview_setView(ui,
+                                  amiga_memview_clampBaseForView(ui, &self->bounds, (uint32_t)addr),
+                                  ui->rowBytes,
+                                  0);
             return 1;
         }
         activeRange++;
@@ -3654,8 +3420,6 @@ amiga_memview_clearUiRefs(amiga_memview_state_t *ui)
     ui->widthBox = NULL;
     ui->widthSeek = NULL;
     ui->zoomSeek = NULL;
-    ui->showAddressCheckbox = NULL;
-    ui->showOverviewCheckbox = NULL;
 }
 
 static int
@@ -3746,36 +3510,6 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     ui->widthSeek = e9ui_seek_bar_make();
     ui->zoomSeek = e9ui_seek_bar_make();
     ui->canvas = amiga_memview_makeCanvas(ui);
-    if (!root || !toolbar || !ui->addressBox || !ui->widthBox || !ui->widthSeek || !ui->zoomSeek || !ui->canvas) {
-        if (root) {
-            e9ui_childDestroy(root, &ui->ctx);
-        } else {
-            if (toolbar) {
-                e9ui_childDestroy(toolbar, &ui->ctx);
-            }
-            if (ui->addressBox) {
-                e9ui_childDestroy(ui->addressBox, &ui->ctx);
-                ui->addressBox = NULL;
-            }
-            if (ui->widthBox) {
-                e9ui_childDestroy(ui->widthBox, &ui->ctx);
-                ui->widthBox = NULL;
-            }
-            if (ui->widthSeek) {
-                e9ui_childDestroy(ui->widthSeek, &ui->ctx);
-                ui->widthSeek = NULL;
-            }
-            if (ui->zoomSeek) {
-                e9ui_childDestroy(ui->zoomSeek, &ui->ctx);
-                ui->zoomSeek = NULL;
-            }
-            if (ui->canvas) {
-                e9ui_childDestroy(ui->canvas, &ui->ctx);
-            }
-        }
-        amiga_memview_clearUiRefs(ui);
-        return NULL;
-    }
 
     addressLabel = e9ui_text_make("Address");
     widthLabel = e9ui_text_make("Width");
@@ -3785,30 +3519,24 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     ui->autoButton = autoButton;
     showAddress = e9ui_checkbox_make("Addr", ui->showAddressColumn, amiga_memview_onShowAddressColumnChanged, ui);
     showOverview = e9ui_checkbox_make("Overview", ui->showOverviewColumn, amiga_memview_onShowOverviewColumnChanged, ui);
-    ui->showAddressCheckbox = showAddress;
-    ui->showOverviewCheckbox = showOverview;
-    if (!addressLabel || !widthLabel || !zoomLabel || !autoButton || !showAddress || !showOverview) {
-        goto failRoot;
-    }
 
     e9ui_textbox_setPlaceholder(ui->addressBox, "0x000000");
     e9ui_textbox_setPlaceholder(ui->widthBox, "20");
     e9ui_textbox_setFocusBorderVisible(ui->addressBox, 0);
     e9ui_textbox_setFocusBorderVisible(ui->widthBox, 0);
-    if (!amiga_memview_initSeekBar(ui->widthSeek,
+    amiga_memview_initSeekBar(ui->widthSeek,
                                    amiga_memview_widthSeekHandleEvent,
                                    amiga_memview_onWidthSeekChanged,
                                    amiga_memview_widthSeekTooltip,
                                    ui,
-                                   &ui->widthSeekDefaultHandleEvent) ||
-        !amiga_memview_initSeekBar(ui->zoomSeek,
+			           &ui->widthSeekDefaultHandleEvent);
+    amiga_memview_initSeekBar(ui->zoomSeek,
                                    amiga_memview_zoomSeekHandleEvent,
                                    amiga_memview_onZoomSeekChanged,
                                    amiga_memview_zoomSeekTooltip,
                                    ui,
-                                   &ui->zoomSeekDefaultHandleEvent)) {
-        goto failRoot;
-    }
+			           &ui->zoomSeekDefaultHandleEvent);
+
     e9ui_button_setMini(autoButton, 1);
     e9ui_button_setLargestLabel(autoButton, "Auto (64/64)");
     amiga_memview_syncAutoButtonLabel(ui);
@@ -3828,13 +3556,10 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     zoomSeekW = e9ui_scale_px(&ui->ctx, 180);
 
     groupGeneral = e9ui_hstack_make();
-    groupLegend = legend ? e9ui_hstack_make() : NULL;
+    groupLegend =  e9ui_hstack_make();
     groupAddress = e9ui_hstack_make();
     groupWidth = e9ui_hstack_make();
     groupZoom = e9ui_hstack_make();
-    if (!groupGeneral || (legend && !groupLegend) || !groupAddress || !groupWidth || !groupZoom) {
-        goto failRoot;
-    }
 
     e9ui_hstack_addFixed(groupGeneral, autoButton, autoButtonW);
     e9ui_hstack_addFixed(groupGeneral, e9ui_spacer_make(gapSmall), gapSmall);
@@ -3872,37 +3597,14 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     groupAddressItem = amiga_memview_makeToolbarItem(groupAddress, groupAddressW);
     groupWidthItem = amiga_memview_makeToolbarItem(groupWidth, groupWidthW);
     groupZoomItem = amiga_memview_makeToolbarItem(groupZoom, groupZoomW);
-    if (!groupGeneralItem || (legend && groupLegendW > 0 && !groupLegendItem) || !groupAddressItem || !groupWidthItem || !groupZoomItem) {
-        if (groupGeneralItem) {
-            e9ui_childDestroy(groupGeneralItem, &ui->ctx);
-        }
-        if (groupLegendItem) {
-            e9ui_childDestroy(groupLegendItem, &ui->ctx);
-        }
-        if (groupAddressItem) {
-            e9ui_childDestroy(groupAddressItem, &ui->ctx);
-        }
-        if (groupWidthItem) {
-            e9ui_childDestroy(groupWidthItem, &ui->ctx);
-        }
-        if (groupZoomItem) {
-            e9ui_childDestroy(groupZoomItem, &ui->ctx);
-        }
-        goto failRoot;
-    }
 
     e9ui_child_add(toolbar, groupGeneralItem, NULL);
     e9ui_child_add(toolbar, groupAddressItem, NULL);
     e9ui_child_add(toolbar, groupWidthItem, NULL);
     e9ui_child_add(toolbar, groupZoomItem, NULL);
-    if (groupLegendItem) {
-        e9ui_child_add(toolbar, groupLegendItem, NULL);
-    }
+    e9ui_child_add(toolbar, groupLegendItem, NULL);
 
     toolbarBox = e9ui_box_make(toolbar);
-    if (!toolbarBox) {
-        goto failRoot;
-    }
 
     e9ui_box_setPadding(toolbarBox, 8);
     e9ui_box_setBorder(toolbarBox, E9UI_BORDER_BOTTOM, (SDL_Color){ 70, 70, 70, 255 }, 1);
@@ -3911,13 +3613,6 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     e9ui_stack_addFlex(root, ui->canvas);
 
     return root;
-
-failRoot:
-    ui->widthSeekDefaultHandleEvent = NULL;
-    ui->zoomSeekDefaultHandleEvent = NULL;
-    e9ui_childDestroy(root, &ui->ctx);
-    amiga_memview_clearUiRefs(ui);
-    return NULL;
 }
 
 static int
@@ -3972,7 +3667,7 @@ amiga_memview_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 
     state = (amiga_memview_overlay_body_state_t*)self->state;
     ui = state ? state->ui : NULL;
-    if (!ui || !ui->open) {
+    if (!ui || !ui->windowState.open) {
         return;
     }
 
@@ -4126,9 +3821,7 @@ amiga_memview_init(void)
     amiga_memview_state_t *ui = &amiga_memview_stateSingleton;
     e9ui_component_t *overlayBodyHost = NULL;
     e9ui_rect_t rect;
-    int hasSavedSize = 0;
-
-    if (ui->open) {
+    if (ui->windowState.open) {
         return 1;
     }
 
@@ -4136,8 +3829,8 @@ amiga_memview_init(void)
     ui->ctx = e9ui->ctx;
     amiga_memview_initDefaultOverviewRanges(ui);
 
-    ui->windowHost = e9ui_windowCreate(amiga_memview_windowBackend());
-    if (!ui->windowHost) {
+    ui->windowState.windowHost = e9ui_windowCreate(amiga_memview_windowBackend());
+    if (!ui->windowState.windowHost) {
         return 0;
     }
 
@@ -4159,52 +3852,37 @@ amiga_memview_init(void)
 
     ui->root = amiga_memview_buildRoot(ui);
     if (!ui->root) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
         return 0;
     }
 
-    hasSavedSize = (ui->winHasSaved && ui->winW > 0 && ui->winH > 0) ? 1 : 0;
-    rect = e9ui_windowResolveOpenRect(&e9ui->ctx,
-                                      amiga_memview_windowDefaultRect(&e9ui->ctx),
-                                      hasSavedSize ? 0 : 640,
-                                      hasSavedSize ? 0 : 360,
-                                      1,
-                                      ui->winHasSaved ? 1 : 0,
-                                      hasSavedSize,
-                                      ui->winX,
-                                      ui->winY,
-                                      ui->winW,
-                                      ui->winH);
+    rect = e9ui_windowResolveStateOpenRect(&e9ui->ctx,
+                                           amiga_memview_windowDefaultRect(&e9ui->ctx),
+                                           &ui->windowState);
 
     overlayBodyHost = amiga_memview_makeOverlayBodyHost(ui);
     if (!overlayBodyHost) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
         ui->root = NULL;
         return 0;
     }
 
-    if (!e9ui_windowOpen(ui->windowHost,
+    e9ui_windowOpen(ui->windowState.windowHost,
                          AMIGA_MEMVIEW_TITLE,
                          rect,
                          overlayBodyHost,
                          amiga_memview_overlayWindowCloseRequested,
                          ui,
-                         &e9ui->ctx)) {
-        e9ui_childDestroy(overlayBodyHost, &e9ui->ctx);
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
-        ui->root = NULL;
-        return 0;
-    }
+		         &e9ui->ctx);
 
     ui->ctx = e9ui->ctx;
-    ui->open = 1;
+    ui->windowState.open = 1;
     aux_window_register(&amiga_memview_auxWindowOps, ui);
 
     if (ui->baseAddrHasSaved && ui->rowBytesHasSaved) {
-        amiga_memview_applyCurrentView(ui, ui->baseAddr, ui->rowBytes, 1);
+        amiga_memview_setView(ui, ui->baseAddr, ui->rowBytes, 1);
     } else {
         amiga_memview_applyAuto(ui, 1);
     }
@@ -4216,27 +3894,21 @@ amiga_memview_shutdown(void)
 {
     amiga_memview_state_t *ui = &amiga_memview_stateSingleton;
 
-    if (!ui->open) {
+    if (!ui->windowState.open) {
         return;
     }
 
     aux_window_unregister(&amiga_memview_auxWindowOps, ui);
-    (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                         (e9ui ? &e9ui->ctx : &ui->ctx),
-                                         &ui->winHasSaved,
-                                         &ui->winX,
-                                         &ui->winY,
-                                         &ui->winW,
-                                         &ui->winH);
+    (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
     config_saveConfig();
 
-    if (ui->windowHost) {
-        e9ui_windowDestroy(ui->windowHost);
-        ui->windowHost = NULL;
+    if (ui->windowState.windowHost) {
+        e9ui_windowDestroy(ui->windowState.windowHost);
+        ui->windowState.windowHost = NULL;
     }
 
     amiga_memview_releaseRuntimeState(ui);
-    ui->open = 0;
+    ui->windowState.open = 0;
     memset(&ui->ctx, 0, sizeof(ui->ctx));
 }
 
@@ -4253,7 +3925,7 @@ amiga_memview_toggle(void)
 int
 amiga_memview_isOpen(void)
 {
-    return amiga_memview_stateSingleton.open ? 1 : 0;
+    return amiga_memview_stateSingleton.windowState.open ? 1 : 0;
 }
 
 void
@@ -4267,16 +3939,10 @@ amiga_memview_render(void)
 {
     amiga_memview_state_t *ui = &amiga_memview_stateSingleton;
 
-    if (!ui->open) {
+    if (!ui->windowState.open) {
         return;
     }
-    if (e9ui_windowCaptureRectChanged(ui->windowHost,
-                                      (e9ui ? &e9ui->ctx : &ui->ctx),
-                                      &ui->winHasSaved,
-                                      &ui->winX,
-                                      &ui->winY,
-                                      &ui->winW,
-                                      &ui->winH)) {
+    if (e9ui_windowCaptureStateRectChanged(&ui->windowState, &e9ui->ctx)) {
         config_saveConfig();
     }
 }
@@ -4289,21 +3955,7 @@ amiga_memview_persistConfig(FILE *file)
     if (!file) {
         return;
     }
-    if (ui->open) {
-        (void)e9ui_windowCaptureRectSnapshot(ui->windowHost,
-                                             (e9ui ? &e9ui->ctx : &ui->ctx),
-                                             &ui->winHasSaved,
-                                             &ui->winX,
-                                             &ui->winY,
-                                             &ui->winW,
-                                             &ui->winH);
-    }
-    if (ui->winHasSaved) {
-        fprintf(file, "comp.amiga_memview.win_x=%d\n", ui->winX);
-        fprintf(file, "comp.amiga_memview.win_y=%d\n", ui->winY);
-        fprintf(file, "comp.amiga_memview.win_w=%d\n", ui->winW);
-        fprintf(file, "comp.amiga_memview.win_h=%d\n", ui->winH);
-    }
+    e9ui_windowPersistStateRect(file, "comp.amiga_memview", &ui->windowState, &e9ui->ctx);
     if (ui->rowBytesHasSaved) {
         fprintf(file, "comp.amiga_memview.row_bytes=%u\n", (unsigned)ui->rowBytes);
     }
@@ -4334,30 +3986,36 @@ amiga_memview_loadConfigProperty(const char *prop, const char *value)
         if (!amiga_memview_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winX = intValue;
+        ui->windowState.winX = intValue;
+        ui->windowState.winHasSaved =
+            e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
         return 1;
     }
     if (strcmp(prop, "win_y") == 0) {
         if (!amiga_memview_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winY = intValue;
+        ui->windowState.winY = intValue;
+        ui->windowState.winHasSaved =
+            e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
         return 1;
     }
     if (strcmp(prop, "win_w") == 0) {
         if (!amiga_memview_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winW = intValue;
-        ui->winHasSaved = 1;
+        ui->windowState.winW = intValue;
+        ui->windowState.winHasSaved =
+            e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
         return 1;
     }
     if (strcmp(prop, "win_h") == 0) {
         if (!amiga_memview_parseInt(value, &intValue)) {
             return 0;
         }
-        ui->winH = intValue;
-        ui->winHasSaved = 1;
+        ui->windowState.winH = intValue;
+        ui->windowState.winHasSaved =
+            e9ui_windowHasSavedPosition(ui->windowState.winX, ui->windowState.winY);
         return 1;
     }
     if (strcmp(prop, "base_addr") == 0) {

@@ -434,17 +434,10 @@ help_makeRow(const char *key, const char *value, int keyW, int gap, SDL_Color ke
 static void
 help_add(e9ui_component_t *stack, e9ui_component_t *item, e9ui_context_t *ctx, int colW, int *totalH)
 {
-    if (!item) {
-        return;
+    e9ui_stack_addFixed(stack, item);
+    if (item->preferredHeight) {
+        *totalH += item->preferredHeight(item, ctx, colW);
     }
-    if (stack) {
-        e9ui_stack_addFixed(stack, item);
-        if (item->preferredHeight) {
-            *totalH += item->preferredHeight(item, ctx, colW);
-        }
-        return;
-    }
-    e9ui_childDestroy(item, ctx);
 }
 
 static void
@@ -853,14 +846,10 @@ help_showModal(e9ui_context_t *ctx)
 
     int contentH = contentHLeft > contentHRight ? contentHLeft : contentHRight;
     e9ui_component_t *columns = e9ui_hstack_make();
-    if (columns) {
-        e9ui_hstack_addFixed(columns, stackLeft, colW);
-        e9ui_hstack_addFixed(columns, e9ui_spacer_make(columnGap), columnGap);
-        e9ui_hstack_addFixed(columns, stackRight, colW);
-    } else {
-        e9ui_childDestroy(stackRight, ctx);
-        stackRight = NULL;
-    }
+    e9ui_hstack_addFixed(columns, stackLeft, colW);
+    e9ui_hstack_addFixed(columns, e9ui_spacer_make(columnGap), columnGap);
+    e9ui_hstack_addFixed(columns, stackRight, colW);
+
     int contentW = colW * 2 + columnGap;
     e9ui_component_t *scroll = e9ui_scroll_make(columns ? columns : stackLeft);
     e9ui_scroll_setContentHeightPx(scroll, contentH);

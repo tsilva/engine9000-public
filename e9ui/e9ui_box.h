@@ -8,8 +8,10 @@
 
 #pragma once
 
-#include "e9ui_component.h"
 #include <SDL.h>
+
+#include "e9ui_component.h"
+
 
 typedef enum {
     e9ui_dim_grow = 0,

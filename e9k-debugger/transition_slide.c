@@ -7,10 +7,9 @@
  */
 
 #include <SDL.h>
-#include "transition.h"
 
+#include "transition.h"
 #include "alloc.h"
-#include "debugger.h"
 
 typedef struct transition_slide_item {
     e9ui_component_t *comp;

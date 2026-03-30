@@ -7,6 +7,7 @@
  */
 
 #include <errno.h>
+
 #include "console_cmd.h"
 #include "debugger.h"
 #include "config.h"

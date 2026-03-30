@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "e9k-lib.h"
 #include <stdint.h>
+
+#include "e9k-lib.h"
 
 void
 protect_clear(void);

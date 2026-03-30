@@ -9,8 +9,8 @@
 #include <SDL.h>
 #include <SDL_version.h>
 #include <math.h>
+
 #include "transition.h"
-#include "debugger.h"
 
 typedef struct transition_rbar_point {
     float x;

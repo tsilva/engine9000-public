@@ -12,7 +12,6 @@
 #include "rom_config.h"
 #include "debugger_input_bindings.h"
 #include "megadrive_core_options.h"
-#include "debugger_platform.h"
 #include "core_options.h"
 #include "libretro_host.h"
 #include "system_badge.h"

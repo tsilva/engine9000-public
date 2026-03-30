@@ -15,7 +15,6 @@
 #include <string.h>
 
 #include "print_debuginfo_readelf_frames.h"
-
 #include "alloc.h"
 #include "debugger.h"
 

@@ -14,14 +14,10 @@
 #include <stdint.h>
 
 #include "libretro.h"
-
 #include "e9k-geo.h"
 #include "e9k-mega.h"
 #include "e9k-lib.h"
 
-#ifndef E9K_HACK_AMI_SPRITE_VIS
-#define E9K_HACK_AMI_SPRITE_VIS 0
-#endif
 
 #define LIBRETRO_HOST_MAX_PORTS 4
 
@@ -246,7 +242,6 @@ libretro_host_debugAmiReadBlitterVisStats(e9k_debug_ami_blitter_vis_stats_t *out
 size_t
 libretro_host_debugAmiReadBlitterVisWordTags(uint32_t addr, uint32_t *out, size_t cap);
 
-#if E9K_HACK_AMI_SPRITE_VIS
 bool
 libretro_host_debugAmiSetSpriteVis(int enabled);
 
@@ -255,7 +250,6 @@ libretro_host_debugAmiGetSpriteVis(int *out_enabled);
 
 size_t
 libretro_host_debugAmiReadSpriteVisPoints(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
-#endif
 
 const e9k_debug_ami_dma_debug_frame_view_t *
 libretro_host_debugAmiGetDmaDebugFrameView(uint32_t frameSelect);

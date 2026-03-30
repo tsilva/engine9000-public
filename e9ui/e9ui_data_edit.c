@@ -7,9 +7,11 @@
  */
 
 #include "e9ui.h"
-#include "e9ui_data_edit.h"
+
 #include <ctype.h>
 #include <string.h>
+
+#include "e9ui_data_edit.h"
 
 typedef struct e9ui_data_edit_state {
     char *text;

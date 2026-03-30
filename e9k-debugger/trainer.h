@@ -9,6 +9,7 @@
 #pragma once
 
 #include "e9ui_component.h"
+
 typedef struct trainer_list_state trainer_list_state_t;
 
 e9ui_component_t *

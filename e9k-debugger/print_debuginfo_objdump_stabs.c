@@ -15,12 +15,25 @@
 #include <string.h>
 
 #include "print_debuginfo_objdump_stabs.h"
-
 #include "alloc.h"
 #include "debug.h"
 #include "debugger.h"
 #include "base_map.h"
-#include "machine.h"
+
+#define PRINT_DEBINFO_STABS_TYPE_BASE 0x80000000u
+
+typedef struct print_debuginfo_objdump_stabs_type_def {
+    uint32_t alias;
+    uint32_t bits;
+    char *def;
+    char *name;
+} print_debuginfo_objdump_stabs_type_def_t;
+
+static int
+print_debuginfo_objdump_stabs_parseStabStringName(const char *stabStr, char *outName, size_t cap);
+
+static void
+print_debuginfo_objdump_stabs_typeEnsure(print_debuginfo_objdump_stabs_type_def_t **defs, size_t *cap, uint32_t id);
 
 static char *
 print_debuginfo_objdump_stabs_strdup(const char *s)
@@ -76,20 +89,6 @@ print_debuginfo_objdump_stabs_preferData(void)
     return 1;
 }
 
-typedef struct print_debuginfo_objdump_stabs_type_def {
-    uint32_t alias;
-    uint32_t bits;
-    char *def;
-    char *name;
-} print_debuginfo_objdump_stabs_type_def_t;
-
-#define PRINT_DEBINFO_STABS_TYPE_BASE 0x80000000u
-
-static int
-print_debuginfo_objdump_stabs_parseStabStringName(const char *stabStr, char *outName, size_t cap);
-
-static void
-print_debuginfo_objdump_stabs_typeEnsure(print_debuginfo_objdump_stabs_type_def_t **defs, size_t *cap, uint32_t id);
 
 static int
 print_debuginfo_objdump_stabs_parseTypeId(const char *p, const char **outEnd, uint32_t *outTypeId)
