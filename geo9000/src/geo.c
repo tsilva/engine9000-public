@@ -694,6 +694,11 @@ void geo_exec(void) {
         ymsamps = 0;
         // Reset YM output buffer write position; geo_mixer_output() won't be called.
         (void)geo_ymfm_get_buffer();
+#ifdef E9K_HACK_REGISTER_LOG
+        if (e9k_debugger_isRegisterLogEnabled()) {
+            e9k_debugger_commitRegisterLogFrame();
+        }
+#endif
         return;
     }
 
@@ -703,4 +708,9 @@ void geo_exec(void) {
 
     // Increment the Watchdog counter at the end of each frame
     geo_watchdog_increment();
+#ifdef E9K_HACK_REGISTER_LOG
+    if (e9k_debugger_isRegisterLogEnabled()) {
+        e9k_debugger_commitRegisterLogFrame();
+    }
+#endif
 }

@@ -1,5 +1,5 @@
-NEOGEO_TESTS=test-neogeosavestate test-neogeostepping test-neogeosprite test-neogeotracker
-NEOGEO_REMAKE=remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeosprite remake-test-neogeotracker
+NEOGEO_TESTS=test-neogeosavestate test-neogeostepping test-neogeosprite test-neogeotracker test-neogeolog
+NEOGEO_REMAKE=remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeosprite remake-test-neogeotracker remake-test-neogeolog
 
 # makers
 
@@ -8,6 +8,9 @@ make-test-neogeosavestate: all
 
 make-test-neogeosprite: all 
 	./e9k-debugger --neogeo --rom=./tests/neogeo/basic/basic.neo --make-test tests/results/neogeo/sprite
+
+make-test-neogeolog: all 
+	./e9k-debugger --neogeo --rom=./tests/neogeo/basic/basic.neo --make-test tests/results/neogeo/log
 
 make-test-neogeotracker: all 
 	./e9k-debugger --neogeo --rom=./tests/neogeo/basic/basic.neo --make-test tests/results/neogeo/tracker
@@ -25,6 +28,10 @@ remake-test-neogeosavestate: all
 remake-test-neogeosprite: all 
 	@printf "NEO GEO SPRITE DEBUG ($@) ..."
 	./e9k-debugger --neogeo --volume=0 --rom=./tests/neogeo/basic/basic.neo --remake-test tests/results/neogeo/sprite
+
+remake-test-neogeolog: all 
+	@printf "NEO GEO LOG ($@) ..."
+	./e9k-debugger --neogeo --volume=0 --rom=./tests/neogeo/basic/basic.neo --remake-test tests/results/neogeo/log
 
 remake-test-neogeotracker: all 
 	@printf "NEO GEO MEMORY TRACKER ($@) ..."
@@ -46,6 +53,11 @@ test-neogeosavestate: all
 test-neogeosprite: all
 	@printf "NEO GEO SPRITE DEBUG ($@) ..." 
 	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/sprite >> test.log 2>&1
+	@echo "PASSED ✅"
+
+test-neogeolog: all
+	@printf "NEO GEO LOG ($@) ..." 
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/log >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeotracker: all

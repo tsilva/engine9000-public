@@ -533,11 +533,7 @@ emu_mega_createOverlays(e9ui_component_t *comp, e9ui_component_t *button_stack)
         e9ui_button_setMini(btn, 1);
         e9ui_setFocusTarget(btn, comp);
         void *histogramBtnMeta = alloc_strdup("histogram");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btn, histogramBtnMeta);
-        } else {
-            e9ui_child_add(comp, btn, histogramBtnMeta);
-        }
+        e9ui_child_add(button_stack, btn, histogramBtnMeta);
     }
 
     e9ui_component_t *btnDebug = e9ui_button_make("Sprite Debug", emu_mega_toggleSpriteDebug, comp);
@@ -545,11 +541,7 @@ emu_mega_createOverlays(e9ui_component_t *comp, e9ui_component_t *button_stack)
         e9ui_button_setMini(btnDebug, 1);
         e9ui_setFocusTarget(btnDebug, comp);
         void *spriteDebugBtnMeta = alloc_strdup("mega_sprite_debug");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnDebug, spriteDebugBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnDebug, spriteDebugBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnDebug, spriteDebugBtnMeta);
     }
 }
 

@@ -94,6 +94,7 @@ typedef int (*e9k_debug_get_checkpoint_enabled_fn_t)(void);
 typedef uint64_t (*e9k_debug_read_cycle_count_fn_t)(void);
 typedef void (*e9k_debug_set_vblank_callback_fn_t)(void (*cb)(void *), void *user);
 typedef void (*e9k_debug_set_custom_log_frame_callback_fn_t)(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
+typedef void (*e9k_debug_set_neogeo_register_log_frame_callback_fn_t)(e9k_debug_geo_register_log_frame_callback_t cb, void *user);
 typedef int *(*e9k_debug_amiga_get_debug_dma_addr_fn_t)(void);
 typedef int *(*e9k_debug_amiga_get_debug_copper_addr_fn_t)(void);
 typedef const e9k_debug_ami_custom_reg_state_t *(*e9k_debug_ami_get_custom_regs_fn_t)(void);
@@ -246,6 +247,7 @@ typedef struct  {
     e9k_debug_read_cycle_count_fn_t debugReadCycleCount;
     e9k_debug_set_vblank_callback_fn_t setVblankCallback;
     e9k_debug_set_custom_log_frame_callback_fn_t setCustomLogFrameCallback;
+    e9k_debug_set_neogeo_register_log_frame_callback_fn_t setNeogeoRegisterLogFrameCallback;
     e9k_debug_amiga_get_debug_dma_addr_fn_t debugAmigaGetDebugDmaAddr;
     e9k_debug_amiga_get_debug_copper_addr_fn_t debugAmigaGetDebugCopperAddr;
     e9k_debug_ami_get_custom_regs_fn_t debugAmiGetCustomRegs;
@@ -2046,6 +2048,7 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugReadCycleCount = (e9k_debug_read_cycle_count_fn_t)libretro_host_loadSymbol("e9k_debug_read_cycle_count");
     libretro_host.setVblankCallback = (e9k_debug_set_vblank_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_vblank_callback");
     libretro_host.setCustomLogFrameCallback = (e9k_debug_set_custom_log_frame_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_custom_log_frame_callback");
+    libretro_host.setNeogeoRegisterLogFrameCallback = (e9k_debug_set_neogeo_register_log_frame_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_neogeo_register_log_frame_callback");
     if (!libretro_host.setEnvironment || !libretro_host.setVideoRefresh ||
         !libretro_host.setInputPoll || !libretro_host.setInputState ||
         !libretro_host.init || !libretro_host.loadGame || !libretro_host.getSystemAvInfo ||
@@ -3387,6 +3390,16 @@ libretro_host_setCustomLogFrameCallback(e9k_debug_ami_custom_log_frame_callback_
         return false;
     }
     libretro_host.setCustomLogFrameCallback(cb, user);
+    return true;
+}
+
+bool
+libretro_host_setNeogeoRegisterLogFrameCallback(e9k_debug_geo_register_log_frame_callback_t cb, void *user)
+{
+    if (!libretro_host.setNeogeoRegisterLogFrameCallback) {
+        return false;
+    }
+    libretro_host.setNeogeoRegisterLogFrameCallback(cb, user);
     return true;
 }
 

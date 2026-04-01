@@ -128,7 +128,7 @@ else
 SRCS += target_amiga_stub.c
 endif
 ifeq ($(E9K_ENABLE_NEOGEO),1)
-SRCS += neogeo_core_options.c target_neogeo.c emu_geo.c neogeo_sprite_debug.c
+SRCS += neogeo_core_options.c target_neogeo.c emu_geo.c neogeo_sprite_debug.c neogeo_register_log.c neogeo_register_log_regs.c
 else
 SRCS += target_neogeo_stub.c
 endif

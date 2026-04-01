@@ -56,6 +56,17 @@ static int s_wps_suspend = 0;
 static e9k_debugger_source_location_resolver_t s_source_location_resolver = NULL;
 static void *s_source_location_resolver_user = NULL;
 
+#ifdef E9K_HACK_REGISTER_LOG
+#define E9K_DEBUG_REGISTER_LOG_ENTRY_CAP 4096
+static e9k_debug_geo_register_log_entry_t s_registerLogEntries[E9K_DEBUG_REGISTER_LOG_ENTRY_CAP];
+static size_t s_registerLogEntryCount = 0;
+static uint32_t s_registerLogDropped = 0;
+static uint64_t s_registerLogFrameNo = 0;
+static int s_registerLogEnabled = 0;
+static e9k_debug_geo_register_log_frame_callback_t s_registerLogFrameCallback = NULL;
+static void *s_registerLogFrameCallbackUser = NULL;
+#endif
+
 static void log_bp_event(const char *verb, uint32_t pc24) {
     printf("Debugger: %s 0x%06x\n", verb, (unsigned)(pc24 & 0x00ffffffu));
     fflush(stdout);
@@ -124,11 +135,75 @@ e9k_debugger_set_source_location_resolver(e9k_debugger_source_location_resolver_
     s_source_location_resolver_user = user;
 }
 
+#ifdef E9K_HACK_REGISTER_LOG
+int
+e9k_debugger_isRegisterLogEnabled(void)
+{
+    return s_registerLogEnabled;
+}
+
+void
+e9k_debugger_setRegisterLogFrameCallback(e9k_debug_geo_register_log_frame_callback_t cb, void *user)
+{
+    s_registerLogEnabled = cb ? 1 : 0;
+    s_registerLogFrameCallback = cb;
+    s_registerLogFrameCallbackUser = user;
+    s_registerLogEntryCount = 0;
+    s_registerLogDropped = 0;
+    s_registerLogFrameNo = 0;
+}
+
+void
+e9k_debugger_writeRegisterLog(uint16_t line, uint32_t reg, uint16_t value, uint8_t sourceKind, uint32_t sourceAddr)
+{
+    if (!s_registerLogFrameCallback) {
+        return;
+    }
+    if (s_registerLogEntryCount >= E9K_DEBUG_REGISTER_LOG_ENTRY_CAP) {
+        if (s_registerLogDropped != UINT32_MAX) {
+            s_registerLogDropped++;
+        }
+        return;
+    }
+
+    e9k_debug_geo_register_log_entry_t *entry = &s_registerLogEntries[s_registerLogEntryCount++];
+    entry->line = line;
+    entry->value = value;
+    entry->reg = reg & 0x00ffffffu;
+    entry->sourceAddr = sourceAddr & 0x00ffffffu;
+    entry->sourceKind = sourceKind;
+    entry->reserved[0] = 0;
+    entry->reserved[1] = 0;
+    entry->reserved[2] = 0;
+}
+
+void
+e9k_debugger_commitRegisterLogFrame(void)
+{
+    if (s_registerLogFrameCallback) {
+        s_registerLogFrameCallback(s_registerLogEntries,
+                                   s_registerLogEntryCount,
+                                   s_registerLogDropped,
+                                   s_registerLogFrameNo,
+                                   s_registerLogFrameCallbackUser);
+    }
+    s_registerLogEntryCount = 0;
+    s_registerLogDropped = 0;
+    s_registerLogFrameNo++;
+}
+#endif
+
 void e9k_debugger_init(void) {
     s_paused = 0; s_step_frame = 0; s_step_instr = 0; s_step_instr_after = 0; s_step_line = 0; s_step_line_has_start = 0; s_step_line_start = 0; s_step_next = 0; s_step_next_depth = 0; s_step_next_skip_once = 0; s_step_next_return_pc_valid = 0; s_step_next_return_pc = 0; s_step_out = 0; s_step_out_depth = 0; s_step_out_skip_once = 0; s_step_into_pending = 0; s_break_requested = 0; s_break_now = 0; s_resnap_needed = 0; s_last_pc = 0; s_hit_pc = 0;
     s_nbps = 0;
     s_n_temp_bps = 0;
     s_callstack_depth = 0;
+#ifdef E9K_HACK_REGISTER_LOG
+    s_registerLogEntryCount = 0;
+    s_registerLogDropped = 0;
+    s_registerLogFrameNo = 0;
+    s_registerLogEnabled = 0;
+#endif
     e9k_debugger_reset_watchpoints();
     e9k_protect_reset();
 }

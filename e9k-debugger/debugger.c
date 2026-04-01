@@ -17,6 +17,7 @@
 #include "profile.h"
 #include "analyse.h"
 #include "linebuf.h"
+#include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
 #include "machine.h"
 #include "base_map.h"
@@ -614,6 +615,7 @@ debugger_cleanup(void)
   if (neogeo_sprite_debug_is_open()) {
     neogeo_sprite_debug_toggle();
   }
+  neogeo_register_log_shutdown();
   if (mega_sprite_debug_is_open()) {
     mega_sprite_debug_toggle();
   }

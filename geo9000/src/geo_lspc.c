@@ -1048,3 +1048,9 @@ const void* geo_lspc_vram_ptr(void) {
 const void* geo_lspc_palram_ptr(void) {
     return lspc.palram;
 }
+
+#ifdef E9K_HACK_REGISTER_LOG
+unsigned geo_lspc_getScanline(void) {
+    return lspc.scanline;
+}
+#endif

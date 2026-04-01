@@ -687,6 +687,7 @@ cli_applyOverrides(void)
 
     if (debugger.cliConfig.neogeo.libretro.romPath[0]) {
         cli_copyPath(debugger.config.neogeo.libretro.romPath, sizeof(debugger.config.neogeo.libretro.romPath), debugger.cliConfig.neogeo.libretro.romPath);
+        debugger.config.neogeo.romFolder[0] = '\0';
     }
     if (debugger.cliConfig.neogeo.romFolder[0]) {
         cli_copyPath(debugger.config.neogeo.romFolder, sizeof(debugger.config.neogeo.romFolder), debugger.cliConfig.neogeo.romFolder);

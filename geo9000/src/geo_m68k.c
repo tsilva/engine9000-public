@@ -135,6 +135,17 @@ static inline void geo_debug_checkpoint_write(uint8_t index) {
     e9k_checkpoint_write(index);
 }
 
+#ifdef E9K_HACK_REGISTER_LOG
+static inline void geo_m68k_logRegisterWrite(uint32_t reg, uint16_t value) {
+    uint32_t pc = (uint32_t)m68k_get_reg(NULL, M68K_REG_PC);
+    e9k_debugger_writeRegisterLog((uint16_t)(geo_lspc_getScanline() & 0xffffu),
+        reg,
+        value,
+        E9K_DEBUG_GEO_REGISTER_LOG_SOURCE_68K,
+        pc & 0x00ffffffu);
+}
+#endif
+
 static inline void write08(uint8_t *ptr, uint32_t addr, uint8_t data) {
     ptr[addr] = data;
 }
@@ -1148,6 +1159,11 @@ void m68k_write_memory_8(unsigned address, unsigned value) {
             }
             case 0x320000: { // REG_SOUND
                 ngsys.sound_code = v8;
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x320000u, v8);
+                }
+#endif
                 geo_z80_nmi();
                 goto out;
             }
@@ -1351,31 +1367,66 @@ void m68k_write_memory_16(unsigned address, unsigned value) {
         switch (address) {
             case 0x320000: { // REG_SOUND
                 ngsys.sound_code = (v16 >> 8) & 0xff; // Use the upper byte
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x320000u, (uint16_t)((v16 >> 8) & 0xffu));
+                }
+#endif
                 geo_z80_nmi();
                 goto out;
             }
             case 0x3c0000: { // REG_VRAMADDR
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c0000u, v16);
+                }
+#endif
                 geo_lspc_vramaddr_wr(v16);
                 goto out;
             }
             case 0x3c0002: { // REG_VRAMRW
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c0002u, v16);
+                }
+#endif
                 geo_lspc_vram_wr(v16);
                 goto out;
             }
             case 0x3c0004: { // REG_VRAMMOD
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c0004u, v16);
+                }
+#endif
                 geo_lspc_vrammod_wr((int16_t)v16);
                 goto out;
             }
             case 0x3c0006: { // REG_LSPCMODE
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c0006u, v16);
+                }
+#endif
                 geo_lspc_mode_wr(v16);
                 goto out;
             }
             case 0x3c0008: { // REG_TIMERHIGH
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c0008u, v16);
+                }
+#endif
                 ngsys.irq2_reload =
                     (ngsys.irq2_reload & 0xffff) | ((uint32_t)v16 << 16);
                 goto out;
             }
             case 0x3c000a: { // REG_TIMERLOW
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c000au, v16);
+                }
+#endif
                 ngsys.irq2_reload =
                     (ngsys.irq2_reload & 0xffff0000) | ((uint32_t)v16 & 0xffff);
 
@@ -1386,6 +1437,11 @@ void m68k_write_memory_16(unsigned address, unsigned value) {
                 goto out;
             }
             case 0x3c000c: { // REG_IRQACK
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c000cu, v16);
+                }
+#endif
                 /* Bit 2: Ack VBlank
                    Bit 1: Ack HBlank
                    Bit 0: Ack IRQ3 (Reset)
@@ -1400,6 +1456,11 @@ void m68k_write_memory_16(unsigned address, unsigned value) {
                 goto out;
             }
             case 0x3c000e: { // REG_TIMERSTOP
+#ifdef E9K_HACK_REGISTER_LOG
+                if (e9k_debugger_isRegisterLogEnabled()) {
+                    geo_m68k_logRegisterWrite(0x3c000eu, v16);
+                }
+#endif
                 /* Bit 0=1: Stop timer counter during first and last 16 lines
                    (32 total) when in PAL mode -- FIXME
                 */

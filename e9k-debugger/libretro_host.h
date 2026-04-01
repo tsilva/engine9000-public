@@ -315,6 +315,9 @@ bool
 libretro_host_setCustomLogFrameCallback(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
 
 bool
+libretro_host_setNeogeoRegisterLogFrameCallback(e9k_debug_geo_register_log_frame_callback_t cb, void *user);
+
+bool
 libretro_host_setDebugBaseCallback(void (*cb)(uint32_t section, uint32_t base));
 
 bool

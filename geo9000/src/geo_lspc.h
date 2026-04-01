@@ -123,5 +123,8 @@ void geo_lspc_state_save(uint8_t*);
 
 const void* geo_lspc_vram_ptr(void);
 const void* geo_lspc_palram_ptr(void);
+#ifdef E9K_HACK_REGISTER_LOG
+unsigned geo_lspc_getScanline(void);
+#endif
 
 #endif

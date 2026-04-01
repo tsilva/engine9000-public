@@ -701,7 +701,7 @@ WARNINGS := -Wall \
 	-fno-strict-overflow
 endif
 
-FLAGS += -D__LIBRETRO__ $(WARNINGS)
+FLAGS += -D__LIBRETRO__ -DE9K_HACK_REGISTER_LOG $(WARNINGS)
 
 CFLAGS += $(FLAGS)
 

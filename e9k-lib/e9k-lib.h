@@ -216,6 +216,26 @@ typedef struct e9k_debug_ami_custom_reg_state {
     uint32_t pc;
 } e9k_debug_ami_custom_reg_state_t;
 
+typedef enum e9k_debug_geo_register_log_source {
+    E9K_DEBUG_GEO_REGISTER_LOG_SOURCE_68K = 0,
+    E9K_DEBUG_GEO_REGISTER_LOG_SOURCE_Z80 = 1
+} e9k_debug_geo_register_log_source_t;
+
+typedef struct e9k_debug_geo_register_log_entry {
+    uint16_t line;
+    uint16_t value;
+    uint32_t reg;
+    uint32_t sourceAddr;
+    uint8_t sourceKind;
+    uint8_t reserved[3];
+} e9k_debug_geo_register_log_entry_t;
+
+typedef void (*e9k_debug_geo_register_log_frame_callback_t)(const e9k_debug_geo_register_log_entry_t *entries,
+                                                            size_t count,
+                                                            uint32_t dropped,
+                                                            uint64_t frameNo,
+                                                            void *user);
+
 
 #define E9K_WATCHPOINT_COUNT 64
 

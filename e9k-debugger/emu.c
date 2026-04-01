@@ -1223,12 +1223,10 @@ emu_makeComponent(void)
     e9ui_child_add(comp, scroll, state->scrollMeta);
 
     e9ui_component_t *button_stack = emu_buttonStackMake();
-    if (button_stack) {
-        e9ui_setAutoHide(button_stack, 1, 64);
-        e9ui_setFocusTarget(button_stack, view);
-        state->buttonStackMeta = alloc_strdup("button_stack");
-        e9ui_child_add(comp, button_stack, state->buttonStackMeta);
-    }
+    e9ui_setAutoHide(button_stack, 1, 64);
+    e9ui_setFocusTarget(button_stack, view);
+    state->buttonStackMeta = alloc_strdup("button_stack");
+    e9ui_child_add(comp, button_stack, state->buttonStackMeta);
 
     state->zoomOutBinding.deltaPercent = -EMU_ZOOM_STEP_PERCENT;
     state->zoomOutBinding.state = state;
@@ -1240,11 +1238,7 @@ emu_makeComponent(void)
         e9ui_button_setMini(btnZoomOut, 1);
         e9ui_setFocusTarget(btnZoomOut, view);
         state->zoomOutBtnMeta = alloc_strdup("zoom_out");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnZoomOut, state->zoomOutBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnZoomOut, state->zoomOutBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnZoomOut, state->zoomOutBtnMeta);
     }
 
     e9ui_component_t *btnZoomIn = e9ui_button_make("+", emu_adjustZoom, &state->zoomInBinding);
@@ -1252,11 +1246,7 @@ emu_makeComponent(void)
         e9ui_button_setMini(btnZoomIn, 1);
         e9ui_setFocusTarget(btnZoomIn, view);
         state->zoomInBtnMeta = alloc_strdup("zoom_in");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnZoomIn, state->zoomInBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnZoomIn, state->zoomInBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnZoomIn, state->zoomInBtnMeta);
     }
 
     target->emu->createOverlays(view, button_stack);
@@ -1266,11 +1256,7 @@ emu_makeComponent(void)
         e9ui_button_setMini(btn_shader, 1);
         e9ui_setFocusTarget(btn_shader, view);
         state->shaderUiBtnMeta = alloc_strdup("shader_ui");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btn_shader, state->shaderUiBtnMeta);
-        } else {
-            e9ui_child_add(comp, btn_shader, state->shaderUiBtnMeta);
-        }
+        e9ui_child_add(button_stack, btn_shader, state->shaderUiBtnMeta);
     }
 
     e9ui_component_t *seek = e9ui_seek_bar_make();

@@ -14,7 +14,8 @@
 #include "debug.h"
 #include "emu_geo.h"
 #include "neogeo_core_options.h"
-#include "sprite_debug.h"
+#include "neogeo_sprite_debug.h"
+#include "neogeo_register_log.h"
 
 static void
 target_neogeo_stubSetConfigDefaults(e9k_system_config_t *config)
@@ -367,47 +368,106 @@ emu_geo_shutdown(void)
 const emu_system_iface_t emu_geo_iface = {0};
 
 void
-sprite_debug_toggle(void)
+neogeo_sprite_debug_toggle(void)
 {
 }
 
 int
-sprite_debug_is_open(void)
+neogeo_sprite_debug_is_open(void)
 {
     return 0;
 }
 
 void
-sprite_debug_render(const e9k_debug_sprite_state_t *st)
+neogeo_sprite_debug_render(const e9k_debug_sprite_state_t *st)
 {
     (void)st;
 }
 
 int
-sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
+neogeo_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
 {
     (void)kev;
     return 0;
 }
 
 void
-sprite_debug_setMainWindowFocused(int focused)
+neogeo_sprite_debug_setMainWindowFocused(int focused)
 {
     (void)focused;
 }
 
 void
-sprite_debug_persistConfig(FILE *file)
+neogeo_sprite_debug_persistConfig(FILE *file)
 {
     (void)file;
 }
 
 int
-sprite_debug_loadConfigProperty(const char *prop, const char *value)
+neogeo_sprite_debug_loadConfigProperty(const char *prop, const char *value)
 {
     (void)prop;
     (void)value;
     return 0;
+}
+
+int
+neogeo_register_log_init(void)
+{
+    return 0;
+}
+
+void
+neogeo_register_log_shutdown(void)
+{
+}
+
+void
+neogeo_register_log_toggle(void)
+{
+}
+
+int
+neogeo_register_log_isOpen(void)
+{
+    return 0;
+}
+
+void
+neogeo_register_log_setMainWindowFocused(int focused)
+{
+    (void)focused;
+}
+
+void
+neogeo_register_log_render(void)
+{
+}
+
+void
+neogeo_register_log_persistConfig(FILE *file)
+{
+    (void)file;
+}
+
+int
+neogeo_register_log_loadConfigProperty(const char *prop, const char *value)
+{
+    (void)prop;
+    (void)value;
+    return 0;
+}
+
+void
+neogeo_register_log_captureFrame(const e9k_debug_geo_register_log_entry_t *entries,
+                                 size_t count,
+                                 uint32_t dropped,
+                                 uint64_t frameNo)
+{
+    (void)entries;
+    (void)count;
+    (void)dropped;
+    (void)frameNo;
 }
 
 int

@@ -9,6 +9,7 @@
 #include "target.h"
 #include "debugger_input_bindings.h"
 #include "e9ui.h"
+#include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
 #include "libretro.h"
 #include "alloc.h"
@@ -99,6 +100,14 @@ emu_geo_toggleSpriteDebug(e9ui_context_t *ctx, void *user)
     neogeo_sprite_debug_toggle();
 }
 
+static void
+emu_geo_toggleRegisterLog(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    neogeo_register_log_toggle();
+}
+
 void
 emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
 {
@@ -107,23 +116,21 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_button_setMini(btn, 1);
     e9ui_setFocusTarget(btn, comp);
     void* histogramBtnMeta = alloc_strdup("histogram");
-    if (button_stack) {
-      e9ui_child_add(button_stack, btn, histogramBtnMeta);
-    } else {
-      e9ui_child_add(comp, btn, histogramBtnMeta);
-    }
+    e9ui_child_add(button_stack, btn, histogramBtnMeta);
   }
   
+  e9ui_component_t *btn_register_log = e9ui_button_make("Register Log", emu_geo_toggleRegisterLog, comp);
+  e9ui_button_setMini(btn_register_log, 1);
+  e9ui_setFocusTarget(btn_register_log, comp);
+  void *registerLogBtnMeta = alloc_strdup("register_log");
+  e9ui_child_add(button_stack, btn_register_log, registerLogBtnMeta);
+
   e9ui_component_t *btn_debug = e9ui_button_make("Sprite Debug", emu_geo_toggleSpriteDebug, comp);
   if (btn_debug) {
     e9ui_button_setMini(btn_debug, 1);
     e9ui_setFocusTarget(btn_debug, comp);
     void* spriteDebugBtnMeta = alloc_strdup("sprite_debug");
-    if (button_stack) {
-      e9ui_child_add(button_stack, btn_debug, spriteDebugBtnMeta);
-    } else {
-      e9ui_child_add(comp, btn_debug, spriteDebugBtnMeta);
-    }
+    e9ui_child_add(button_stack, btn_debug, spriteDebugBtnMeta);
   }
 }
 

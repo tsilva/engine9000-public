@@ -33,8 +33,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 
 #include "geo.h"
+#include "geo_lspc.h"
 #include "geo_z80.h"
 #include "geo_serial.h"
+#include "e9k_debugger.h"
 #include "ymfm/ymfm_opn.h"
 #include "z80/z80.h"
 
@@ -136,6 +138,18 @@ static inline void geo_z80_bankswap(uint8_t bank, uint16_t port) {
     }
 }
 
+#ifdef E9K_HACK_REGISTER_LOG
+static void
+geo_z80_logRegisterWrite(uint32_t reg, uint8_t value)
+{
+    e9k_debugger_writeRegisterLog((uint16_t)(geo_lspc_getScanline() & 0xffffu),
+                                  reg,
+                                  value,
+                                  E9K_DEBUG_GEO_REGISTER_LOG_SOURCE_Z80,
+                                  geo_z80_getPc());
+}
+#endif
+
 static uint8_t geo_z80_port_rd(z80 *userdata, uint16_t port) {
     if (userdata) { } // Unused
 
@@ -192,6 +206,11 @@ static void geo_z80_port_wr(z80 *userdata, uint16_t port, uint8_t value) {
             break;
         }
         case 0x04: case 0x05: case 0x06: case 0x07: {
+#ifdef E9K_HACK_REGISTER_LOG
+            if (e9k_debugger_isRegisterLogEnabled()) {
+                geo_z80_logRegisterWrite((uint32_t)(port & 0xffu), value);
+            }
+#endif
             ym2610_write(port, value);
             break;
         }
@@ -355,3 +374,9 @@ void geo_z80_state_save(uint8_t *st) {
 const void* geo_z80_ram_ptr(void) {
     return zram;
 }
+
+#ifdef E9K_HACK_REGISTER_LOG
+uint16_t geo_z80_getPc(void) {
+    return z80ctx.pc;
+}
+#endif

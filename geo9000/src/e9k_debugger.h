@@ -83,4 +83,18 @@ void e9k_debugger_watchpoint_write(uint32_t addr, uint32_t value, uint32_t old_v
 void e9k_debugger_watchpoint_suspend(void);
 void e9k_debugger_watchpoint_resume(void);
 
+#ifdef E9K_HACK_REGISTER_LOG
+int
+e9k_debugger_isRegisterLogEnabled(void);
+
+void
+e9k_debugger_setRegisterLogFrameCallback(e9k_debug_geo_register_log_frame_callback_t cb, void *user);
+
+void
+e9k_debugger_writeRegisterLog(uint16_t line, uint32_t reg, uint16_t value, uint8_t sourceKind, uint32_t sourceAddr);
+
+void
+e9k_debugger_commitRegisterLogFrame(void);
+#endif
+
 #endif // E9K_DEBUGGER_H

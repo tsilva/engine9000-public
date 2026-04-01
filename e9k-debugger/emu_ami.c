@@ -3646,11 +3646,7 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
         e9ui_button_setMini(btn, 1);
         e9ui_setFocusTarget(btn, comp);
         void* dmaDebugBtnMeta = alloc_strdup("dma_debug");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btn, dmaDebugBtnMeta);
-        } else {
-            e9ui_child_add(comp, btn, dmaDebugBtnMeta);
-        }
+        e9ui_child_add(button_stack, btn, dmaDebugBtnMeta);
     }
 
     e9ui_component_t *btnCustom = e9ui_button_make("Visualisers", emu_ami_toggleCustom, comp);
@@ -3658,11 +3654,7 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
         e9ui_button_setMini(btnCustom, 1);
         e9ui_setFocusTarget(btnCustom, comp);
         void *customBtnMeta = alloc_strdup("custom");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnCustom, customBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnCustom, customBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnCustom, customBtnMeta);
     }
 
     e9ui_component_t *btnMemview = e9ui_button_make("RAM", emu_ami_toggleMemview, comp);
@@ -3670,11 +3662,7 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
         e9ui_button_setMini(btnMemview, 1);
         e9ui_setFocusTarget(btnMemview, comp);
         void *memviewBtnMeta = alloc_strdup("amiga_memview");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnMemview, memviewBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnMemview, memviewBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnMemview, memviewBtnMeta);
     }
 
     e9ui_component_t *btnCustomAmiga = e9ui_button_make("Chipset", emu_ami_toggleCustomAmiga, comp);
@@ -3682,11 +3670,7 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
         e9ui_button_setMini(btnCustomAmiga, 1);
         e9ui_setFocusTarget(btnCustomAmiga, comp);
         void *customAmigaBtnMeta = alloc_strdup("custom_amiga");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnCustomAmiga, customAmigaBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnCustomAmiga, customAmigaBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnCustomAmiga, customAmigaBtnMeta);
     }
 
     e9ui_component_t *btnCustomLog = e9ui_button_make("Chipset Log", emu_ami_toggleCustomLog, comp);
@@ -3694,11 +3678,7 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
         e9ui_button_setMini(btnCustomLog, 1);
         e9ui_setFocusTarget(btnCustomLog, comp);
         void *customLogBtnMeta = alloc_strdup("custom_log");
-        if (button_stack) {
-            e9ui_child_add(button_stack, btnCustomLog, customLogBtnMeta);
-        } else {
-            e9ui_child_add(comp, btnCustomLog, customLogBtnMeta);
-        }
+        e9ui_child_add(button_stack, btnCustomLog, customLogBtnMeta);
     }
 }
 
