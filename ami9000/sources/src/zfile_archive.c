@@ -690,7 +690,7 @@ struct zvolume *archive_directory_7z (struct zfile *z)
 		return NULL;
 	}
 #if defined(_WIN32) && defined(USE_WINDOWS_FILE) && !defined(LEGACY_WIN32)
-	if (InFile_OpenW (&ctx->archiveStream.file, zfile_getname (z)) != 0) {
+	if (InFile_Open (&ctx->archiveStream.file, zfile_getname (z)) != 0) {
 		allocImp.Free (&allocImp, ctx->lookStream.buf);
 		xfree (ctx);
 		return NULL;
