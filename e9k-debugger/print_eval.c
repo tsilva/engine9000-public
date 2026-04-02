@@ -28,6 +28,7 @@
 #include "libretro.h"
 #include "libretro_host.h"
 #include "machine.h"
+#include "symbol_text_map.h"
 #include "strutil.h"
 
 typedef struct print_value {
@@ -980,6 +981,29 @@ print_eval_resolveLocal(const char *name, print_index_t *index, print_value_t *o
 }
 
 static int
+print_eval_addSymbol(print_index_t *index, const char *name, uint32_t addr)
+{
+    if (!index || !name || !*name) {
+        return 0;
+    }
+    if (index->symbolCount >= index->symbolCap) {
+        int next = index->symbolCap ? index->symbolCap * 2 : 128;
+        print_symbol_t *nextSymbols =
+            (print_symbol_t *)alloc_realloc(index->symbols, sizeof(*nextSymbols) * (size_t)next);
+        if (!nextSymbols) {
+            return 0;
+        }
+        index->symbols = nextSymbols;
+        index->symbolCap = next;
+    }
+    print_symbol_t *symbol = &index->symbols[index->symbolCount++];
+    memset(symbol, 0, sizeof(*symbol));
+    symbol->name = print_eval_strdup(name);
+    symbol->addr = addr & 0x00ffffffu;
+    return symbol->name != NULL;
+}
+
+static int
 print_eval_addVariable(print_index_t *index, const char *name, uint32_t addr, uint32_t typeRef, size_t byteSize, int hasByteSize)
 {
     if (!index || !name || !*name) {
@@ -1541,6 +1565,29 @@ print_eval_defaultU64(print_index_t *index)
 }
 
 static int
+print_eval_loadTextMap(print_index_t *index, const char *elfPath)
+{
+    const symbol_text_map_entry_t *entries = NULL;
+    int count = 0;
+    if (!index || !elfPath || !*elfPath) {
+        return 0;
+    }
+    if (!symbol_text_map_getEntries(elfPath, &entries, &count) || !entries || count <= 0) {
+        return 0;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        const symbol_text_map_entry_t *entry = &entries[i];
+        if (entry->kind == SYMBOL_TEXT_MAP_SYMBOL_KIND_VARIABLE) {
+            (void)print_eval_addVariable(index, entry->name, entry->addr, 0, 4, 1);
+        } else {
+            (void)print_eval_addSymbol(index, entry->name, entry->addr);
+        }
+    }
+    return 1;
+}
+
+static int
 print_eval_loadIndex(print_index_t *index)
 {
     const char *elfPath = debugger.libretro.exePath;
@@ -1579,6 +1626,13 @@ print_eval_loadIndex(print_index_t *index)
     index->cacheDataBaseAddr = curData;
     index->cacheBssBaseAddr = curBss;
     index->cacheBaseMapSignature = curBaseMapSignature;
+    if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        (void)print_eval_loadTextMap(index, elfPath);
+        print_eval_buildSymbolLookup(index);
+        print_eval_buildVariables(index);
+        print_eval_defaultU32(index);
+        return 1;
+    }
     print_debuginfo_readelf_loadSymbols(elfPath, index);
     uint64_t tSymbols = 0;
     if (print_eval_perfEnabled()) {
@@ -2745,7 +2799,13 @@ print_eval_resolveSymbol(const char *name, uint32_t *outAddr, size_t *outSize)
     }
     print_variable_t *var = print_eval_findVariable(&print_eval_index, name);
     if (!var) {
-        return 0;
+        print_symbol_t *sym = print_eval_findSymbol(&print_eval_index, name);
+        if (!sym) {
+            return 0;
+        }
+        *outAddr = sym->addr;
+        *outSize = 4;
+        return 1;
     }
     print_type_t *type = NULL;
     if (var->typeRef != 0) {
@@ -2821,6 +2881,29 @@ print_eval_resolveAddress(const char *expr, uint32_t *outAddr, size_t *outSize)
 }
 
 int
+print_eval_resolveNamedKind(const char *name, int *outIsVariable)
+{
+    if (outIsVariable) {
+        *outIsVariable = 0;
+    }
+    if (!name || !*name || !outIsVariable) {
+        return 0;
+    }
+    if (!print_eval_loadIndex(&print_eval_index)) {
+        return 0;
+    }
+    if (print_eval_findVariable(&print_eval_index, name)) {
+        *outIsVariable = 1;
+        return 1;
+    }
+    if (print_eval_findSymbol(&print_eval_index, name)) {
+        *outIsVariable = 0;
+        return 1;
+    }
+    return 0;
+}
+
+int
 print_eval_print(const char *expr)
 {
     if (!expr || !*expr) {
@@ -2828,7 +2911,7 @@ print_eval_print(const char *expr)
         return 0;
     }
     if (!print_eval_loadIndex(&print_eval_index)) {
-        debug_error("print: failed to load symbols (check --elf)");
+        debug_error("print: failed to load symbols (check the debug symbol file path)");
         return 0;
     }
     print_temp_type_t *tempTypes = NULL;

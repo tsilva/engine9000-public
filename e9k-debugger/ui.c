@@ -570,7 +570,13 @@ ui_applySourcePaneElfMode(void)
         if (!pane) {
             continue;
         }
-        if (!debugger.elfValid && source_pane_getMode(pane) == source_pane_mode_c) {
+        if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP &&
+            source_pane_getMode(pane) == source_pane_mode_c) {
+            source_pane_setMode(pane, source_pane_mode_c);
+        }
+        if (!debugger.elfValid &&
+            debugger.symbolFileKind != DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP &&
+            source_pane_getMode(pane) == source_pane_mode_c) {
             source_pane_setMode(pane, source_pane_mode_a);
         }
         source_pane_setToggleVisible(pane, showToggle);

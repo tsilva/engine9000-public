@@ -187,6 +187,22 @@ cli_parseArgs(int argc, char **argv)
             cli_copyPath(debugger.cliConfig.neogeo.libretro.exePath, sizeof(debugger.cliConfig.neogeo.libretro.exePath), argv[i] + sizeof("--elf=") - 1);
             continue;
         }
+        if (strcmp(argv[i], "--symbols") == 0) {
+            if (i + 1 >= argc) {
+                cli_setError("symbols: missing file path");
+                return;
+            }
+            cli_copyPath(targetLibretro->exePath, sizeof(targetLibretro->exePath), argv[++i]);
+            continue;
+        }
+        if (strncmp(argv[i], "--symbols=", sizeof("--symbols=") - 1) == 0) {
+            if (argv[i][sizeof("--symbols=") - 1] == '\0') {
+                cli_setError("symbols: missing file path");
+                return;
+            }
+            cli_copyPath(targetLibretro->exePath, sizeof(targetLibretro->exePath), argv[i] + sizeof("--symbols=") - 1);
+            continue;
+        }
         if (strcmp(argv[i], "--hunk") == 0) {
 	     if (targetSystem != target_amiga()) {
                 cli_setError("hunk: only supported for Amiga (use --amiga)");
@@ -652,6 +668,7 @@ cli_printUsage(const char *argv0)
     printf("Neo Geo options (use with --neogeo):\n");
     printf("  --neogeo                     Start in Neo Geo system mode\n");    
     printf("  --elf PATH                   ELF file path\n");
+    printf("  --symbols PATH               Text symbol map path\n");
     printf("  --rom PATH                   Neo Geo ROM (.neo) path\n");
     printf("  --rom-folder PATH            ROM folder (generates a .neo)\n");
     printf("\n");
@@ -660,6 +677,7 @@ cli_printUsage(const char *argv0)
     printf("Amiga options (use with --amiga):\n");
     printf("  --amiga                      Start in Amiga system mode\n");
     printf("  --hunk PATH                  Amiga debug binary (hunk) path\n");
+    printf("  --symbols PATH               Text symbol map path\n");
     printf("  --uae PATH                   Amiga UAE config (.uae) path\n");
     printf("\n");
 #endif

@@ -369,6 +369,7 @@ int
 source_pane_asm_view_isAsmLikeMode(source_pane_mode_t mode)
 {
     return (mode == source_pane_mode_a ||
+            mode == source_pane_mode_sym ||
             mode == source_pane_mode_h ||
             mode == source_pane_mode_cpr) ? 1 : 0;
 }
@@ -377,7 +378,110 @@ int
 source_pane_asm_view_isCpuAsmLikeMode(source_pane_mode_t mode)
 {
     return (mode == source_pane_mode_a ||
+            mode == source_pane_mode_sym ||
             mode == source_pane_mode_h) ? 1 : 0;
+}
+
+static int
+source_pane_asm_view_countSymbolLabelsForAddr(const source_pane_state_t *st, uint64_t addr)
+{
+    if (!st || st->viewMode != source_pane_mode_sym) {
+        return 0;
+    }
+    if (!st->asmSymbolNames || !st->asmSymbolAddrs || st->asmSymbolCount <= 0) {
+        return 0;
+    }
+
+    int count = 0;
+    uint64_t addr24 = addr & 0x00ffffffull;
+    for (int i = 0; i < st->asmSymbolCount; ++i) {
+        const char *name = st->asmSymbolNames[i];
+        uint64_t symbolAddr = st->asmSymbolAddrs[i] & 0x00ffffffull;
+        if (!name || !name[0] || symbolAddr != addr24) {
+            continue;
+        }
+        count++;
+    }
+    return count;
+}
+
+static int
+source_pane_asm_view_resolveGutterRowAddr(const source_pane_state_t *st,
+                                          const uint64_t *addrs,
+                                          int count,
+                                          int row,
+                                          uint32_t *outAddr)
+{
+    if (!st || !addrs || count <= 0 || row < 0 || !outAddr) {
+        return 0;
+    }
+
+    int visualRow = 0;
+    for (int i = 0; i < count; ++i) {
+        int labelCount = source_pane_asm_view_countSymbolLabelsForAddr(st, addrs[i]);
+        if (row < visualRow + labelCount + 1) {
+            *outAddr = (uint32_t)(addrs[i] & 0x00ffffffu);
+            return 1;
+        }
+        visualRow += labelCount + 1;
+    }
+    return 0;
+}
+
+static int
+source_pane_asm_view_renderSymbolLabels(e9ui_context_t *ctx,
+                                        e9ui_component_t *self,
+                                        TTF_Font *font,
+                                        source_pane_state_t *st,
+                                        uint64_t addr,
+                                        int labelX,
+                                        int *ioY,
+                                        int lineHeight,
+                                        int hitW,
+                                        int clipBottom)
+{
+    if (!ctx || !self || !font || !st || !ioY || st->viewMode != source_pane_mode_sym) {
+        return 0;
+    }
+    if (!st->asmSymbolNames || !st->asmSymbolAddrs || st->asmSymbolCount <= 0) {
+        return 0;
+    }
+
+    int added = 0;
+    SDL_Color labelColor = (SDL_Color){196, 172, 108, 255};
+    void *sourceBucket = (void *)&st->bucketSource;
+    uint64_t addr24 = addr & 0x00ffffffull;
+    for (int i = 0; i < st->asmSymbolCount; ++i) {
+        const char *name = st->asmSymbolNames[i];
+        uint64_t symbolAddr = st->asmSymbolAddrs[i] & 0x00ffffffull;
+        if (!name || !name[0] || symbolAddr != addr24) {
+            continue;
+        }
+
+        char label[1024];
+        int written = snprintf(label, sizeof(label), "%s:", name);
+        if (written < 0 || (size_t)written >= sizeof(label)) {
+            continue;
+        }
+
+        source_pane_renderAsmLineHighlighted(ctx,
+                                             self,
+                                             font,
+                                             label,
+                                             0,
+                                             labelColor,
+                                             labelX,
+                                             *ioY,
+                                             lineHeight,
+                                             hitW,
+                                             sourceBucket);
+        *ioY += lineHeight;
+        added++;
+        if (*ioY > clipBottom) {
+            break;
+        }
+    }
+    return added;
 }
 
 int
@@ -460,12 +564,13 @@ source_pane_asm_view_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ct
         return 0;
     }
     int row = (my - (contentArea.y + padPx)) / metrics.lineHeight;
-    if (row < 0 || row >= count) {
+    uint32_t gutterAddr = 0;
+    if (!source_pane_asm_view_resolveGutterRowAddr(st, addrs, count, row, &gutterAddr)) {
         return 0;
     }
     st->gutterPending = 1;
     st->gutterMode = mode;
-    st->gutterAddr = (uint32_t)(addrs[row] & 0x00ffffffu);
+    st->gutterAddr = gutterAddr;
     st->gutterDownX = mx;
     st->gutterDownY = my;
     return 1;
@@ -531,15 +636,33 @@ source_pane_asm_view_renderAsm(e9ui_component_t *self, e9ui_context_t *ctx)
     SDL_Color lnoBpOn = (SDL_Color){120, 200, 120, 255};
     SDL_Color lnoBpOff = (SDL_Color){200, 140, 60, 255};
     int textX = contentArea.x + padPx + gutterW + gutterPad;
+    int labelX = contentArea.x + padPx;
     int hitW = contentArea.x + contentArea.w - textX - padPx;
+    int labelHitW = contentArea.x + contentArea.w - labelX - padPx;
     if (hitW < 0) {
         hitW = 0;
+    }
+    if (labelHitW < 0) {
+        labelHitW = 0;
     }
     int y = contentArea.y + padPx;
     int clipBottom = contentArea.y + contentArea.h + metrics.lineHeight;
     for (int i = 0; i < count; ++i) {
         uint64_t a = addrs[i];
         const char *ins = lines[i] ? lines[i] : "";
+        (void)source_pane_asm_view_renderSymbolLabels(ctx,
+                                                      self,
+                                                      useFont,
+                                                      st,
+                                                      a,
+                                                      labelX,
+                                                      &y,
+                                                      metrics.lineHeight,
+                                                      labelHitW,
+                                                      clipBottom);
+        if (y > clipBottom) {
+            break;
+        }
         if (i == curRow) {
             SDL_SetRenderDrawColor(ctx->renderer, 40, 72, 138, 255);
             SDL_Rect hl = { area.x + 2, y - 2, area.w - 4, metrics.lineHeight + 4 };

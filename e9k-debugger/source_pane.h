@@ -20,7 +20,8 @@ typedef enum source_pane_mode {
     source_pane_mode_c = 0,
     source_pane_mode_a = 1,
     source_pane_mode_h = 2,
-    source_pane_mode_cpr = 3
+    source_pane_mode_cpr = 3,
+    source_pane_mode_sym = 4
 } source_pane_mode_t;
 e9ui_component_t *
 source_pane_make(void);

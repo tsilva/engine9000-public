@@ -20,7 +20,39 @@
 #include "libretro_host.h"
 #include "addr2line.h"
 #include "base_map.h"
+#include "symbol_text_map.h"
 #include "strutil.h"
+
+static int
+machine_resolveTextMapFunction(uint32_t runtimeAddr, char *outFunction, size_t functionCap)
+{
+    if (!outFunction || functionCap == 0) {
+        return 0;
+    }
+    outFunction[0] = '\0';
+    if (!debugger.symbolValid || debugger.symbolFileKind != DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        return 0;
+    }
+
+    const symbol_text_map_entry_t *entry = NULL;
+    if (!symbol_text_map_findNearest(debugger.libretro.exePath,
+                                     runtimeAddr & 0x00ffffffu,
+                                     SYMBOL_TEXT_MAP_SYMBOL_MASK_FUNCTION |
+                                     SYMBOL_TEXT_MAP_SYMBOL_MASK_UNKNOWN,
+                                     &entry)) {
+        (void)symbol_text_map_findNearest(debugger.libretro.exePath,
+                                          runtimeAddr & 0x00ffffffu,
+                                          SYMBOL_TEXT_MAP_SYMBOL_MASK_ALL,
+                                          &entry);
+    }
+    if (!entry || !entry->name || !entry->name[0]) {
+        return 0;
+    }
+
+    strncpy(outFunction, entry->name, functionCap - 1);
+    outFunction[functionCap - 1] = '\0';
+    return 1;
+}
 
 static void
 machine_clearRegs(machine_t *m)
@@ -331,7 +363,11 @@ machine_fillFrame(machine_frame_t *frame, int level, uint32_t addr, const char *
     uint32_t addr24 = addr & 0x00ffffffu;
     frame->addr = addr24;
     snprintf(frame->func, sizeof(frame->func), "0x%06X", (unsigned)addr24);
-    if (!exe || !*exe || !debugger.elfValid) {
+    if (!exe || !*exe || !debugger.symbolValid) {
+        return;
+    }
+    if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        (void)machine_resolveTextMapFunction(addr24, frame->func, sizeof(frame->func));
         return;
     }
     if (!addr2line_start(exe)) {

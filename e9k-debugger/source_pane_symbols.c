@@ -21,15 +21,21 @@
 #include "strutil.h"
 #include "addr2line.h"
 #include "print_eval.h"
+#include "symbol_text_map.h"
 
 void
 source_pane_symbols_refreshSourceFunctions(e9ui_component_t *comp, source_pane_state_t *st,
                                            const char *source_file);
 
 static int
+source_pane_symbols_addAsmSymbol(source_pane_state_t *st, const char *name, uint64_t addr,
+                                 const char *valueOverride);
+
+static int
 source_pane_symbols_isAsmLikeMode(source_pane_mode_t mode)
 {
     return (mode == source_pane_mode_a ||
+            mode == source_pane_mode_sym ||
             mode == source_pane_mode_h ||
             mode == source_pane_mode_cpr) ? 1 : 0;
 }
@@ -197,6 +203,7 @@ source_pane_symbols_clearAsmSymbols(source_pane_state_t *st)
     st->asmSymbolCount = 0;
     st->asmSymbolCap = 0;
     st->asmSymbolsLoaded = 0;
+    st->asmSymbolsTextMapRevision = 0;
     st->asmSymbolsElf[0] = '\0';
     st->asmSymbolsToolchain[0] = '\0';
 }
@@ -847,6 +854,27 @@ source_pane_symbols_addAsmSymbol(source_pane_state_t *st, const char *name, uint
 }
 
 static int
+source_pane_symbols_collectTextMapAsmSymbols(source_pane_state_t *st, const char *elf_path)
+{
+    const symbol_text_map_entry_t *entries = NULL;
+    int count = 0;
+    if (!st || !elf_path || !elf_path[0] || !debugger.symbolValid ||
+        debugger.symbolFileKind != DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        return 0;
+    }
+    if (!symbol_text_map_getEntries(elf_path, &entries, &count) || !entries || count <= 0) {
+        return 0;
+    }
+
+    int added = 0;
+    for (int i = 0; i < count; ++i) {
+        const symbol_text_map_entry_t *entry = &entries[i];
+        added += source_pane_symbols_addAsmSymbol(st, entry->name, (uint64_t)entry->addr, NULL);
+    }
+    return added;
+}
+
+static int
 source_pane_symbols_collectObjdumpTextAsmSymbols(source_pane_state_t *st, const char *elf_path)
 {
     if (!st || !elf_path || !elf_path[0] || !debugger.elfValid) {
@@ -927,8 +955,11 @@ source_pane_symbols_collectObjdumpTextAsmSymbols(source_pane_state_t *st, const 
 static int
 source_pane_symbols_collectAsmSymbols(source_pane_state_t *st, const char *elf_path)
 {
-    if (!st || !elf_path || !elf_path[0] || !debugger.elfValid) {
+    if (!st || !elf_path || !elf_path[0] || !debugger.symbolValid) {
         return 0;
+    }
+    if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        return source_pane_symbols_collectTextMapAsmSymbols(st, elf_path);
     }
 
     int added = 0;
@@ -1058,7 +1089,11 @@ source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_
 
     const char *elf = debugger.libretro.exePath;
     const char *toolchain = debugger.libretro.toolchainPrefix;
-    if (!elf || !elf[0] || !debugger.elfValid) {
+    uint64_t textMapRevision = 0;
+    if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        textMapRevision = symbol_text_map_revision();
+    }
+    if (!elf || !elf[0] || !debugger.symbolValid) {
         e9ui_textbox_setOptions(select, NULL, 0);
         source_pane_symbols_clearAsmSymbols(st);
         select->disabled = 1;
@@ -1066,7 +1101,8 @@ source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_
     }
     if (st->asmSymbolsLoaded &&
         strcmp(st->asmSymbolsElf, elf) == 0 &&
-        strcmp(st->asmSymbolsToolchain, toolchain ? toolchain : "") == 0) {
+        strcmp(st->asmSymbolsToolchain, toolchain ? toolchain : "") == 0 &&
+        st->asmSymbolsTextMapRevision == textMapRevision) {
         if (!editingSelect) {
             e9ui_textbox_setOptions(select, st->asmSymbolOptions, st->asmSymbolCount);
         }
@@ -1078,6 +1114,7 @@ source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_
     source_pane_symbols_clearAsmSymbols(st);
     (void)source_pane_symbols_collectAsmSymbols(st, elf);
     st->asmSymbolsLoaded = 1;
+    st->asmSymbolsTextMapRevision = textMapRevision;
     strncpy(st->asmSymbolsElf, elf, sizeof(st->asmSymbolsElf) - 1);
     st->asmSymbolsElf[sizeof(st->asmSymbolsElf) - 1] = '\0';
     if (toolchain && toolchain[0]) {

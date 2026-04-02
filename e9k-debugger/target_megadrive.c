@@ -57,7 +57,7 @@ target_megadrive_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t
     out->footerWarning = NULL;
 
     const char *romExts[] = { "*.bin", "*.gen", "*.md", "*.smd", "*.sms", "*.zip" };
-    const char *elfExts[] = { "*.elf" };
+    const char *elfExts[] = { "*.elf", "*.txt" };
 
     settings_romselect_state_t *romState = (settings_romselect_state_t *)alloc_calloc(1, sizeof(*romState));
     if (romState) {
@@ -65,7 +65,7 @@ target_megadrive_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t
     }
 
     e9ui_component_t *fsRom = e9ui_fileSelect_make("ROM", 120, 600, "...", romExts, (int)countof(romExts), E9UI_FILESELECT_FILE);
-    e9ui_component_t *fsElf = e9ui_fileSelect_make("ELF", 120, 600, "...", elfExts, 1, E9UI_FILESELECT_FILE);
+    e9ui_component_t *fsElf = e9ui_fileSelect_make("ELF", 120, 600, "...", elfExts, (int)countof(elfExts), E9UI_FILESELECT_FILE);
     e9ui_component_t *fsBios = e9ui_fileSelect_make("BIOS FOLDER", 120, 600, "...", NULL, 0, E9UI_FILESELECT_FOLDER);
     e9ui_component_t *fsSaves = e9ui_fileSelect_make("SAVES FOLDER", 120, 600, "...", NULL, 0, E9UI_FILESELECT_FOLDER);
     e9ui_component_t *fsSource = e9ui_fileSelect_make("SOURCE FOLDER", 120, 600, "...", NULL, 0, E9UI_FILESELECT_FOLDER);

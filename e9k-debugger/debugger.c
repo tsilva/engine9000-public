@@ -51,6 +51,7 @@
 #include "emu_geo.h"
 #include "breakpoints.h"
 #include "mega_sprite_debug.h"
+#include "symbol_text_map.h"
 
 e9ui_global_t _e9ui;
 e9k_debugger_t debugger;
@@ -570,14 +571,26 @@ void
 debugger_refreshElfValid(void)
 {
     debugger.elfValid = 0;
+    debugger.symbolValid = 0;
+    debugger.symbolFileKind = DEBUGGER_SYMBOL_FILE_KIND_NONE;
     const char *rawElf = NULL;
     const char* toolchainPrefix = NULL;
     char elfPath[PATH_MAX];
-    elfPath[0] = '\0';   
+    elfPath[0] = '\0';
     target->pickElfToolchainPaths(&rawElf, &toolchainPrefix);
     debugger_copyPath(elfPath, sizeof(elfPath), rawElf);
-    if (elfPath[0] && debugger_pathExistsFile(elfPath) && toolchainPrefix && toolchainPrefix[0] != 0) {
-      debugger.elfValid = 1;
+    if (symbol_text_map_hasActive()) {
+        debugger.symbolValid = symbol_text_map_isValid(elfPath) ? 1 : 0;
+        debugger.symbolFileKind = DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP;
+    } else if (elfPath[0] && debugger_pathExistsFile(elfPath)) {
+        if (symbol_text_map_canLoad(elfPath)) {
+            debugger.symbolValid = symbol_text_map_isValid(elfPath) ? 1 : 0;
+            debugger.symbolFileKind = DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP;
+        } else if (toolchainPrefix && toolchainPrefix[0] != 0) {
+            debugger.elfValid = 1;
+            debugger.symbolValid = 1;
+            debugger.symbolFileKind = DEBUGGER_SYMBOL_FILE_KIND_BINARY;
+        }
     }
     ui_applySourcePaneElfMode();
 }
@@ -624,6 +637,7 @@ debugger_cleanup(void)
   libretro_host_shutdown();
   emu_geo_shutdown();
   addr2line_stop();
+  symbol_text_map_clear();
   profile_streamStop();
   state_buffer_shutdown();
   machine_shutdown(&debugger.machine);

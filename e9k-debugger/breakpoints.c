@@ -12,8 +12,10 @@
 #include "libretro_host.h"
 #include "debugger.h"
 #include "addr2line.h"
+#include "base_map.h"
 #include "e9ui_scroll.h"
 #include "hotkeys.h"
+#include "symbol_text_map.h"
 #include "strutil.h"
 
 typedef struct breakpoints_record {
@@ -51,6 +53,37 @@ static char breakpoints_tipAddCurrent[96];
 static void breakpoints_listMarkDirty(breakpoints_list_state_t *st);
 static void breakpoints_listRefreshAndMarkDirty(breakpoints_list_state_t *st);
 static void breakpoints_componentDtor(e9ui_component_t *self, e9ui_context_t *ctx);
+
+static int
+breakpoints_resolveTextMapFunction(uint32_t runtimeAddr, char *outFunction, size_t functionCap)
+{
+    if (!outFunction || functionCap == 0) {
+        return 0;
+    }
+    outFunction[0] = '\0';
+    if (!debugger.symbolValid || debugger.symbolFileKind != DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        return 0;
+    }
+
+    const symbol_text_map_entry_t *entry = NULL;
+    if (!symbol_text_map_findNearest(debugger.libretro.exePath,
+                                     runtimeAddr & 0x00ffffffu,
+                                     SYMBOL_TEXT_MAP_SYMBOL_MASK_FUNCTION |
+                                     SYMBOL_TEXT_MAP_SYMBOL_MASK_UNKNOWN,
+                                     &entry)) {
+        (void)symbol_text_map_findNearest(debugger.libretro.exePath,
+                                          runtimeAddr & 0x00ffffffu,
+                                          SYMBOL_TEXT_MAP_SYMBOL_MASK_ALL,
+                                          &entry);
+    }
+    if (!entry || !entry->name || !entry->name[0]) {
+        return 0;
+    }
+
+    strncpy(outFunction, entry->name, functionCap - 1);
+    outFunction[functionCap - 1] = '\0';
+    return 1;
+}
 
 void
 breakpoints_refreshHotkeyTooltips(void)
@@ -220,7 +253,17 @@ breakpoints_resolveLocation(machine_breakpoint_t *bp)
         return;
     }
     const char *elf = debugger.libretro.exePath;
-    if (!elf || !*elf || !debugger.elfValid) {
+    if (!elf || !*elf || !debugger.symbolValid) {
+        return;
+    }
+    if (debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        char functionName[512];
+        if (breakpoints_resolveTextMapFunction((uint32_t)(bp->addr & 0x00ffffffu),
+                                               functionName,
+                                               sizeof(functionName))) {
+            strncpy(bp->func, functionName, sizeof(bp->func) - 1);
+            bp->func[sizeof(bp->func) - 1] = '\0';
+        }
         return;
     }
     if (!addr2line_start(elf)) {

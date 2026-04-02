@@ -29,5 +29,8 @@ print_eval_resolveSymbol(const char *name, uint32_t *outAddr, size_t *outSize);
 int
 print_eval_resolveAddress(const char *expr, uint32_t *outAddr, size_t *outSize);
 
+int
+print_eval_resolveNamedKind(const char *name, int *outIsVariable);
+
 void
 print_eval_invalidateCache(void);

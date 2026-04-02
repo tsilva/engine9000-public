@@ -1439,7 +1439,7 @@ source_pane_layoutComp(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t 
 static const char *
 source_pane_modeValue(source_pane_mode_t mode)
 {
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_sym) {
         return "c";
     }
     if (mode == source_pane_mode_cpr) {
@@ -1472,7 +1472,7 @@ source_pane_modeFromValue(const char *value)
 static int
 source_pane_modePersistValue(source_pane_mode_t mode)
 {
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_sym) {
         return 0;
     }
     if (mode == source_pane_mode_cpr) {
@@ -1543,6 +1543,8 @@ source_pane_persistLoad(e9ui_component_t *self, e9ui_context_t *ctx, const char 
       source_pane_mode_t mode = source_pane_mode_a;
       if (m == 0) {
           mode = source_pane_mode_c;
+      } else if (m == 5) {
+          mode = source_pane_mode_sym;
       } else if (m == 4) {
           mode = source_pane_mode_cpr;
       } else if (m == 3) {
@@ -2063,6 +2065,11 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
         source_pane_freeFrozenAsm(st);
     }
     if (st && st->viewMode == source_pane_mode_a) {
+        source_pane_symbols_refreshAsmSymbols(self, st);
+        source_pane_renderAsm(self, ctx);
+        goto done;
+    }
+    if (st && st->viewMode == source_pane_mode_sym) {
         source_pane_symbols_refreshAsmSymbols(self, st);
         source_pane_renderAsm(self, ctx);
         goto done;
@@ -2914,8 +2921,17 @@ source_pane_setModeInternal(e9ui_component_t *comp, source_pane_mode_t mode, int
     source_pane_mode_t prevMode = st->viewMode;
     if (mode != source_pane_mode_c &&
         mode != source_pane_mode_a &&
+        mode != source_pane_mode_sym &&
         mode != source_pane_mode_h &&
         mode != source_pane_mode_cpr) {
+        mode = source_pane_mode_a;
+    }
+    if (mode == source_pane_mode_c &&
+        debugger.symbolFileKind == DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
+        mode = source_pane_mode_sym;
+    }
+    if (mode == source_pane_mode_sym &&
+        debugger.symbolFileKind != DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP) {
         mode = source_pane_mode_a;
     }
     if (mode == source_pane_mode_cpr && !source_cpr_isModeAvailable()) {

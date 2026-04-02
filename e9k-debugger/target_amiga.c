@@ -1241,7 +1241,7 @@ target_amiga_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *ou
     const char *romExts[] = { "*.uae" };
     const char *floppyExts[] = { "*.adf", "*.adz", "*.fdi", "*.dms", "*.ipf", "*.raw", ".7z" };
     const char *hdfExts[] = { "*.hdf", "*.hdz" };
-    const char *elfExts[] = { "*.elf" };
+    const char *elfExts[] = { "*.elf", "*.txt" };
 
     settings_romselect_state_t *romState = (settings_romselect_state_t *)alloc_calloc(1, sizeof(*romState));
     if (romState) {
@@ -1291,7 +1291,7 @@ target_amiga_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *ou
         e9ui_fileSelect_setOnChange(fsDh0Hdf, target_amiga_settingsHardDriveHdfChanged, extra);
     }
 
-    e9ui_component_t *fsElf = e9ui_fileSelect_make("EXE", 120, 600, "...", elfExts, 0, E9UI_FILESELECT_FILE);
+    e9ui_component_t *fsElf = e9ui_fileSelect_make("EXE", 120, 600, "...", elfExts, (int)countof(elfExts), E9UI_FILESELECT_FILE);
     if (fsElf) {
         e9ui_fileSelect_setAllowEmpty(fsElf, 1);
         e9ui_fileSelect_setText(fsElf, debugger.settingsEdit.amiga.libretro.exePath);

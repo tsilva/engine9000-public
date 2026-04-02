@@ -36,6 +36,12 @@ typedef enum {
   DEBUGGER_RUNMODE_RESTORE,
 } debugger_run_mode_t;
 
+typedef enum debugger_symbol_file_kind {
+    DEBUGGER_SYMBOL_FILE_KIND_NONE = 0,
+    DEBUGGER_SYMBOL_FILE_KIND_BINARY = 1,
+    DEBUGGER_SYMBOL_FILE_KIND_TEXT_MAP = 2
+} debugger_symbol_file_kind_t;
+
 typedef struct e9k_libretro_config {
   char romPath[PATH_MAX];
   char systemDir[PATH_MAX];
@@ -133,6 +139,8 @@ typedef struct e9k_debugger {
     int cliTargetIndex;
     int settingsOk;
     int elfValid;
+    int symbolValid;
+    debugger_symbol_file_kind_t symbolFileKind;
     int restartRequested;
     e9k_debug_options_t opts;
     int coreOptionsShowHelp;

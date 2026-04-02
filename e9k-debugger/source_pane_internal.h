@@ -103,6 +103,7 @@ typedef struct source_pane_state {
     int asmSymbolCount;
     int asmSymbolCap;
     int asmSymbolsLoaded;
+    uint64_t asmSymbolsTextMapRevision;
     char asmSymbolsElf[PATH_MAX];
     char asmSymbolsToolchain[PATH_MAX];
     int functionScrollLock;
