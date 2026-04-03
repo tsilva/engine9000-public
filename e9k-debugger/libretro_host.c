@@ -93,6 +93,7 @@ typedef void (*e9k_debug_set_checkpoint_enabled_fn_t)(int enabled);
 typedef int (*e9k_debug_get_checkpoint_enabled_fn_t)(void);
 typedef uint64_t (*e9k_debug_read_cycle_count_fn_t)(void);
 typedef void (*e9k_debug_set_vblank_callback_fn_t)(void (*cb)(void *), void *user);
+typedef void (*e9k_debug_set_deterministic_fn_t)(int enabled);
 typedef void (*e9k_debug_set_custom_log_frame_callback_fn_t)(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
 typedef void (*e9k_debug_set_neogeo_register_log_frame_callback_fn_t)(e9k_debug_geo_register_log_frame_callback_t cb, void *user);
 typedef int *(*e9k_debug_amiga_get_debug_dma_addr_fn_t)(void);
@@ -246,6 +247,7 @@ typedef struct  {
     e9k_debug_get_checkpoint_enabled_fn_t debugGetCheckpointEnabled;
     e9k_debug_read_cycle_count_fn_t debugReadCycleCount;
     e9k_debug_set_vblank_callback_fn_t setVblankCallback;
+    e9k_debug_set_deterministic_fn_t setDeterministic;
     e9k_debug_set_custom_log_frame_callback_fn_t setCustomLogFrameCallback;
     e9k_debug_set_neogeo_register_log_frame_callback_fn_t setNeogeoRegisterLogFrameCallback;
     e9k_debug_amiga_get_debug_dma_addr_fn_t debugAmigaGetDebugDmaAddr;
@@ -2047,6 +2049,7 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugGetCheckpointEnabled = (e9k_debug_get_checkpoint_enabled_fn_t)libretro_host_loadSymbol("e9k_debug_get_checkpoint_enabled");
     libretro_host.debugReadCycleCount = (e9k_debug_read_cycle_count_fn_t)libretro_host_loadSymbol("e9k_debug_read_cycle_count");
     libretro_host.setVblankCallback = (e9k_debug_set_vblank_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_vblank_callback");
+    libretro_host.setDeterministic = (e9k_debug_set_deterministic_fn_t)libretro_host_loadSymbol("e9k_debug_setDeterministic");
     libretro_host.setCustomLogFrameCallback = (e9k_debug_set_custom_log_frame_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_custom_log_frame_callback");
     libretro_host.setNeogeoRegisterLogFrameCallback = (e9k_debug_set_neogeo_register_log_frame_callback_fn_t)libretro_host_loadSymbol("e9k_debug_set_neogeo_register_log_frame_callback");
     if (!libretro_host.setEnvironment || !libretro_host.setVideoRefresh ||
@@ -3380,6 +3383,16 @@ libretro_host_setVblankCallback(void (*cb)(void *), void *user)
         return false;
     }
     libretro_host.setVblankCallback(cb, user);
+    return true;
+}
+
+bool
+libretro_host_setDeterministic(int enabled)
+{
+    if (!libretro_host.setDeterministic) {
+        return false;
+    }
+    libretro_host.setDeterministic(enabled ? 1 : 0);
     return true;
 }
 

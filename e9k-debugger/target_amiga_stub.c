@@ -206,6 +206,13 @@ target_amiga_stubGetLibretroCliConfig(void)
 }
 
 static void
+target_amiga_stubOnCoreStarted(void)
+{
+    debug_error("BUG: target_amiga_stubOnCoreStarted called with E9K_ENABLE_AMIGA=0");
+    abort();
+}
+
+static void
 target_amiga_stubOnVblank(void)
 {
     debug_error("BUG: target_amiga_stubOnVblank called with E9K_ENABLE_AMIGA=0");
@@ -694,6 +701,7 @@ static target_iface_t target_amiga_stubTarget = {
     .coreOptionsSaveClicked = target_amiga_stubCoreOptionsSaveClicked,
     .coreOptionGetValue = target_amiga_stubCoreOptionGetValue,
     .getLibretroCliConfig = target_amiga_stubGetLibretroCliConfig,
+    .onCoreStarted = target_amiga_stubOnCoreStarted,
     .onVblank = target_amiga_stubOnVblank,
     .libretroSelectConfig = target_amiga_stubLibretroSelectConfig,
     .pickElfToolchainPaths = target_amiga_stubPickElfToolchainPaths,

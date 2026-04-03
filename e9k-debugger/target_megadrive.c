@@ -499,6 +499,11 @@ target_megadrive_getLibretroCliConfig(void)
 }
 
 static void
+target_megadrive_onCoreStarted(void)
+{
+}
+
+static void
 target_megadrive_onVblank(void)
 {
     e9k_debug_mega_sprite_state_t spriteState;
@@ -665,6 +670,7 @@ static target_iface_t _target_megadrive = {
     .coreOptionsSaveClicked = target_megadrive_coreOptionsSaveClicked,
     .coreOptionGetValue = target_megadrive_coreOptionGetValue,
     .getLibretroCliConfig = target_megadrive_getLibretroCliConfig,
+    .onCoreStarted = target_megadrive_onCoreStarted,
     .onVblank = target_megadrive_onVblank,
     .coreIndex = TARGET_MEGADRIVE,
     .libretroSelectConfig = target_megadrive_libretroSelectConfig,

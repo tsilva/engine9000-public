@@ -27,6 +27,10 @@
 #define E9K_HACK_AMI_SPRITE_VIS 0
 #endif
 
+#ifndef E9K_HACK_DET_RTC
+#define E9K_HACK_DET_RTC 0
+#endif
+
 #define E9K_DEBUG_EXCEPTION_WATCH_PREWRITE 0x7e91
 
 // Debug base register sections (passed to e9k_debug_set_debug_base_callback()).
@@ -91,6 +95,14 @@ e9k_debug_remove_temp_breakpoint(uint32_t addr);
 // Optional host callback invoked once per vblank/frame.
 void
 e9k_debug_set_vblank_callback(void (*cb)(void *), void *user);
+
+#if E9K_HACK_DET_RTC
+void
+e9k_debug_setDeterministic(int enabled);
+
+int
+e9k_debug_getDeterministic(void);
+#endif
 
 #if E9K_DEBUGGER_CUSTOM_LOGGER
 void

@@ -71,6 +71,7 @@ typedef struct target_iface
     void (*coreOptionsSaveClicked)(e9ui_context_t *ctx, struct core_options_modal_state *st);
     const char *(*coreOptionGetValue)(const char *key);
     struct e9k_libretro_config *(*getLibretroCliConfig)(void);
+    void (*onCoreStarted)(void);
     void (*onVblank)(void);
     void (*libretroSelectConfig)(void);
     void (*pickElfToolchainPaths)(const char **rawElf, const char **toolchainPrefix);

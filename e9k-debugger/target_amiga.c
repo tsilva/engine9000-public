@@ -21,6 +21,7 @@
 #include "core_options.h"
 #include "libretro_host.h"
 #include "system_badge.h"
+#include "ui_test.h"
 #include "alloc.h"
 #include "file.h"
 #include "strutil.h"
@@ -954,6 +955,14 @@ target_amiga_getLibretroCliConfig(void)
   return &debugger.cliConfig.amiga.libretro;
 }
 
+static void
+target_amiga_onCoreStarted(void)
+{
+    if (ui_test_isEnabled()) {
+        (void)libretro_host_setDeterministic(1);
+    }
+}
+
 
 static void target_amiga_onVblank(void) {}
 
@@ -1589,6 +1598,7 @@ static target_iface_t _target_amiga = {
     .coreOptionsSaveClicked = target_amiga_coreOptionsSaveClicked,
     .coreOptionGetValue = target_amiga_coreOptionGetValue,
     .getLibretroCliConfig = target_amiga_getLibretroCliConfig,
+    .onCoreStarted = target_amiga_onCoreStarted,
     .onVblank = target_amiga_onVblank,
     .coreIndex = TARGET_AMIGA,
     .libretroSelectConfig = target_amiga_libretroSelectConfig,

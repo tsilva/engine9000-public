@@ -204,6 +204,13 @@ target_megadrive_stubGetLibretroCliConfig(void)
 }
 
 static void
+target_megadrive_stubOnCoreStarted(void)
+{
+    debug_error("BUG: target_megadrive_stubOnCoreStarted called with E9K_ENABLE_MEGADRIVE=0");
+    abort();
+}
+
+static void
 target_megadrive_stubOnVblank(void)
 {
     debug_error("BUG: target_megadrive_stubOnVblank called with E9K_ENABLE_MEGADRIVE=0");
@@ -330,6 +337,7 @@ static target_iface_t target_megadrive_stubTarget = {
     .coreOptionsSaveClicked = target_megadrive_stubCoreOptionsSaveClicked,
     .coreOptionGetValue = target_megadrive_stubCoreOptionGetValue,
     .getLibretroCliConfig = target_megadrive_stubGetLibretroCliConfig,
+    .onCoreStarted = target_megadrive_stubOnCoreStarted,
     .onVblank = target_megadrive_stubOnVblank,
     .libretroSelectConfig = target_megadrive_stubLibretroSelectConfig,
     .pickElfToolchainPaths = target_megadrive_stubPickElfToolchainPaths,

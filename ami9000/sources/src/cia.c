@@ -48,6 +48,14 @@
 #include "rtc.h"
 #include "devices.h"
 
+#ifndef E9K_HACK_DET_RTC
+#define E9K_HACK_DET_RTC 0
+#endif
+
+#if E9K_HACK_DET_RTC
+#include "e9k_debug.h"
+#endif
+
 #define CIAA_DEBUG_R 0
 #define CIAA_DEBUG_W 0
 #define CIAA_DEBUG_IRQ 0
@@ -2728,6 +2736,37 @@ static uae_u8 getclockreg(int addr, struct tm *ct)
 	return v;
 }
 
+#if E9K_HACK_DET_RTC
+static struct tm *
+cia_getCurrentClockTime(struct tm *outTm)
+{
+	if (!outTm) {
+		return NULL;
+	}
+	if (e9k_debug_getDeterministic()) {
+		memset(outTm, 0, sizeof(*outTm));
+		outTm->tm_mday = 1;
+		outTm->tm_mon = 0;
+		outTm->tm_year = 100;
+		outTm->tm_wday = 6;
+		return outTm;
+	}
+	time_t t = time(0);
+	t += currprefs.cs_rtc_adjust;
+	struct tm *ct = localtime(&t);
+	if (!ct) {
+		memset(outTm, 0, sizeof(*outTm));
+		outTm->tm_mday = 1;
+		outTm->tm_mon = 0;
+		outTm->tm_year = 100;
+		outTm->tm_wday = 6;
+		return outTm;
+	}
+	*outTm = *ct;
+	return outTm;
+}
+#endif
+
 static void write_battclock(void)
 {
 	if (!currprefs.rtcfile[0] || currprefs.cs_rtc == 0)
@@ -2736,10 +2775,15 @@ static void write_battclock(void)
 	cfgfile_resolve_path_out_load(currprefs.rtcfile, path, MAX_DPATH, PATH_ROM);
 	struct zfile *f = zfile_fopen_2x(path, _T("wb"));
 	if (f) {
+#if E9K_HACK_DET_RTC
+		struct tm clockTm;
+		struct tm *ct = cia_getCurrentClockTime(&clockTm);
+#else
 		struct tm *ct;
 		time_t t = time(0);
 		t += currprefs.cs_rtc_adjust;
 		ct = localtime(&t);
+#endif
 		uae_u8 od;
 		if (currprefs.cs_rtc == 2) {
 			od = rtc_ricoh.clock_control_d;
@@ -2830,7 +2874,11 @@ static uae_u32 REGPARAM2 clock_wget(uaecptr addr)
 
 static uae_u32 REGPARAM2 clock_bget(uaecptr addr)
 {
+#if E9K_HACK_DET_RTC
+	struct tm clockTm;
+#else
 	struct tm *ct;
+#endif
 	uae_u8 v = 0;
 
 	if ((addr & 0xffff) >= 0x8000 && currprefs.cs_fatgaryrev >= 0)
@@ -2845,11 +2893,16 @@ static uae_u32 REGPARAM2 clock_bget(uaecptr addr)
 	if ((addr & 3) == 2 || (addr & 3) == 0 || currprefs.cs_rtc == 0) {
 		return dummy_get_safe(addr, 1, false, v);
 	}
+#if E9K_HACK_DET_RTC
+	addr >>= 2;
+	return getclockreg(addr, cia_getCurrentClockTime(&clockTm));
+#else
 	time_t t = time(0);
 	t += currprefs.cs_rtc_adjust;
 	ct = localtime(&t);
 	addr >>= 2;
 	return getclockreg(addr, ct);
+#endif
 }
 
 static void cputester_event(uae_u32 v)

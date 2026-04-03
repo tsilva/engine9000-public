@@ -312,6 +312,9 @@ bool
 libretro_host_setVblankCallback(void (*cb)(void *), void *user);
 
 bool
+libretro_host_setDeterministic(int enabled);
+
+bool
 libretro_host_setCustomLogFrameCallback(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
 
 bool

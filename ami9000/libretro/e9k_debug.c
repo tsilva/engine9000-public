@@ -110,6 +110,9 @@ static size_t e9k_debug_tempBreakpointCount = 0;
 
 static void (*e9k_debug_vblankCb)(void *) = NULL;
 static void *e9k_debug_vblankUser = NULL;
+#if E9K_HACK_DET_RTC
+static int e9k_debug_deterministic = 0;
+#endif
 
 int debug_enableE9kHooks(void);
 
@@ -1194,6 +1197,20 @@ e9k_debug_set_vblank_callback(void (*cb)(void *), void *user)
 	e9k_debug_vblankCb = cb;
 	e9k_debug_vblankUser = user;
 }
+
+#if E9K_HACK_DET_RTC
+E9K_DEBUG_EXPORT void
+e9k_debug_setDeterministic(int enabled)
+{
+	e9k_debug_deterministic = enabled ? 1 : 0;
+}
+
+E9K_DEBUG_EXPORT int
+e9k_debug_getDeterministic(void)
+{
+	return e9k_debug_deterministic;
+}
+#endif
 
 #if E9K_DEBUGGER_CUSTOM_LOGGER
 E9K_DEBUG_EXPORT void

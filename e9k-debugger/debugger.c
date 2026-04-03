@@ -883,6 +883,9 @@ debugger_main(int argc, char **argv)
 	  debug_error("source_location: core does not expose e9k_debug_set_source_location_resolver");
         }
         target->validateAPI();
+        if (target->onCoreStarted) {
+	  target->onCoreStarted();
+        }
         if (ui_test_getMode() == UI_TEST_MODE_NONE) {
 	  snapshot_loadOnBoot();
         }

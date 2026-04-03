@@ -735,6 +735,11 @@ target_neogeo_getLibretroCliConfig(void)
   return &debugger.cliConfig.neogeo.libretro;
 }
 
+static void
+target_neogeo_onCoreStarted(void)
+{
+}
+
 
 static void
 target_neogeo_onVblank(void)
@@ -923,6 +928,7 @@ static target_iface_t _target_neogeo = {
     .coreOptionsSaveClicked = target_neogeo_coreOptionsSaveClicked,
     .coreOptionGetValue = target_neogeo_coreOptionGetValue,
     .getLibretroCliConfig = target_neogeo_getLibretroCliConfig,
+    .onCoreStarted = target_neogeo_onCoreStarted,
     .onVblank = target_neogeo_onVblank,
     .coreIndex = TARGET_NEOGEO,
     .libretroSelectConfig = target_neogeo_libretroSelectConfig,

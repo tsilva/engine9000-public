@@ -205,6 +205,13 @@ target_neogeo_stubGetLibretroCliConfig(void)
 }
 
 static void
+target_neogeo_stubOnCoreStarted(void)
+{
+    debug_error("BUG: target_neogeo_stubOnCoreStarted called with E9K_ENABLE_NEOGEO=0");
+    abort();
+}
+
+static void
 target_neogeo_stubOnVblank(void)
 {
     debug_error("BUG: target_neogeo_stubOnVblank called with E9K_ENABLE_NEOGEO=0");
@@ -331,6 +338,7 @@ static target_iface_t target_neogeo_stubTarget = {
     .coreOptionsSaveClicked = target_neogeo_stubCoreOptionsSaveClicked,
     .coreOptionGetValue = target_neogeo_stubCoreOptionGetValue,
     .getLibretroCliConfig = target_neogeo_stubGetLibretroCliConfig,
+    .onCoreStarted = target_neogeo_stubOnCoreStarted,
     .onVblank = target_neogeo_stubOnVblank,
     .libretroSelectConfig = target_neogeo_stubLibretroSelectConfig,
     .pickElfToolchainPaths = target_neogeo_stubPickElfToolchainPaths,
