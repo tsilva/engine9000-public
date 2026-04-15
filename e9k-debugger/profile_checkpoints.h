@@ -24,3 +24,6 @@ profile_checkpoints_dump(void);
 
 void
 profile_checkpoints_refreshHotkeyTooltips(void);
+
+void
+profile_checkpoints_renderScanlineOverlay(e9ui_context_t *ctx, const SDL_Rect *dst);

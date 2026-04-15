@@ -55,14 +55,22 @@ typedef enum e9k_debug_option
 } e9k_debug_option_t;
 
 #define E9K_CHECKPOINT_COUNT 64
+#define E9K_CHECKPOINT_NAME_MAX 48
 
 typedef struct e9k_debug_checkpoint {
+    char name[E9K_CHECKPOINT_NAME_MAX];
     uint64_t current;
     uint64_t accumulator;
     uint64_t count;
     uint64_t average;
     uint64_t minimum;
     uint64_t maximum;
+    uint64_t scanlineLast;
+    uint64_t scanlineCount;
+    uint64_t scanlineAccumulator;
+    uint64_t scanlineAverage;
+    uint64_t scanlineMinimum;
+    uint64_t scanlineMaximum;
 } e9k_debug_checkpoint_t;
 
 typedef struct e9k_debug_ami_blitter_vis_span {

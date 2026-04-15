@@ -11,6 +11,7 @@
 #include "e9ui.h"
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
+#include "profile_checkpoints.h"
 #include "libretro.h"
 #include "alloc.h"
 
@@ -662,6 +663,8 @@ emu_geo_translateKey(SDL_Keycode key)
 void
 emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst)    
 {
+  profile_checkpoints_renderScanlineOverlay(ctx, dst);
+
   if (emu_geo_histogramEnabled && emu_geo_spriteShadowReady) {
     emu_e9k_spriteOverlayRender(ctx->renderer, dst, &emu_geo_spriteShadow);
   }

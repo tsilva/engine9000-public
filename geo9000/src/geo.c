@@ -395,7 +395,7 @@ void geo_reset(int hard) {
     geo_z80_reset();
     geo_ymfm_reset(); // Reset the YM2610 to make sure everything is defaulted
     geo_lspc_init();
-    e9k_checkpoint_reset();
+    e9k_checkpoint_resetHard();
     geo_cycles_reset();
 
     if (hard)
@@ -408,7 +408,7 @@ void geo_init(void) {
     geo_ymfm_init();
     geo_rtc_init();
     geo_lspc_init();
-    e9k_checkpoint_reset();
+    e9k_checkpoint_resetHard();
     geo_cycles_reset();
 
     ngsys.irq2_ctrl = 0;

@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "m68k/m68k.h"
 #include "m68k/m68kcpu.h"
@@ -49,6 +50,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define SMATAP 0x98ec // NEO-SMA Tapped bits - 2, 3, 5, 6, 7, 11, 12, and 15
 #define GEO_DBG_TEXT_ADDR 0xFFFF0 // Fake debug output register
 #define GEO_DBG_CHECKPOINT_ADDR 0xFFFEC // Fake checkpoint register
+#define GEO_DBG_CHECKPOINT_NAME_ADDR 0xFFE00 // Fake checkpoint name base register
+#define GEO_DBG_CHECKPOINT_NAME_SIZE (E9K_CHECKPOINT_COUNT * 4u)
 
 // Game ROM data
 static romdata_t *romdata = NULL;
@@ -132,7 +135,49 @@ static inline void geo_debug_print_byte(uint8_t byte) {
 }
 
 static inline void geo_debug_checkpoint_write(uint8_t index) {
-    e9k_checkpoint_write(index);
+    e9k_checkpoint_write(index, (uint32_t)geo_lspc_getScanline());
+}
+
+static inline int
+geo_debug_checkpoint_nameAddressToIndex(uint32_t address, uint8_t *indexOut)
+{
+    if (address < GEO_DBG_CHECKPOINT_NAME_ADDR) {
+        return 0;
+    }
+    uint32_t offset = address - GEO_DBG_CHECKPOINT_NAME_ADDR;
+    if (offset >= GEO_DBG_CHECKPOINT_NAME_SIZE) {
+        return 0;
+    }
+    if ((offset & 3u) != 0u) {
+        return 0;
+    }
+    if (!indexOut) {
+        return 0;
+    }
+    *indexOut = (uint8_t)(offset >> 2);
+    return 1;
+}
+
+static inline void
+geo_debug_checkpoint_setNameFromPointer(uint8_t index, uint32_t ptrValue)
+{
+    char name[E9K_CHECKPOINT_NAME_MAX];
+    memset(name, 0, sizeof(name));
+
+    uint32_t ptr24 = ptrValue & 0x00ffffffu;
+    if (ptr24 != 0) {
+        e9k_debugger_watchpoint_suspend();
+        for (size_t i = 0; i + 1 < sizeof(name); ++i) {
+            uint8_t c = (uint8_t)m68k_read_memory_8((unsigned)((ptr24 + (uint32_t)i) & 0x00ffffffu));
+            name[i] = (char)c;
+            if (c == 0) {
+                break;
+            }
+        }
+        e9k_debugger_watchpoint_resume();
+    }
+
+    e9k_checkpoint_setName(index, name);
 }
 
 #ifdef E9K_HACK_REGISTER_LOG
@@ -1494,6 +1539,12 @@ out:
 void m68k_write_memory_32(unsigned address, unsigned value) {
     uint32_t addr24 = (uint32_t)(address & 0x00ffffffu);
     uint32_t v32 = (uint32_t)value;
+    uint8_t checkpointNameIndex = 0;
+    if (geo_debug_checkpoint_nameAddressToIndex(addr24, &checkpointNameIndex)) {
+        geo_debug_checkpoint_setNameFromPointer(checkpointNameIndex, v32);
+        e9k_debugger_watchpoint_write(addr24, v32, 0, 32, 0);
+        return;
+    }
     e9k_debugger_watchpoint_suspend();
     unsigned old_hi = m68k_read_memory_16(address);
     unsigned old_lo = m68k_read_memory_16(address + 2);
