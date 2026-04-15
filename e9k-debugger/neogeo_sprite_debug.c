@@ -621,6 +621,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     const uint32_t col_black = sprite_dbgColor(0, 0, 0);
     const uint32_t col_white = sprite_dbgColor(255, 255, 255);
     const uint32_t col_green = sprite_dbgColor(0, 255, 0);
+    const uint32_t col_anim = sprite_dbgColor(255, 192, 0);
     const uint32_t col_hist_bg = sprite_dbgColor(34, 34, 34);
     const uint32_t col_bounds = sprite_dbgColor(120, 120, 120);
     for (size_t i = 0; i < needed; ++i) {
@@ -708,6 +709,22 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             if (w <= 0) {
                 continue;
             }
+            int hasAnimBits = 0;
+            unsigned spriteRows = sprsize;
+            if (spriteRows > 32u) {
+                spriteRows = 32u;
+            }
+            for (unsigned row = 0; row < spriteRows; ++row) {
+                unsigned oddWordOffset = (i << 6) + (row << 1) + 1u;
+                if (oddWordOffset >= st->vram_words) {
+                    break;
+                }
+                if (vram[oddWordOffset] & 0x0cu) {
+                    hasAnimBits = 1;
+                    break;
+                }
+            }
+            uint32_t spriteCol = hasAnimBits ? col_anim : col_green;
             int x0 = (int)(xpos & NG_WRAP_MASK);
             int xsum = x0 + w;
             int visible = (x0 < NG_VISIBLE_W) || (xsum > NG_COORD_SIZE);
@@ -715,22 +732,22 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
                 viscount++;
             }
 
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 + w - 1, line, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE + w - 1, line, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line - NG_COORD_SIZE, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 + w - 1, line - NG_COORD_SIZE, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line - NG_COORD_SIZE, 1, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE + w - 1, line - NG_COORD_SIZE, 1, 1, col_green);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 + w - 1, line, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE + w - 1, line, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line - NG_COORD_SIZE, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 + w - 1, line - NG_COORD_SIZE, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line - NG_COORD_SIZE, 1, 1, spriteCol);
+            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE + w - 1, line - NG_COORD_SIZE, 1, 1, spriteCol);
 
             unsigned total_h = (unsigned)(sprsize << 4);
             if (srow == 0u || (srow + 1u) == total_h) {
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line, w, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line, w, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line - NG_COORD_SIZE, w, 1, col_green);
-            sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line - NG_COORD_SIZE, w, 1, col_green);
-        }
+                sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line, w, 1, spriteCol);
+                sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line, w, 1, spriteCol);
+                sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0, line - NG_COORD_SIZE, w, 1, spriteCol);
+                sprite_dbgFillRectCoord(pixels, ext_w, ext_w, ext_h, x0 - NG_COORD_SIZE, line - NG_COORD_SIZE, w, 1, spriteCol);
+            }
         }
 
         if (line >= NG_VISIBLE_Y0 && line < (NG_VISIBLE_Y0 + NG_VISIBLE_H)) {
