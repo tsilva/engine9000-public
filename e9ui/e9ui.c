@@ -255,15 +255,6 @@ e9ui_setMainWindowFocused(e9ui_context_t *ctx, int focused)
 }
 
 int
-e9ui_normalizeMouseWheelY(e9ui_context_t *ctx, int value)
-{
-    if (!ctx || !ctx->normalizeMouseWheelY) {
-        return value;
-    }
-    return ctx->normalizeMouseWheelY(ctx, value);
-}
-
-int
 e9ui_handleGlobalKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
 {
     if (!ctx || !ctx->handleGlobalKeydown || !kev) {
@@ -2847,7 +2838,8 @@ e9ui_processEvents(void)
             if (!mainWindowId || ev.wheel.windowID != mainWindowId) {
                 continue;
             }
-            ev.wheel.y = e9ui_normalizeMouseWheelY(&e9ui->ctx, ev.wheel.y);
+            ev.wheel.x = -ev.wheel.x;
+            ev.wheel.y = -ev.wheel.y;
             int scaledX = e9ui->ctx.mouseX;
             int scaledY = e9ui->ctx.mouseY;
 #if SDL_VERSION_ATLEAST(2, 0, 18)

@@ -330,6 +330,23 @@ ui_setActionTooltip(e9ui_component_t *btn, const char *baseLabel, const char *ac
 void
 ui_refreshHotkeyTooltips(void)
 {
+    ui_validateToolbarButtonRef(&ui_btnContinue);
+    ui_validateToolbarButtonRef(&ui_btnPause);
+    ui_validateToolbarButtonRef(&ui_btnStep);
+    ui_validateToolbarButtonRef(&ui_btnNext);
+    ui_validateToolbarButtonRef(&ui_btnStepInst);
+    ui_validateToolbarButtonRef(&ui_btnWarp);
+    ui_validateToolbarButtonRef(&ui_btnFrameBack);
+    ui_validateToolbarButtonRef(&ui_btnFrameStep);
+    ui_validateToolbarButtonRef(&ui_btnFrameContinue);
+    ui_validateToolbarButtonRef(&ui_btnSaveState);
+    ui_validateToolbarButtonRef(&ui_btnRestoreState);
+    ui_validateToolbarButtonRef(&ui_btnAudio);
+    ui_validateToolbarButtonRef(&ui_btnRecord);
+    ui_validateToolbarButtonRef(&ui_btnSettings);
+    ui_validateToolbarButtonRef(&ui_btnReset);
+    ui_validateToolbarButtonRef(&ui_btnRestart);
+
     ui_setActionTooltip(ui_btnContinue, "Continue", "continue", ui_tipContinue, sizeof(ui_tipContinue));
     ui_setActionTooltip(ui_btnPause, "Pause", "pause", ui_tipPause, sizeof(ui_tipPause));
     ui_setActionTooltip(ui_btnStep, "Step", "step", ui_tipStep, sizeof(ui_tipStep));
@@ -409,13 +426,6 @@ ui_setMainWindowFocused(e9ui_context_t *ctx, int focused)
 {
     (void)ctx;
     aux_window_setFocus(focused);
-}
-
-int
-ui_normalizeMouseWheelY(e9ui_context_t *ctx, int value)
-{
-    (void)ctx;
-    return debugger_platform_normalizeMouseWheelY(value);
 }
 
 int
@@ -977,7 +987,6 @@ ui_configureE9uiHost(void)
     e9ui->ctx.recordUiEvent = ui_hostRecordUiEvent;
     e9ui->ctx.runFullscreenTransition = ui_runFullscreenTransition;
     e9ui->ctx.setMainWindowFocused = ui_setMainWindowFocused;
-    e9ui->ctx.normalizeMouseWheelY = ui_normalizeMouseWheelY;
     e9ui->ctx.handleGlobalKeydown = ui_handleGlobalKeydown;
     e9ui->ctx.shutdownHostUi = ui_shutdownHostUi;
     e9ui->ctx.prepareMainWindow = ui_prepareMainWindow;

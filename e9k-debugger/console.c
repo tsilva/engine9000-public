@@ -185,8 +185,11 @@ console_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_even
             return 0;
         }
         int linesPerWheel = 3;
-        if (ev->wheel.y > 0) { debugger.consoleScrollLines += linesPerWheel * ev->wheel.y; }
-        else if (ev->wheel.y < 0) { debugger.consoleScrollLines += linesPerWheel * ev->wheel.y; if (debugger.consoleScrollLines < 0) debugger.consoleScrollLines = 0; }
+        int count = debugger.console.n;
+        int visibleLines = console_visibleLines(self, ctx, NULL);
+        int topIndex = console_getTopIndex(count, visibleLines);
+        topIndex += linesPerWheel * ev->wheel.y;
+        console_setTopIndex(count, visibleLines, topIndex);
         return 1;
     }
     return 0;

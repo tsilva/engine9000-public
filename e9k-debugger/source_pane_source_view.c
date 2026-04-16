@@ -596,9 +596,6 @@ source_pane_source_view_handleCScrollEvent(e9ui_component_t *self, e9ui_context_
         }
 
         int wheelX = ev->wheel.x;
-        if (ev->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-            wheelX = -wheelX;
-        }
         if (wheelX == 0) {
             return 0;
         }

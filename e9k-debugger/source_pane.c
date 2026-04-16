@@ -2478,10 +2478,6 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
         if (source_pane_pointInBounds(self, mx, my)) {
             int wheelX = ev->wheel.x;
             int wheelY = ev->wheel.y;
-            if (ev->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-                wheelX = -wheelX;
-                wheelY = -wheelY;
-            }
             int handledCScroll = 0;
             if (ctx) {
                 handledCScroll = source_pane_source_view_handleCScrollEvent(self, ctx, st, ev);

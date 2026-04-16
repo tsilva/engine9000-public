@@ -315,9 +315,6 @@ void
 e9ui_setMainWindowFocused(e9ui_context_t *ctx, int focused);
 
 int
-e9ui_normalizeMouseWheelY(e9ui_context_t *ctx, int value);
-
-int
 e9ui_handleGlobalKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev);
 
 void

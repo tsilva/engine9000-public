@@ -216,9 +216,8 @@ target_neogeo_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *o
 
     // System row: [MVS] [AES] [SKIP BIOS LOGO]
     e9ui_component_t *rowSystem = e9ui_flow_make();
-    e9ui_component_t *rowSystemCenter = NULL;
     if (rowSystem) {
-        e9ui_flow_setWrap(rowSystem, 1);
+        e9ui_flow_setWrap(rowSystem, 0);
         e9ui_flow_setSpacing(rowSystem, 12);
         target_neogeo_systemtype_state_t *sys = (target_neogeo_systemtype_state_t *)alloc_calloc(1, sizeof(*sys));
         if (sys) {
@@ -244,16 +243,6 @@ target_neogeo_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *o
         }
         if (cbSkip) {
             e9ui_flow_add(rowSystem, cbSkip);
-        }
-        rowSystemCenter = e9ui_center_make(rowSystem);
-        if (rowSystemCenter) {
-            int rowW = 0;
-            int rowH = 0;
-            e9ui_flow_measure(rowSystem, ctx, &rowW, &rowH);
-            (void)rowH;
-            if (rowW > 0) {
-                e9ui_center_setSize(rowSystemCenter, e9ui_unscale_px(ctx, rowW), 0);
-            }
         }
     }
 
@@ -313,15 +302,9 @@ target_neogeo_settingsBuildModal(e9ui_context_t *ctx, target_settings_modal_t *o
             e9ui_stack_addFixed(body, ltAudio);
             first = 0;
         }
-        if (rowSystemCenter) {
-            if (!first) {
-                e9ui_stack_addFixed(body, e9ui_vspacer_make(12));
-            }
-            e9ui_stack_addFixed(body, rowSystemCenter);
-            first = 0;
-        }
     }
     out->body = body;
+    out->footerWarning = rowSystem;
 }
 
 static void

@@ -422,12 +422,6 @@ debugger_platform_replaceFile(const char *srcPath, const char *dstPath)
 }
 
 int
-debugger_platform_normalizeMouseWheelY(int value)
-{
-    return -value;
-}
-
-int
 debugger_platform_glCompositeNeedsOpenGLHint(void)
 {
     return 1;

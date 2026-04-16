@@ -155,10 +155,6 @@ scroll_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event
             int consumed = 0;
             int wheelX = ev->wheel.x;
             int wheelY = ev->wheel.y;
-            if (ev->wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-                wheelX = -wheelX;
-                wheelY = -wheelY;
-            }
             SDL_Keymod mods = ctx->keyMods;
             if (wheelX == 0 && (mods & KMOD_SHIFT)) {
                 wheelX = wheelY;

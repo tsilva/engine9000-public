@@ -1451,9 +1451,6 @@ amiga_custom_log_overlayBodyHandleEvent(e9ui_component_t *self, e9ui_context_t *
     }
     if (localEv.type == SDL_MOUSEWHEEL) {
         int wheelY = localEv.wheel.y;
-        if (localEv.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
-            wheelY = -wheelY;
-        }
         if (wheelY != 0) {
             amiga_custom_log_adjustScroll(ui, wheelY);
         }
