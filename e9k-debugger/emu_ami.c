@@ -22,6 +22,7 @@
 #include "amiga_custom_log.h"
 #include "amiga_custom_ui.h"
 #include "amiga_custom_regs.h"
+#include "profile_checkpoints.h"
 #include "libretro.h"
 #include "libretro_host.h"
 #include "ui.h"
@@ -3686,6 +3687,7 @@ static void
 emu_ami_render(e9ui_context_t *ctx, SDL_Rect* dst)
 {
     emu_ami_tryBindCustomLogFrameCallback();
+    profile_checkpoints_renderScanlineOverlay(ctx, dst);
     emu_ami_renderDmaDebugOverlay(ctx, dst);
     emu_ami_renderCopperDebugOverlay(ctx, dst);
     emu_ami_renderBlitterVisOverlay(ctx, dst);

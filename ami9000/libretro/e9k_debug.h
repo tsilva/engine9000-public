@@ -31,6 +31,10 @@
 #define E9K_HACK_DET_RTC 0
 #endif
 
+#ifndef E9K_HACK_CHECKPOINTS
+#define E9K_HACK_CHECKPOINTS 0
+#endif
+
 #define E9K_DEBUG_EXCEPTION_WATCH_PREWRITE 0x7e91
 
 // Debug base register sections (passed to e9k_debug_set_debug_base_callback()).
@@ -208,3 +212,10 @@ e9k_debug_set_debug_option(e9k_debug_option_t option, uint32_t argument, void *u
 
 void
 e9k_debug_push_debug_base(uint32_t section, uae_u32 base, uae_u32 size);
+
+#if E9K_HACK_CHECKPOINTS
+void
+e9k_debug_checkpoint_write(uint8_t index);
+void
+e9k_debug_checkpoint_set_name_from_pointer(uint8_t index, uint32_t ptrValue);
+#endif

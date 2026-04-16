@@ -573,29 +573,36 @@ profile_checkpoints_dump(void)
     if (entryCount > E9K_CHECKPOINT_COUNT) {
         entryCount = E9K_CHECKPOINT_COUNT;
     }
-    if (profile_checkpoints_showScanlines) {
-        printf("Profiler checkpoints (scanline avg/min/max):\n");
-    } else {
-        printf("Profiler checkpoints (cycle avg/min/max):\n");
-    }
+    printf("Profiler checkpoints\n");
+    printf("%-3s %-16s | %-32s | %-32s\n",
+           "",
+           "",
+           "Cycles",
+           "Scan Lines");
+    printf("--- ---------------- | ---------- ---------- ---------- | ---------- ---------- ----------\n");
+    printf("%-3s %-16s | %10s %10s %10s | %10s %10s %10s\n",
+           "id",
+           "desc",
+           "avg",
+           "min",
+           "max",
+           "avg",
+           "min",
+           "max");
+    printf("--- ---------------- | ---------- ---------- ---------- | ---------- ---------- ----------\n");
     for (size_t i = 0; i < entryCount; ++i) {
         if (entries[i].count == 0 && entries[i].scanlineCount == 0 && entries[i].name[0] == '\0') {
             continue;
         }
-        uint64_t avg = entries[i].average;
-        uint64_t min = entries[i].minimum;
-        uint64_t max = entries[i].maximum;
-        if (profile_checkpoints_showScanlines) {
-            avg = entries[i].scanlineAverage;
-            min = entries[i].scanlineMinimum;
-            max = entries[i].scanlineMaximum;
-        }
-        printf("%02zu %-16.16s avg:%llu min:%llu max:%llu\n",
+        printf("%02zu  %-16.16s | %10llu %10llu %10llu | %10llu %10llu %10llu\n",
                i,
                entries[i].name,
-               (unsigned long long)avg,
-               (unsigned long long)min,
-               (unsigned long long)max);
+               (unsigned long long)entries[i].average,
+               (unsigned long long)entries[i].minimum,
+               (unsigned long long)entries[i].maximum,
+               (unsigned long long)entries[i].scanlineAverage,
+               (unsigned long long)entries[i].scanlineMinimum,
+               (unsigned long long)entries[i].scanlineMaximum);
     }
     fflush(stdout);
 }

@@ -141,6 +141,10 @@ static uint64_t e9k_debug_protectEnabledMask = 0;
 
 static int e9k_debug_checkpointEnabled = 0;
 static e9k_debug_checkpoint_t e9k_debug_checkpoints[E9K_CHECKPOINT_COUNT];
+#if E9K_HACK_CHECKPOINTS
+static int e9k_debug_checkpointActive = -1;
+static uint64_t e9k_debug_checkpointLastCycle = 0;
+#endif
 static e9k_debug_ami_video_line_state_t e9k_debug_amiVideoLineStates[MAXVPOS];
 
 static int e9k_debug_profilerEnabled = 0;
@@ -2641,21 +2645,35 @@ e9k_debug_get_p1_rom(e9k_debug_rom_region_t *out, size_t cap)
 E9K_DEBUG_EXPORT size_t
 e9k_debug_read_checkpoints(e9k_debug_checkpoint_t *out, size_t cap)
 {
+	size_t count = 0;
+	size_t maxEntries = 0;
+
 	if (!out || cap == 0) {
 		return 0;
 	}
-	size_t count = E9K_CHECKPOINT_COUNT;
-	if (count > cap) {
-		count = cap;
+
+	maxEntries = cap / sizeof(out[0]);
+	if (maxEntries == 0) {
+		return 0;
 	}
+
+	count = E9K_CHECKPOINT_COUNT;
+	if (count > maxEntries) {
+		count = maxEntries;
+	}
+
 	memcpy(out, e9k_debug_checkpoints, count * sizeof(out[0]));
-	return count;
+	return count * sizeof(out[0]);
 }
 
 E9K_DEBUG_EXPORT void
 e9k_debug_reset_checkpoints(void)
 {
 	memset(e9k_debug_checkpoints, 0, sizeof(e9k_debug_checkpoints));
+#if E9K_HACK_CHECKPOINTS
+	e9k_debug_checkpointActive = -1;
+	e9k_debug_checkpointLastCycle = 0;
+#endif
 }
 
 E9K_DEBUG_EXPORT void
@@ -2669,6 +2687,94 @@ e9k_debug_get_checkpoint_enabled(void)
 {
 	return e9k_debug_checkpointEnabled;
 }
+
+#if E9K_HACK_CHECKPOINTS
+void
+e9k_debug_checkpoint_write(uint8_t index)
+{
+	uint64_t sample = 0;
+	uint64_t now = 0;
+	uint64_t scanline = 0;
+
+	if (!e9k_debug_checkpointEnabled) {
+		return;
+	}
+	if (index >= E9K_CHECKPOINT_COUNT) {
+		return;
+	}
+
+	now = e9k_debug_read_cycle_count();
+	scanline = (uint64_t)(vpos & 0xffff);
+
+	if (e9k_debug_checkpointActive >= 0) {
+		e9k_debug_checkpoint_t *prev = &e9k_debug_checkpoints[e9k_debug_checkpointActive];
+		if (now >= e9k_debug_checkpointLastCycle) {
+			sample = now - e9k_debug_checkpointLastCycle;
+		}
+		prev->current = sample;
+		if (prev->count == 0) {
+			prev->minimum = sample;
+			prev->maximum = sample;
+		} else {
+			if (sample < prev->minimum) {
+				prev->minimum = sample;
+			}
+			if (sample > prev->maximum) {
+				prev->maximum = sample;
+			}
+		}
+		prev->count += 1;
+		prev->accumulator += sample;
+		prev->average = prev->count ? (prev->accumulator / prev->count) : 0;
+	}
+
+	{
+		e9k_debug_checkpoint_t *cur = &e9k_debug_checkpoints[index];
+		if (cur->scanlineCount == 0) {
+			cur->scanlineMinimum = scanline;
+			cur->scanlineMaximum = scanline;
+		} else {
+			if (scanline < cur->scanlineMinimum) {
+				cur->scanlineMinimum = scanline;
+			}
+			if (scanline > cur->scanlineMaximum) {
+				cur->scanlineMaximum = scanline;
+			}
+		}
+		cur->scanlineCount += 1;
+		cur->scanlineLast = scanline;
+		cur->scanlineAccumulator += scanline;
+		cur->scanlineAverage = cur->scanlineAccumulator / cur->scanlineCount;
+		cur->current = 0;
+	}
+
+	e9k_debug_checkpointActive = (int)index;
+	e9k_debug_checkpointLastCycle = now;
+}
+
+void
+e9k_debug_checkpoint_set_name_from_pointer(uint8_t index, uint32_t ptrValue)
+{
+	char name[E9K_CHECKPOINT_NAME_MAX];
+	uint32_t ptrAddr = 0;
+
+	if (index >= E9K_CHECKPOINT_COUNT) {
+		return;
+	}
+
+	memset(name, 0, sizeof(name));
+	ptrAddr = ptrValue;
+	if (ptrAddr != 0) {
+		size_t readCount = e9k_debug_read_memory(ptrAddr, (uint8_t *)name, sizeof(name) - 1);
+		if (readCount < sizeof(name)) {
+			name[readCount] = '\0';
+		}
+		name[sizeof(name) - 1] = '\0';
+	}
+
+	memcpy(e9k_debug_checkpoints[index].name, name, sizeof(name));
+}
+#endif
 
 E9K_DEBUG_EXPORT int *
 e9k_debug_amiga_get_debug_dma_addr(void)
