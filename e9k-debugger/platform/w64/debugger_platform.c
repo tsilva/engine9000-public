@@ -58,24 +58,36 @@ debugger_platform_pathIsDirectory(const char *path)
 static const char *
 debugger_platform_dialogDefaultPath(const char *path, char *out, size_t cap)
 {
+    DWORD fullPathLen = 0;
+    char fullPath[PATH_MAX];
+    const char *sourcePath = path;
     size_t len = 0;
+
     if (!path || !*path) {
         return path;
     }
     if (!out || cap < 4) {
         return path;
     }
-    if (!debugger_platform_pathIsDirectory(path)) {
+
+    fullPathLen = GetFullPathNameA(path, (DWORD)sizeof(fullPath), fullPath, NULL);
+    if (fullPathLen > 0 && fullPathLen < sizeof(fullPath)) {
+        sourcePath = fullPath;
+    }
+    len = strlen(sourcePath);
+    if (len + 1 > cap) {
         return path;
     }
-    len = strlen(path);
-    if (path[len - 1] == '/' || path[len - 1] == '\\') {
-        return path;
+    memcpy(out, sourcePath, len + 1);
+    if (!debugger_platform_pathIsDirectory(out)) {
+        return out;
+    }
+    if (out[len - 1] == '/' || out[len - 1] == '\\') {
+        return out;
     }
     if (len + 2 > cap) {
-        return path;
+        return out;
     }
-    memcpy(out, path, len);
     out[len++] = '\\';
     out[len] = '\0';
     return out;
@@ -436,7 +448,12 @@ debugger_platform_windowIconAssetPath(void)
 const char *
 debugger_platform_selectFolderDialog(const char *title, const char *defaultPath)
 {
-    return tinyfd_selectFolderDialog(title, defaultPath);
+    char dialogPath[PATH_MAX];
+
+    return tinyfd_selectFolderDialog(title,
+                                     debugger_platform_dialogDefaultPath(defaultPath,
+                                                                         dialogPath,
+                                                                         sizeof(dialogPath)));
 }
 
 const char *
