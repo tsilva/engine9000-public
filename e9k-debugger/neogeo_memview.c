@@ -64,6 +64,7 @@
 #define NEOGEO_MEMVIEW_FOLLOW_MIN_ACTIVE_TILES 16u
 #define NEOGEO_MEMVIEW_FOLLOW_MIN_SCORE 256u
 #define NEOGEO_MEMVIEW_FOLLOW_STABLE_FRAMES 3u
+#define NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS 64
 
 typedef enum neogeo_memview_mode {
     neogeo_memview_mode_ram = 0,
@@ -1103,14 +1104,14 @@ neogeo_memview_updateModeButtons(neogeo_memview_state_t *ui)
         if (ui->mode == neogeo_memview_mode_ram) {
             e9ui_button_setTheme(ui->modeButtonRam, activeTheme);
         } else {
-            e9ui_button_setTheme(ui->modeButtonRam, NULL);
+            e9ui_button_clearTheme(ui->modeButtonRam);
         }
     }
     if (ui->modeButtonCrom) {
         if (ui->mode == neogeo_memview_mode_crom) {
             e9ui_button_setTheme(ui->modeButtonCrom, activeTheme);
         } else {
-            e9ui_button_setTheme(ui->modeButtonCrom, NULL);
+            e9ui_button_clearTheme(ui->modeButtonCrom);
         }
     }
 }
@@ -2287,14 +2288,53 @@ neogeo_memview_toolbarWrapPreferredHeight(e9ui_component_t *self, e9ui_context_t
 }
 
 static void
+neogeo_memview_toolbarWrapLayoutRow(e9ui_context_t *ctx,
+                                    e9ui_component_t **children,
+                                    const int *childWidths,
+                                    const int *childHeights,
+                                    int childCount,
+                                    int rowX,
+                                    int rowY,
+                                    int rowH,
+                                    int gap)
+{
+    int x = rowX;
+
+    if (!ctx || !children || !childWidths || !childHeights || childCount <= 0) {
+        return;
+    }
+    for (int i = 0; i < childCount; ++i) {
+        e9ui_component_t *child = children[i];
+        int childH = childHeights[i];
+        int childY = rowY;
+
+        if (!child) {
+            continue;
+        }
+        if (childH < rowH) {
+            childY = rowY + (rowH - childH) / 2;
+        }
+        if (child->layout) {
+            child->layout(child, ctx, (e9ui_rect_t){ x, childY, childWidths[i], childH });
+        }
+        x += childWidths[i] + gap;
+    }
+}
+
+static void
 neogeo_memview_toolbarWrapLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
     neogeo_memview_toolbar_wrap_state_t *state = NULL;
+    e9ui_component_t *rowChildren[NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS];
+    int rowWidths[NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS];
+    int rowHeights[NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS];
     int pad = 0;
     int gap = 0;
     int x = 0;
     int y = 0;
     int rowH = 0;
+    int rowX = 0;
+    int rowCount = 0;
     int rightLimit = 0;
 
     if (!self || !ctx || !self->state) {
@@ -2305,6 +2345,7 @@ neogeo_memview_toolbarWrapLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9
     pad = e9ui_scale_px(ctx, state->padPx);
     gap = e9ui_scale_px(ctx, state->gapPx);
     x = bounds.x + pad;
+    rowX = x;
     y = bounds.y + pad;
     rightLimit = bounds.x + bounds.w - pad;
     if (rightLimit < x) {
@@ -2332,18 +2373,41 @@ neogeo_memview_toolbarWrapLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9
             childH = 24;
         }
         if (x > bounds.x + pad && x + childW > rightLimit) {
-            x = bounds.x + pad;
+            neogeo_memview_toolbarWrapLayoutRow(ctx,
+                                                rowChildren,
+                                                rowWidths,
+                                                rowHeights,
+                                                rowCount,
+                                                rowX,
+                                                y,
+                                                rowH,
+                                                gap);
             y += rowH + gap;
+            x = bounds.x + pad;
+            rowX = x;
             rowH = 0;
+            rowCount = 0;
         }
         if (childH > rowH) {
             rowH = childH;
         }
-        if (child->layout) {
-            child->layout(child, ctx, (e9ui_rect_t){ x, y, childW, childH });
+        if (rowCount < NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS) {
+            rowChildren[rowCount] = child;
+            rowWidths[rowCount] = childW;
+            rowHeights[rowCount] = childH;
+            rowCount++;
         }
         x += childW + gap;
     }
+    neogeo_memview_toolbarWrapLayoutRow(ctx,
+                                        rowChildren,
+                                        rowWidths,
+                                        rowHeights,
+                                        rowCount,
+                                        rowX,
+                                        y,
+                                        rowH,
+                                        gap);
 }
 
 static void
