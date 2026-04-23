@@ -974,7 +974,7 @@ neogeo_sprite_debug_toggle(void)
                                                            neogeo_sprite_debug_windowDefaultRect(&e9ui->ctx),
                                                            &s_dbg.windowState);
         e9ui_windowOpen(s_dbg.windowState.windowHost,
-                                     "Sprite Debug",
+                                     "ENGINE9000 DEBUGGER - Sprites",
                                      rect,
                                      s_dbg.root ? s_dbg.root : s_dbg.overlayBodyHost,
                                      neogeo_sprite_debug_overlayWindowCloseRequested,

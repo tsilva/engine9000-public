@@ -138,13 +138,13 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_child_add(button_stack, btn, histogramBtnMeta);
   }
   
-  e9ui_component_t *btn_register_log = e9ui_button_make("Register Log", emu_geo_toggleRegisterLog, comp);
+  e9ui_component_t *btn_register_log = e9ui_button_make("Registers", emu_geo_toggleRegisterLog, comp);
   e9ui_button_setMini(btn_register_log, 1);
   e9ui_setFocusTarget(btn_register_log, comp);
   void *registerLogBtnMeta = alloc_strdup("register_log");
   e9ui_child_add(button_stack, btn_register_log, registerLogBtnMeta);
 
-  e9ui_component_t *btn_memview = e9ui_button_make("Memview", emu_geo_toggleMemview, comp);
+  e9ui_component_t *btn_memview = e9ui_button_make("RAM/ROMS", emu_geo_toggleMemview, comp);
   if (btn_memview) {
     e9ui_button_setMini(btn_memview, 1);
     e9ui_setFocusTarget(btn_memview, comp);
@@ -152,7 +152,7 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_child_add(button_stack, btn_memview, memviewBtnMeta);
   }
 
-  e9ui_component_t *btn_debug = e9ui_button_make("Sprite Debug", emu_geo_toggleSpriteDebug, comp);
+  e9ui_component_t *btn_debug = e9ui_button_make("Sprites", emu_geo_toggleSpriteDebug, comp);
   if (btn_debug) {
     e9ui_button_setMini(btn_debug, 1);
     e9ui_setFocusTarget(btn_debug, comp);
@@ -160,7 +160,7 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_child_add(button_stack, btn_debug, spriteDebugBtnMeta);
   }
 
-  e9ui_component_t *btn_palette_debug = e9ui_button_make("Palette Debug", emu_geo_togglePaletteDebug, comp);
+  e9ui_component_t *btn_palette_debug = e9ui_button_make("Palette", emu_geo_togglePaletteDebug, comp);
   if (btn_palette_debug) {
     e9ui_button_setMini(btn_palette_debug, 1);
     e9ui_setFocusTarget(btn_palette_debug, comp);

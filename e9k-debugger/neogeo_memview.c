@@ -34,7 +34,7 @@
 #include "libretro_host.h"
 #include "neogeo_memview.h"
 
-#define NEOGEO_MEMVIEW_TITLE "ENGINE9000 DEBUGGER - NEO GEO MEMVIEW"
+#define NEOGEO_MEMVIEW_TITLE "ENGINE9000 DEBUGGER - RAM/ROMS"
 #define NEOGEO_MEMVIEW_RAM_BASE_MIN 0x00100000u
 #define NEOGEO_MEMVIEW_RAM_BASE_MAX 0x0010ffffu
 #define NEOGEO_MEMVIEW_DEFAULT_RAM_ROW_BYTES 32u
@@ -91,19 +91,6 @@ typedef struct neogeo_memview_toolbar_wrap_state {
     int padPx;
     int gapPx;
 } neogeo_memview_toolbar_wrap_state_t;
-
-typedef struct neogeo_memview_crom_profile_accum {
-    uint64_t frames;
-    double overviewTotalMs;
-    double overviewLiveMapMs;
-    double overviewDrawMs;
-    double overviewUploadMs;
-    double cromTotalMs;
-    double cromReadMs;
-    double cromPaletteMapMs;
-    double cromDrawMs;
-    double cromUploadMs;
-} neogeo_memview_crom_profile_accum_t;
 
 typedef struct neogeo_memview_step_buttons_action_ctx {
     neogeo_memview_state_t *ui;
@@ -174,10 +161,6 @@ struct neogeo_memview_state {
     uint32_t overviewBackgroundTilesPerRow;
     int overviewBackgroundMode;
     uint64_t overviewBackgroundContentToken;
-    double lastOverviewTotalMs;
-    double lastOverviewLiveMapMs;
-    double lastOverviewDrawMs;
-    double lastOverviewUploadMs;
     neogeo_memview_overview_range_t overviewRanges[2];
     int (*widthSeekDefaultHandleEvent)(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev);
     int (*zoomSeekDefaultHandleEvent)(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev);
@@ -206,71 +189,6 @@ static const aux_window_ops_t neogeo_memview_auxWindowOps = {
     .setFocus = neogeo_memview_setMainWindowFocused,
     .render = neogeo_memview_render,
 };
-
-static uint64_t
-neogeo_memview_perfNow(void)
-{
-    return (uint64_t)SDL_GetPerformanceCounter();
-}
-
-static double
-neogeo_memview_perfElapsedMs(uint64_t start, uint64_t end)
-{
-    uint64_t freq = (uint64_t)SDL_GetPerformanceFrequency();
-
-    if (freq == 0u || end < start) {
-        return 0.0;
-    }
-    return (double)(end - start) * 1000.0 / (double)freq;
-}
-
-static void
-neogeo_memview_profileAccumPrint(const neogeo_memview_crom_profile_accum_t *accum)
-{
-    if (!accum || accum->frames == 0u) {
-        return;
-    }
-    printf("neogeo_memview crom profile avg over %llu frames: overview total=%.3fms livemap=%.3fms draw=%.3fms upload=%.3fms | main total=%.3fms read=%.3fms palmap=%.3fms draw=%.3fms upload=%.3fms\n",
-           (unsigned long long)accum->frames,
-           accum->overviewTotalMs / (double)accum->frames,
-           accum->overviewLiveMapMs / (double)accum->frames,
-           accum->overviewDrawMs / (double)accum->frames,
-           accum->overviewUploadMs / (double)accum->frames,
-           accum->cromTotalMs / (double)accum->frames,
-           accum->cromReadMs / (double)accum->frames,
-           accum->cromPaletteMapMs / (double)accum->frames,
-           accum->cromDrawMs / (double)accum->frames,
-           accum->cromUploadMs / (double)accum->frames);
-}
-
-static void
-neogeo_memview_profileAccumRecord(double overviewTotalMs,
-                                  double overviewLiveMapMs,
-                                  double overviewDrawMs,
-                                  double overviewUploadMs,
-                                  double cromTotalMs,
-                                  double cromReadMs,
-                                  double cromPaletteMapMs,
-                                  double cromDrawMs,
-                                  double cromUploadMs)
-{
-    static neogeo_memview_crom_profile_accum_t accum;
-
-    accum.frames++;
-    accum.overviewTotalMs += overviewTotalMs;
-    accum.overviewLiveMapMs += overviewLiveMapMs;
-    accum.overviewDrawMs += overviewDrawMs;
-    accum.overviewUploadMs += overviewUploadMs;
-    accum.cromTotalMs += cromTotalMs;
-    accum.cromReadMs += cromReadMs;
-    accum.cromPaletteMapMs += cromPaletteMapMs;
-    accum.cromDrawMs += cromDrawMs;
-    accum.cromUploadMs += cromUploadMs;
-    if ((accum.frames % 60u) == 0u) {
-        neogeo_memview_profileAccumPrint(&accum);
-        memset(&accum, 0, sizeof(accum));
-    }
-}
 
 static int
 neogeo_memview_stepButtonsGutterWidth(const e9ui_context_t *ctx, e9ui_component_t *self);
@@ -819,21 +737,6 @@ neogeo_memview_followActiveCromWindow(neogeo_memview_state_t *ui, const e9ui_rec
     } else {
         ui->followPendingStartRow = currentRow;
         ui->followPendingFrames = 0u;
-    }
-    if (ui->followPrevSpriteVram && ui->followPrevSpriteVramWords == spriteState.vram_words) {
-        printf("neogeo_memview follow: current_row=%u best_row=%u current_active=%u current_changed=%u current_score=%llu best_active=%u best_changed=%u best_score=%llu threshold=%llu qualified=%d pending_row=%u pending_frames=%u\n",
-               currentRow,
-               bestStartRow,
-               currentActiveSum,
-               currentChangedSum,
-               (unsigned long long)currentScore,
-               bestActiveSum,
-               bestChangedSum,
-               (unsigned long long)bestScore,
-               (unsigned long long)thresholdScore,
-               bestQualified,
-               ui->followPendingStartRow,
-               ui->followPendingFrames);
     }
     if ((!ui->followPrevSpriteVramWords || ui->followPrevSpriteVramWords != spriteState.vram_words) &&
         bootstrapBestActiveSum > 0u && bootstrapBestStartRow != currentRow) {
@@ -1626,10 +1529,6 @@ neogeo_memview_rebuildOverviewBackgroundTexture(neogeo_memview_state_t *ui, e9ui
     e9ui_rect_t contentBounds;
     uint32_t sample[256];
     e9k_debug_rom_region_t crom = { 0 };
-    uint64_t overviewStartTicks = neogeo_memview_perfNow();
-    uint64_t phaseStartTicks = overviewStartTicks;
-    double drawMs = 0.0;
-    double uploadMs = 0.0;
     uint32_t cacheStartRow = 0u;
     uint32_t cacheVisibleRows = 0u;
     uint32_t cacheTilesPerRow = 0u;
@@ -1656,10 +1555,6 @@ neogeo_memview_rebuildOverviewBackgroundTexture(neogeo_memview_state_t *ui, e9ui
         ui->overviewBackgroundVisibleRows == cacheVisibleRows &&
         ui->overviewBackgroundTilesPerRow == cacheTilesPerRow &&
         ui->overviewBackgroundContentToken == cacheContentToken) {
-        ui->lastOverviewTotalMs = 0.0;
-        ui->lastOverviewLiveMapMs = 0.0;
-        ui->lastOverviewDrawMs = 0.0;
-        ui->lastOverviewUploadMs = 0.0;
         return 1;
     }
     if (!neogeo_memview_ensureTexture(ctx->renderer,
@@ -1743,17 +1638,10 @@ neogeo_memview_rebuildOverviewBackgroundTexture(neogeo_memview_state_t *ui, e9ui
                     }
                 }
             }
-            drawMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-            phaseStartTicks = neogeo_memview_perfNow();
             SDL_UpdateTexture(ui->overviewBackgroundTexture,
                               NULL,
                               ui->overviewBackgroundPixels,
                               contentBounds.w * (int)sizeof(*ui->overviewBackgroundPixels));
-            uploadMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-            ui->lastOverviewTotalMs = neogeo_memview_perfElapsedMs(overviewStartTicks, neogeo_memview_perfNow());
-            ui->lastOverviewLiveMapMs = 0.0;
-            ui->lastOverviewDrawMs = drawMs;
-            ui->lastOverviewUploadMs = uploadMs;
             ui->overviewBackgroundMode = (int)ui->mode;
             ui->overviewBackgroundStartRow = cacheStartRow;
             ui->overviewBackgroundVisibleRows = cacheVisibleRows;
@@ -1842,18 +1730,11 @@ neogeo_memview_rebuildOverviewBackgroundTexture(neogeo_memview_state_t *ui, e9ui
             }
         }
     }
-    drawMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    phaseStartTicks = neogeo_memview_perfNow();
 
     SDL_UpdateTexture(ui->overviewBackgroundTexture,
                       NULL,
                       ui->overviewBackgroundPixels,
                       contentBounds.w * (int)sizeof(*ui->overviewBackgroundPixels));
-    uploadMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    ui->lastOverviewTotalMs = neogeo_memview_perfElapsedMs(overviewStartTicks, neogeo_memview_perfNow());
-    ui->lastOverviewLiveMapMs = 0.0;
-    ui->lastOverviewDrawMs = drawMs;
-    ui->lastOverviewUploadMs = uploadMs;
     ui->overviewBackgroundMode = (int)ui->mode;
     ui->overviewBackgroundStartRow = cacheStartRow;
     ui->overviewBackgroundVisibleRows = cacheVisibleRows;
@@ -1935,7 +1816,7 @@ neogeo_memview_renderOverviewSelection(neogeo_memview_state_t *ui,
     SDL_RenderDrawRect(ctx->renderer, &selection);
 }
 
-static double
+static int
 neogeo_memview_rebuildOverviewTexture(neogeo_memview_state_t *ui,
                                       e9ui_context_t *ctx,
                                       const e9ui_rect_t *overviewBounds)
@@ -1943,20 +1824,16 @@ neogeo_memview_rebuildOverviewTexture(neogeo_memview_state_t *ui,
     e9ui_rect_t contentBounds;
     e9k_debug_sprite_state_t spriteState;
     const uint16_t *vram = NULL;
-    uint64_t startTicks = neogeo_memview_perfNow();
-    uint64_t phaseStartTicks = startTicks;
-    double liveMapMs = 0.0;
-    double uploadMs = 0.0;
 
     if (!ui || !ctx || !overviewBounds || ui->mode != neogeo_memview_mode_crom) {
-        return 0.0;
+        return 0;
     }
     contentBounds = neogeo_memview_overviewContentBounds(ctx, overviewBounds);
     if (contentBounds.w <= 0 || contentBounds.h <= 0) {
-        return 0.0;
+        return 0;
     }
     if (!ui->overviewBackgroundTexture || !ui->overviewBackgroundPixels) {
-        return 0.0;
+        return 0;
     }
     if (!neogeo_memview_ensureTexture(ctx->renderer,
                                       &ui->overviewTexture,
@@ -1966,13 +1843,13 @@ neogeo_memview_rebuildOverviewTexture(neogeo_memview_state_t *ui,
                                       &ui->overviewTextureH,
                                       contentBounds.w,
                                       contentBounds.h)) {
-        return 0.0;
+        return 0;
     }
     memcpy(ui->overviewPixels,
            ui->overviewBackgroundPixels,
            (size_t)contentBounds.w * (size_t)contentBounds.h * sizeof(*ui->overviewPixels));
     if (!libretro_host_debugGetSpriteState(&spriteState) || !spriteState.vram || spriteState.vram_words == 0u) {
-        return 0.0;
+        return 0;
     }
     vram = spriteState.vram;
     for (unsigned i = 0; i < 382u; ++i) {
@@ -2004,17 +1881,11 @@ neogeo_memview_rebuildOverviewTexture(neogeo_memview_state_t *ui,
             }
         }
     }
-    liveMapMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    phaseStartTicks = neogeo_memview_perfNow();
     SDL_UpdateTexture(ui->overviewTexture,
                       NULL,
                       ui->overviewPixels,
                       contentBounds.w * (int)sizeof(*ui->overviewPixels));
-    uploadMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    ui->lastOverviewLiveMapMs = liveMapMs;
-    ui->lastOverviewUploadMs = uploadMs;
-    ui->lastOverviewTotalMs = neogeo_memview_perfElapsedMs(startTicks, neogeo_memview_perfNow());
-    return ui->lastOverviewTotalMs;
+    return 1;
 }
 
 static int
@@ -2984,13 +2855,6 @@ neogeo_memview_canvasRenderCrom(neogeo_memview_state_t *ui,
     uint8_t *tileHasPalette = NULL;
     size_t visibleTileCount = 0u;
     int haveLivePalette = 0;
-    uint64_t cromStartTicks = neogeo_memview_perfNow();
-    uint64_t phaseStartTicks = cromStartTicks;
-    double readMs = 0.0;
-    double paletteMapMs = 0.0;
-    double drawMs = 0.0;
-    double uploadMs = 0.0;
-    double totalMs = 0.0;
 
     if (!neogeo_memview_ensureTexture(ctx->renderer,
                                       &ui->mainTexture,
@@ -3025,8 +2889,6 @@ neogeo_memview_canvasRenderCrom(neogeo_memview_state_t *ui,
                       paletteState.colors &&
                       paletteState.color_count > 0u;
     (void)neogeo_memview_readRange(ui, ui->cromBaseAddr, tileData, dataSize);
-    readMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    phaseStartTicks = neogeo_memview_perfNow();
 
     for (size_t tileIndex = 0; tileIndex < visibleTileCount; ++tileIndex) {
         uint32_t tileNum = (ui->cromBaseAddr / NEOGEO_MEMVIEW_TILE_BYTES) + (uint32_t)tileIndex;
@@ -3042,8 +2904,6 @@ neogeo_memview_canvasRenderCrom(neogeo_memview_state_t *ui,
                                                   tilePaletteBanks,
                                                   tileHasPalette);
     }
-    paletteMapMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    phaseStartTicks = neogeo_memview_perfNow();
 
     for (int row = 0; row < visibleRows; ++row) {
         uint32_t rowAddr = ui->cromBaseAddr + (uint32_t)row * (uint32_t)tilesPerRow * NEOGEO_MEMVIEW_TILE_BYTES;
@@ -3088,21 +2948,8 @@ neogeo_memview_canvasRenderCrom(neogeo_memview_state_t *ui,
             (void)tileNum;
         }
     }
-    drawMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    phaseStartTicks = neogeo_memview_perfNow();
 
     SDL_UpdateTexture(ui->mainTexture, NULL, ui->mainPixels, texW * (int)sizeof(*ui->mainPixels));
-    uploadMs = neogeo_memview_perfElapsedMs(phaseStartTicks, neogeo_memview_perfNow());
-    totalMs = neogeo_memview_perfElapsedMs(cromStartTicks, neogeo_memview_perfNow());
-    neogeo_memview_profileAccumRecord(ui->lastOverviewTotalMs,
-                                      ui->lastOverviewLiveMapMs,
-                                      ui->lastOverviewDrawMs,
-                                      ui->lastOverviewUploadMs,
-                                      totalMs,
-                                      readMs,
-                                      paletteMapMs,
-                                      drawMs,
-                                      uploadMs);
     ui->contentPixelWidth = texW;
     srcRect.x = ui->scrollX;
     srcRect.y = 0;

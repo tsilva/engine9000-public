@@ -16,6 +16,7 @@
 #include "alloc.h"
 #include "config.h"
 #include "e9ui.h"
+#include "e9ui_scroll.h"
 #include "libretro_host.h"
 
 #define NEOGEO_PALETTE_DEBUG_BANK_COUNT 2
@@ -33,6 +34,7 @@
 #define NEOGEO_PALETTE_DEBUG_PANEL_HEADER_H 18
 #define NEOGEO_PALETTE_DEBUG_PANEL_GAP 18
 #define NEOGEO_PALETTE_DEBUG_OUTER_PAD 10
+#define NEOGEO_PALETTE_DEBUG_RIGHT_PAD 18
 
 typedef struct neogeo_palette_debug_state
 {
@@ -60,8 +62,8 @@ typedef struct neogeo_palette_debug_overlay_body_state
 static neogeo_palette_debug_state_t neogeo_palette_debugState = {
     .windowState.winX = E9UI_WINDOW_COORD_UNSET,
     .windowState.winY = E9UI_WINDOW_COORD_UNSET,
-    .windowState.openMinWidthPx = 420,
-    .windowState.openMinHeightPx = 360,
+    .windowState.openMinWidthPx = 320,
+    .windowState.openMinHeightPx = 260,
     .windowState.openCenterWhenNoSaved = 1,
 };
 
@@ -264,45 +266,92 @@ neogeo_palette_debug_hashPaletteState(const e9k_debug_palette_state_t *paletteSt
 }
 
 static void
-neogeo_palette_debug_presentTexture(int baseW, int baseH)
+neogeo_palette_debug_baseSize(int *outW, int *outH)
 {
-    SDL_Rect viewport = {0, 0, 0, 0};
+    const int paletteCellW =
+        NEOGEO_PALETTE_DEBUG_PALETTE_BORDER * 2 +
+        NEOGEO_PALETTE_DEBUG_SWATCH_COLS * NEOGEO_PALETTE_DEBUG_SWATCH_SIZE +
+        (NEOGEO_PALETTE_DEBUG_SWATCH_COLS - 1) * NEOGEO_PALETTE_DEBUG_SWATCH_GAP;
+    const int paletteCellH =
+        NEOGEO_PALETTE_DEBUG_PALETTE_BORDER * 2 +
+        NEOGEO_PALETTE_DEBUG_SWATCH_ROWS * NEOGEO_PALETTE_DEBUG_SWATCH_SIZE +
+        (NEOGEO_PALETTE_DEBUG_SWATCH_ROWS - 1) * NEOGEO_PALETTE_DEBUG_SWATCH_GAP;
+    const int panelW =
+        NEOGEO_PALETTE_DEBUG_PANEL_PAD * 2 +
+        NEOGEO_PALETTE_DEBUG_GRID_COLS * paletteCellW +
+        (NEOGEO_PALETTE_DEBUG_GRID_COLS - 1) * NEOGEO_PALETTE_DEBUG_PALETTE_GAP;
+    const int panelH =
+        NEOGEO_PALETTE_DEBUG_PANEL_HEADER_H +
+        NEOGEO_PALETTE_DEBUG_PANEL_PAD * 2 +
+        NEOGEO_PALETTE_DEBUG_GRID_ROWS * paletteCellH +
+        (NEOGEO_PALETTE_DEBUG_GRID_ROWS - 1) * NEOGEO_PALETTE_DEBUG_PALETTE_GAP;
+
+    if (outW) {
+        *outW = panelW + NEOGEO_PALETTE_DEBUG_OUTER_PAD * 2;
+    }
+    if (outH) {
+        *outH = panelH * NEOGEO_PALETTE_DEBUG_BANK_COUNT +
+                NEOGEO_PALETTE_DEBUG_PANEL_GAP +
+                NEOGEO_PALETTE_DEBUG_OUTER_PAD * 2;
+    }
+}
+
+static float
+neogeo_palette_debug_scaleForWidth(int availW, int baseW)
+{
+    int drawW = availW - NEOGEO_PALETTE_DEBUG_OUTER_PAD - NEOGEO_PALETTE_DEBUG_RIGHT_PAD;
+
+    if (baseW <= 0) {
+        return 1.0f;
+    }
+    if (drawW <= 0) {
+        drawW = availW > 0 ? availW : baseW;
+    }
+    return (float)drawW / (float)baseW;
+}
+
+static int
+neogeo_palette_debug_contentHeightForWidth(int availW)
+{
+    int baseW = 0;
+    int baseH = 0;
+    float scale = 1.0f;
+    int contentH = 0;
+
+    neogeo_palette_debug_baseSize(&baseW, &baseH);
+    scale = neogeo_palette_debug_scaleForWidth(availW, baseW);
+    contentH = (int)((float)baseH * scale + 0.5f) + NEOGEO_PALETTE_DEBUG_OUTER_PAD * 2;
+    if (contentH < 1) {
+        contentH = 1;
+    }
+    return contentH;
+}
+
+static void
+neogeo_palette_debug_presentTexture(const e9ui_rect_t *bounds, int baseW, int baseH)
+{
     SDL_Rect clearRect = {0, 0, 0, 0};
     SDL_Rect dst = {0, 0, 0, 0};
     SDL_Rect src = {0, 0, 0, 0};
-    int outW = 0;
-    int outH = 0;
-    float scaleX = 1.0f;
-    float scaleY = 1.0f;
     float scale = 1.0f;
 
-    SDL_RenderGetViewport(neogeo_palette_debugState.renderer, &viewport);
-    outW = viewport.w;
-    outH = viewport.h;
-    if (outW <= 0 || outH <= 0) {
-        SDL_GetRendererOutputSize(neogeo_palette_debugState.renderer, &outW, &outH);
-    }
-    if (outW <= 0 || outH <= 0) {
+    if (!bounds || bounds->w <= 0 || bounds->h <= 0) {
         return;
     }
 
-    scaleX = (float)outW / (float)baseW;
-    scaleY = (float)outH / (float)baseH;
-    scale = scaleX < scaleY ? scaleX : scaleY;
-    if (scale <= 0.0f) {
-        scale = 1.0f;
-    }
-
+    scale = neogeo_palette_debug_scaleForWidth(bounds->w, baseW);
     dst.w = (int)((float)baseW * scale + 0.5f);
     dst.h = (int)((float)baseH * scale + 0.5f);
-    dst.x = (outW - dst.w) / 2;
-    dst.y = (outH - dst.h) / 2;
+    dst.x = bounds->x + NEOGEO_PALETTE_DEBUG_OUTER_PAD;
+    dst.y = bounds->y + NEOGEO_PALETTE_DEBUG_OUTER_PAD;
     src.w = baseW;
     src.h = baseH;
 
     SDL_SetRenderDrawColor(neogeo_palette_debugState.renderer, 0, 0, 0, 255);
-    clearRect.w = outW;
-    clearRect.h = outH;
+    clearRect.x = bounds->x;
+    clearRect.y = bounds->y;
+    clearRect.w = bounds->w;
+    clearRect.h = bounds->h;
     SDL_RenderFillRect(neogeo_palette_debugState.renderer, &clearRect);
     SDL_RenderCopy(neogeo_palette_debugState.renderer, neogeo_palette_debugState.texture, &src, &dst);
 }
@@ -408,9 +457,8 @@ neogeo_palette_debug_renderBank(uint32_t *pixels,
 }
 
 static void
-neogeo_palette_debug_renderFrameInternal(void)
+neogeo_palette_debug_renderFrameInternal(const e9ui_rect_t *bounds)
 {
-    const int swatchStride = NEOGEO_PALETTE_DEBUG_SWATCH_SIZE + NEOGEO_PALETTE_DEBUG_SWATCH_GAP;
     const int paletteCellW =
         NEOGEO_PALETTE_DEBUG_PALETTE_BORDER * 2 +
         NEOGEO_PALETTE_DEBUG_SWATCH_COLS * NEOGEO_PALETTE_DEBUG_SWATCH_SIZE +
@@ -428,22 +476,18 @@ neogeo_palette_debug_renderFrameInternal(void)
         NEOGEO_PALETTE_DEBUG_PANEL_PAD * 2 +
         NEOGEO_PALETTE_DEBUG_GRID_ROWS * paletteCellH +
         (NEOGEO_PALETTE_DEBUG_GRID_ROWS - 1) * NEOGEO_PALETTE_DEBUG_PALETTE_GAP;
-    const int baseW = panelW + NEOGEO_PALETTE_DEBUG_OUTER_PAD * 2;
-    const int baseH =
-        panelH * NEOGEO_PALETTE_DEBUG_BANK_COUNT +
-        NEOGEO_PALETTE_DEBUG_PANEL_GAP +
-        NEOGEO_PALETTE_DEBUG_OUTER_PAD * 2;
+    int baseW = 0;
+    int baseH = 0;
     const uint32_t bgColor = neogeo_palette_debug_argb(255, 10, 12, 16);
     e9k_debug_palette_state_t paletteState;
     uint32_t hash = 0u;
     size_t needed = 0;
 
-    (void)swatchStride;
-
-    if (!neogeo_palette_debugState.windowState.open || !neogeo_palette_debugState.renderer) {
+    if (!bounds || !neogeo_palette_debugState.windowState.open || !neogeo_palette_debugState.renderer) {
         return;
     }
 
+    neogeo_palette_debug_baseSize(&baseW, &baseH);
     memset(&paletteState, 0, sizeof(paletteState));
     if (!libretro_host_debugGetGeoPaletteState(&paletteState)) {
         return;
@@ -471,7 +515,7 @@ neogeo_palette_debug_renderFrameInternal(void)
 
     hash = neogeo_palette_debug_hashPaletteState(&paletteState);
     if (neogeo_palette_debugState.cachedValid && hash == neogeo_palette_debugState.lastHash) {
-        neogeo_palette_debug_presentTexture(baseW, baseH);
+        neogeo_palette_debug_presentTexture(bounds, baseW, baseH);
         return;
     }
 
@@ -511,7 +555,7 @@ neogeo_palette_debug_renderFrameInternal(void)
                       NULL,
                       neogeo_palette_debugState.pixels,
                       baseW * (int)sizeof(uint32_t));
-    neogeo_palette_debug_presentTexture(baseW, baseH);
+    neogeo_palette_debug_presentTexture(bounds, baseW, baseH);
     neogeo_palette_debugState.cachedValid = 1;
     neogeo_palette_debugState.lastHash = hash;
 }
@@ -521,8 +565,7 @@ neogeo_palette_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_con
 {
     (void)self;
     (void)ctx;
-    (void)availW;
-    return 0;
+    return neogeo_palette_debug_contentHeightForWidth(availW);
 }
 
 static void
@@ -538,14 +581,6 @@ neogeo_palette_debug_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *c
 static void
 neogeo_palette_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 {
-    SDL_Rect prevViewport = {0, 0, 0, 0};
-    SDL_Rect viewport = {0, 0, 0, 0};
-    SDL_Rect prevClip = {0, 0, 0, 0};
-    SDL_Rect localClip = {0, 0, 0, 0};
-    SDL_Rect viewportLocal = {0, 0, 0, 0};
-    SDL_Rect clipped = {0, 0, 0, 0};
-    int hadClip = 0;
-
     if (!self || !ctx || !ctx->renderer) {
         return;
     }
@@ -553,39 +588,9 @@ neogeo_palette_debug_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *c
         return;
     }
 
-    viewport.x = self->bounds.x;
-    viewport.y = self->bounds.y;
-    viewport.w = self->bounds.w;
-    viewport.h = self->bounds.h;
-    hadClip = SDL_RenderIsClipEnabled(ctx->renderer) ? 1 : 0;
-    if (hadClip) {
-        SDL_RenderGetClipRect(ctx->renderer, &prevClip);
-    }
-    SDL_RenderGetViewport(ctx->renderer, &prevViewport);
-    SDL_RenderSetViewport(ctx->renderer, &viewport);
-
-    if (hadClip) {
-        localClip.x = prevClip.x - self->bounds.x;
-        localClip.y = prevClip.y - self->bounds.y;
-        localClip.w = prevClip.w;
-        localClip.h = prevClip.h;
-        viewportLocal.w = self->bounds.w;
-        viewportLocal.h = self->bounds.h;
-        if (SDL_IntersectRect(&localClip, &viewportLocal, &clipped)) {
-            SDL_RenderSetClipRect(ctx->renderer, &clipped);
-        } else {
-            SDL_Rect empty = {0, 0, 0, 0};
-            SDL_RenderSetClipRect(ctx->renderer, &empty);
-        }
-    }
-
     neogeo_palette_debugState.window = ctx->window;
     neogeo_palette_debugState.renderer = ctx->renderer;
-    neogeo_palette_debug_renderFrameInternal();
-    SDL_RenderSetViewport(ctx->renderer, &prevViewport);
-    if (hadClip) {
-        SDL_RenderSetClipRect(ctx->renderer, &prevClip);
-    }
+    neogeo_palette_debug_renderFrameInternal(&self->bounds);
 }
 
 static void
@@ -676,19 +681,24 @@ neogeo_palette_debug_toggle(void)
         if (!neogeo_palette_debugState.windowState.windowHost) {
             return;
         }
+        e9ui_windowSetMinSize(neogeo_palette_debugState.windowState.windowHost,
+                              neogeo_palette_debugState.windowState.openMinWidthPx,
+                              neogeo_palette_debugState.windowState.openMinHeightPx);
 
         neogeo_palette_debugState.root = e9ui_stack_makeVertical();
         neogeo_palette_debugState.overlayBodyHost = neogeo_palette_debug_makeOverlayBodyHost();
         if (neogeo_palette_debugState.root && neogeo_palette_debugState.overlayBodyHost) {
+            e9ui_component_t *scroll = e9ui_scroll_make(neogeo_palette_debugState.overlayBodyHost);
+
             e9ui_stack_addFlex(neogeo_palette_debugState.root,
-                               neogeo_palette_debugState.overlayBodyHost);
+                               scroll ? scroll : neogeo_palette_debugState.overlayBodyHost);
         }
 
         rect = e9ui_windowResolveStateOpenRect(&e9ui->ctx,
                                                neogeo_palette_debug_windowDefaultRect(&e9ui->ctx),
                                                &neogeo_palette_debugState.windowState);
         e9ui_windowOpen(neogeo_palette_debugState.windowState.windowHost,
-                        "Palette Debug",
+                        "ENGINE9000 DEBUGGER - Palette",
                         rect,
                         neogeo_palette_debugState.root ?
                             neogeo_palette_debugState.root :

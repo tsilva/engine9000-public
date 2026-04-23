@@ -353,8 +353,8 @@ config_loadConfigFile(const char *path)
             neogeo_sprite_debug_loadConfigProperty(prop, value);
             continue;
         }
-        if (strncmp(key, "comp.neogeo_palette_debug.", 25) == 0) {
-            const char *prop = key + 25;
+        if (strncmp(key, "comp.neogeo_palette_debug.", 26) == 0) {
+            const char *prop = key + 26;
             neogeo_palette_debug_loadConfigProperty(prop, value);
             continue;
         }
