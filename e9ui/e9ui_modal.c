@@ -371,6 +371,20 @@ e9ui_modal_closeAll(e9ui_context_t *ctx)
 }
 
 void
+e9ui_modal_setCloseCallback(e9ui_component_t *modal, e9ui_modal_close_cb_t onClose, void *user)
+{
+    if (!modal || !modal->state) {
+        return;
+    }
+    e9ui_modal_state_t *st = (e9ui_modal_state_t*)modal->state;
+    if (!st) {
+        return;
+    }
+    st->onClose = onClose;
+    st->onCloseUser = user;
+}
+
+void
 e9ui_modal_setBodyChild(e9ui_component_t *modal, e9ui_component_t *child, e9ui_context_t *ctx)
 {
     if (!modal || !modal->state) {

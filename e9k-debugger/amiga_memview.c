@@ -37,7 +37,6 @@
 #include "platform.h"
 #include "settings.h"
 #include "strutil.h"
-#include "tinyfiledialogs.h"
 
 #define AMIGA_MEMVIEW_TITLE "ENGINE9000 DEBUGGER - RAM"
 #define AMIGA_MEMVIEW_DEFAULT_ROW_BYTES 40u
@@ -103,6 +102,28 @@ typedef struct amiga_memview_toolbar_wrap_state {
 typedef struct amiga_memview_legend_state {
     amiga_memview_state_t *ui;
 } amiga_memview_legend_state_t;
+
+enum
+{
+    amiga_memview_ram_type_chip = 0,
+    amiga_memview_ram_type_slow,
+    amiga_memview_ram_type_fast,
+    amiga_memview_ram_type_other,
+    amiga_memview_ram_type_count
+};
+
+typedef struct amiga_memview_save_plan {
+    amiga_memview_state_t *ui;
+    target_memory_range_t ranges[AMIGA_MEMVIEW_EXPORT_MAX_RANGES];
+    size_t rangeCount;
+    char exportPaths[amiga_memview_ram_type_count][PATH_MAX];
+    char customRegsPath[PATH_MAX];
+    char collisionMessage[PATH_MAX];
+    char sequenceButtonLabel[PATH_MAX];
+    int exportTypes[amiga_memview_ram_type_count];
+    int exportTypeCount;
+    e9ui_component_t *modal;
+} amiga_memview_save_plan_t;
 
 struct amiga_memview_state {
     e9ui_window_state_t windowState;
@@ -173,15 +194,6 @@ static amiga_memview_state_t amiga_memview_stateSingleton = {
 static const aux_window_ops_t amiga_memview_auxWindowOps = {
     .setFocus = amiga_memview_setMainWindowFocused,
     .render = amiga_memview_render,
-};
-
-enum
-{
-    amiga_memview_ram_type_chip = 0,
-    amiga_memview_ram_type_slow,
-    amiga_memview_ram_type_fast,
-    amiga_memview_ram_type_other,
-    amiga_memview_ram_type_count
 };
 
 static int
@@ -1440,47 +1452,164 @@ amiga_memview_collectExportRanges(target_memory_range_t *outRanges, size_t cap, 
 }
 
 static int
-amiga_memview_buildOverwriteMessage(char *out, size_t cap, const char *const *paths, int pathCount)
+amiga_memview_buildIncrementedPath(char *out, size_t cap, const char *path, unsigned index)
 {
-    size_t pos = 0u;
-    const char *header = "These files already exist:\n";
-    const char *footer = "\n\nOverwrite these RAM dumps?";
+    const char *slash = NULL;
+    const char *backslash = NULL;
+    const char *lastSep = NULL;
+    const char *dot = NULL;
+    const char *ext = NULL;
+    char suffix[32];
+    size_t stemLen = 0u;
+    size_t suffixLen = 0u;
+    size_t extLen = 0u;
+    size_t pathLen = 0u;
 
-    if (!out || cap == 0u) {
+    if (!out || cap == 0u || !path || !path[0]) {
+        return 0;
+    }
+    slash = strrchr(path, '/');
+    backslash = strrchr(path, '\\');
+    if (slash && backslash) {
+        lastSep = slash > backslash ? slash : backslash;
+    } else if (slash) {
+        lastSep = slash;
+    } else {
+        lastSep = backslash;
+    }
+
+    dot = strrchr(path, '.');
+    pathLen = strlen(path);
+    if (dot && (!lastSep || dot > lastSep)) {
+        ext = dot;
+        stemLen = (size_t)(dot - path);
+        extLen = pathLen - stemLen;
+    } else {
+        ext = path + pathLen;
+        stemLen = pathLen;
+        extLen = 0u;
+    }
+
+    if (snprintf(suffix, sizeof(suffix), "-%u", index) < 0) {
+        return 0;
+    }
+    suffix[sizeof(suffix) - 1u] = '\0';
+    suffixLen = strlen(suffix);
+    if (stemLen + suffixLen + extLen >= cap) {
+        return 0;
+    }
+
+    memcpy(out, path, stemLen);
+    memcpy(out + stemLen, suffix, suffixLen);
+    if (extLen > 0u) {
+        memcpy(out + stemLen + suffixLen, ext, extLen);
+    }
+    out[stemLen + suffixLen + extLen] = '\0';
+    return 1;
+}
+
+static int
+amiga_memview_resolveIncrementedPath(char *path, size_t cap)
+{
+    char candidate[PATH_MAX];
+
+    if (!path || cap == 0u || !path[0]) {
+        return 0;
+    }
+    if (!settings_pathExistsFile(path)) {
+        return 1;
+    }
+
+    for (unsigned index = 1u; index < 1000000u; ++index) {
+        if (!amiga_memview_buildIncrementedPath(candidate, sizeof(candidate), path, index)) {
+            return 0;
+        }
+        if (!settings_pathExistsFile(candidate)) {
+            strutil_strlcpy(path, cap, candidate);
+            return strcmp(path, candidate) == 0 ? 1 : 0;
+        }
+    }
+    return 0;
+}
+
+static int
+amiga_memview_copyBasenameNoExt(char *out, size_t cap, const char *path)
+{
+    const char *slash = NULL;
+    const char *backslash = NULL;
+    const char *base = NULL;
+    const char *dot = NULL;
+    size_t len = 0u;
+
+    if (!out || cap == 0u || !path || !path[0]) {
+        return 0;
+    }
+    slash = strrchr(path, '/');
+    backslash = strrchr(path, '\\');
+    if (slash && backslash) {
+        base = (slash > backslash ? slash : backslash) + 1;
+    } else if (slash) {
+        base = slash + 1;
+    } else if (backslash) {
+        base = backslash + 1;
+    } else {
+        base = path;
+    }
+    if (!base[0]) {
+        return 0;
+    }
+    dot = strrchr(base, '.');
+    if (dot) {
+        len = (size_t)(dot - base);
+    } else {
+        len = strlen(base);
+    }
+    if (len == 0u || len >= cap) {
+        return 0;
+    }
+    memcpy(out, base, len);
+    out[len] = '\0';
+    return 1;
+}
+
+static int
+amiga_memview_buildCollisionMessage(char *out, size_t cap, const char *path)
+{
+    char basename[PATH_MAX];
+
+    if (!out || cap == 0u || !path || !path[0]) {
+        return 0;
+    }
+    if (!amiga_memview_copyBasenameNoExt(basename, sizeof(basename), path)) {
+        return 0;
+    }
+    strutil_join2Trunc(out, cap, basename, " already exists");
+    return strlen(out) == strlen(basename) + strlen(" already exists") ? 1 : 0;
+}
+
+static int
+amiga_memview_buildSequenceButtonLabel(char *out, size_t cap, const char *path)
+{
+    char candidate[PATH_MAX];
+    char basename[PATH_MAX];
+
+    if (!out || cap == 0u || !path || !path[0]) {
         return 0;
     }
     out[0] = '\0';
-    if (strlen(header) >= cap) {
-        return 0;
-    }
-    memcpy(out, header, strlen(header) + 1u);
-    pos = strlen(header);
-    for (int i = 0; i < pathCount; ++i) {
-        size_t pathLen = 0u;
-
-        if (!paths[i] || !paths[i][0]) {
-            continue;
-        }
-        pathLen = strlen(paths[i]);
-        if (pos + pathLen >= cap) {
+    for (unsigned index = 1u; index < 1000000u; ++index) {
+        if (!amiga_memview_buildIncrementedPath(candidate, sizeof(candidate), path, index)) {
             return 0;
         }
-        memcpy(out + pos, paths[i], pathLen);
-        pos += pathLen;
-        out[pos] = '\0';
-        if (i + 1 < pathCount) {
-            if (pos + 1u >= cap) {
+        if (!settings_pathExistsFile(candidate)) {
+            if (!amiga_memview_copyBasenameNoExt(basename, sizeof(basename), candidate)) {
                 return 0;
             }
-            out[pos++] = '\n';
-            out[pos] = '\0';
+            strutil_join2Trunc(out, cap, "Save as ", basename);
+            return strlen(out) == strlen("Save as ") + strlen(basename) ? 1 : 0;
         }
     }
-    if (pos + strlen(footer) >= cap) {
-        return 0;
-    }
-    memcpy(out + pos, footer, strlen(footer) + 1u);
-    return 1;
+    return 0;
 }
 
 static int
@@ -1618,6 +1747,207 @@ amiga_memview_writeExportType(amiga_memview_state_t *ui,
     return 1;
 }
 
+static int
+amiga_memview_finishSavePlan(amiga_memview_save_plan_t *plan, int saveAsSequence)
+{
+    if (!plan || !plan->ui || plan->rangeCount == 0u || plan->exportTypeCount == 0) {
+        e9ui_showTransientMessage("RAM SAVE FAILED");
+        return 0;
+    }
+
+    for (int i = 0; i < plan->exportTypeCount; ++i) {
+        int ramType = plan->exportTypes[i];
+
+        if (saveAsSequence &&
+            !amiga_memview_resolveIncrementedPath(plan->exportPaths[ramType], sizeof(plan->exportPaths[ramType]))) {
+            e9ui_showTransientMessage("RAM SAVE FAILED");
+            return 0;
+        }
+        if (!amiga_memview_writeExportType(plan->ui,
+                                           plan->ranges,
+                                           plan->rangeCount,
+                                           ramType,
+                                           plan->exportPaths[ramType])) {
+            e9ui_showTransientMessage("RAM SAVE FAILED");
+            return 0;
+        }
+    }
+    if (saveAsSequence &&
+        !amiga_memview_resolveIncrementedPath(plan->customRegsPath, sizeof(plan->customRegsPath))) {
+        e9ui_showTransientMessage("RAM SAVE FAILED");
+        return 0;
+    }
+    if (!amiga_memview_writeCustomRegsExportPath(plan->customRegsPath)) {
+        e9ui_showTransientMessage("RAM SAVE FAILED");
+        return 0;
+    }
+
+    e9ui_showTransientMessage("RAM SAVED");
+    return 1;
+}
+
+static void
+amiga_memview_requestCloseSaveModal(amiga_memview_save_plan_t *plan)
+{
+    e9ui_component_t *modal = NULL;
+
+    if (!plan || !plan->modal) {
+        if (plan) {
+            alloc_free(plan);
+        }
+        return;
+    }
+    modal = plan->modal;
+    plan->modal = NULL;
+    e9ui_modal_setCloseCallback(modal, NULL, NULL);
+    e9ui_setHidden(modal, 1);
+    if (e9ui && !e9ui->pendingRemove) {
+        e9ui->pendingRemove = modal;
+    }
+    alloc_free(plan);
+}
+
+static void
+amiga_memview_saveModalClosed(e9ui_component_t *modal, void *user)
+{
+    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
+
+    (void)modal;
+    if (plan) {
+        plan->modal = NULL;
+        e9ui_modal_setCloseCallback(modal, NULL, NULL);
+        alloc_free(plan);
+    }
+}
+
+static void
+amiga_memview_saveOverwriteClicked(e9ui_context_t *ctx, void *user)
+{
+    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
+
+    (void)ctx;
+    if (!plan) {
+        return;
+    }
+    amiga_memview_finishSavePlan(plan, 0);
+    amiga_memview_requestCloseSaveModal(plan);
+}
+
+static void
+amiga_memview_saveSequenceClicked(e9ui_context_t *ctx, void *user)
+{
+    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
+
+    (void)ctx;
+    if (!plan) {
+        return;
+    }
+    amiga_memview_finishSavePlan(plan, 1);
+    amiga_memview_requestCloseSaveModal(plan);
+}
+
+static void
+amiga_memview_saveCancelClicked(e9ui_context_t *ctx, void *user)
+{
+    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
+
+    (void)ctx;
+    if (!plan) {
+        return;
+    }
+    amiga_memview_requestCloseSaveModal(plan);
+}
+
+static e9ui_component_t *
+amiga_memview_makeSaveCollisionModalBody(amiga_memview_save_plan_t *plan)
+{
+    e9ui_component_t *message = e9ui_stack_makeVertical();
+    e9ui_component_t *contentBox = NULL;
+    e9ui_component_t *center = NULL;
+    e9ui_component_t *overwriteButton = NULL;
+    e9ui_component_t *sequenceButton = NULL;
+    e9ui_component_t *cancelButton = NULL;
+    e9ui_component_t *footer = NULL;
+
+    if (!message) {
+        return NULL;
+    }
+    e9ui_stack_addFixed(message,
+                        e9ui_text_make(plan->collisionMessage[0] ?
+                                       plan->collisionMessage :
+                                       "RAM dump files already exist"));
+
+    contentBox = e9ui_box_make(message);
+    e9ui_box_setPadding(contentBox, 16);
+    center = e9ui_center_make(contentBox);
+    e9ui_center_setSize(center, 520, 80);
+
+    overwriteButton = e9ui_button_make("Overwrite", amiga_memview_saveOverwriteClicked, plan);
+    sequenceButton = e9ui_button_make(plan->sequenceButtonLabel[0] ? plan->sequenceButtonLabel : "Save as sequence",
+                                      amiga_memview_saveSequenceClicked,
+                                      plan);
+    cancelButton = e9ui_button_make("Cancel", amiga_memview_saveCancelClicked, plan);
+    footer = e9ui_flow_make();
+    e9ui_flow_setPadding(footer, 0);
+    e9ui_flow_setSpacing(footer, 8);
+    e9ui_flow_setWrap(footer, 0);
+    e9ui_button_setTheme(overwriteButton, e9ui_theme_button_preset_red());
+    e9ui_button_setGlowPulse(overwriteButton, 1);
+    e9ui_flow_add(footer, overwriteButton);
+    e9ui_button_setTheme(sequenceButton, e9ui_theme_button_preset_green());
+    e9ui_button_setGlowPulse(sequenceButton, 1);
+    e9ui_flow_add(footer, sequenceButton);
+    e9ui_flow_add(footer, cancelButton);
+
+    e9ui_component_t *overlay = e9ui_overlay_make(center, footer);
+    e9ui_overlay_setAnchor(overlay, e9ui_anchor_bottom_right);
+    e9ui_overlay_setMargin(overlay, 12);
+    return overlay;
+}
+
+static int
+amiga_memview_showSaveCollisionModal(e9ui_context_t *ctx, amiga_memview_save_plan_t *plan)
+{
+    int modalW = 0;
+    int modalH = 0;
+    int x = 0;
+    int y = 0;
+    e9ui_rect_t rect;
+    e9ui_component_t *body = NULL;
+
+    if (!ctx || !plan) {
+        return 0;
+    }
+    modalW = e9ui_scale_px(ctx, 600);
+    modalH = e9ui_scale_px(ctx, 180);
+    if (modalW < 1) {
+        modalW = 1;
+    }
+    if (modalH < 1) {
+        modalH = 1;
+    }
+    x = (ctx->winW - modalW) / 2;
+    y = (ctx->winH - modalH) / 2;
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    rect = (e9ui_rect_t){ x, y, modalW, modalH };
+    plan->modal = e9ui_modal_show(ctx, "RAM dump files exist", rect, amiga_memview_saveModalClosed, plan);
+    if (!plan->modal) {
+        return 0;
+    }
+    body = amiga_memview_makeSaveCollisionModalBody(plan);
+    if (!body) {
+        amiga_memview_requestCloseSaveModal(plan);
+        return 1;
+    }
+    e9ui_modal_setBodyChild(plan->modal, body, ctx);
+    return 1;
+}
+
 static void
 amiga_memview_onSave(e9ui_context_t *ctx, void *user)
 {
@@ -1627,19 +1957,14 @@ amiga_memview_onSave(e9ui_context_t *ctx, void *user)
     char fileName[PATH_MAX];
     char regsFileName[PATH_MAX];
     char configName[PATH_MAX];
-    char exportPaths[amiga_memview_ram_type_count][PATH_MAX];
-    char customRegsPath[PATH_MAX];
-    const char *overwritePaths[amiga_memview_ram_type_count + 1];
+    amiga_memview_save_plan_t *plan = NULL;
     const char *folder = NULL;
     const char *configPath = NULL;
     const char *defaultPath = NULL;
     size_t rangeCount = 0u;
-    int exportTypes[amiga_memview_ram_type_count];
-    int exportTypeCount = 0;
     int overwriteCount = 0;
 
-    (void)ctx;
-    if (!ui) {
+    if (!ctx || !ui) {
         return;
     }
 
@@ -1671,6 +1996,15 @@ amiga_memview_onSave(e9ui_context_t *ctx, void *user)
         return;
     }
 
+    plan = (amiga_memview_save_plan_t*)alloc_calloc(1, sizeof(*plan));
+    if (!plan) {
+        e9ui_showTransientMessage("RAM SAVE FAILED");
+        return;
+    }
+    plan->ui = ui;
+    plan->rangeCount = rangeCount;
+    memcpy(plan->ranges, ranges, sizeof(ranges[0]) * rangeCount);
+
     for (int ramType = 0; ramType < amiga_memview_ram_type_count; ++ramType) {
         int present = 0;
 
@@ -1684,56 +2018,79 @@ amiga_memview_onSave(e9ui_context_t *ctx, void *user)
             continue;
         }
         if (!amiga_memview_buildExportFileName(fileName, sizeof(fileName), configName, ramType) ||
-            !debugger_platform_pathJoin(exportPaths[ramType],
-                                        sizeof(exportPaths[ramType]),
+            !debugger_platform_pathJoin(plan->exportPaths[ramType],
+                                        sizeof(plan->exportPaths[ramType]),
                                         folder,
                                         fileName)) {
+            alloc_free(plan);
             e9ui_showTransientMessage("RAM SAVE FAILED");
             return;
         }
-        exportTypes[exportTypeCount++] = ramType;
-        if (settings_pathExistsFile(exportPaths[ramType])) {
-            overwritePaths[overwriteCount++] = exportPaths[ramType];
+        plan->exportTypes[plan->exportTypeCount++] = ramType;
+        if (settings_pathExistsFile(plan->exportPaths[ramType])) {
+            if (!plan->collisionMessage[0] &&
+                !amiga_memview_buildCollisionMessage(plan->collisionMessage,
+                                                     sizeof(plan->collisionMessage),
+                                                     plan->exportPaths[ramType])) {
+                alloc_free(plan);
+                e9ui_showTransientMessage("RAM SAVE FAILED");
+                return;
+            }
+            if (!plan->sequenceButtonLabel[0] &&
+                !amiga_memview_buildSequenceButtonLabel(plan->sequenceButtonLabel,
+                                                        sizeof(plan->sequenceButtonLabel),
+                                                        plan->exportPaths[ramType])) {
+                alloc_free(plan);
+                e9ui_showTransientMessage("RAM SAVE FAILED");
+                return;
+            }
+            overwriteCount++;
         }
     }
 
-    if (exportTypeCount == 0) {
+    if (plan->exportTypeCount == 0) {
+        alloc_free(plan);
         e9ui_showTransientMessage("RAM SAVE FAILED");
         return;
     }
 
     if (!amiga_memview_buildCustomRegsFileName(regsFileName, sizeof(regsFileName), configName) ||
-        !debugger_platform_pathJoin(customRegsPath, sizeof(customRegsPath), folder, regsFileName)) {
+        !debugger_platform_pathJoin(plan->customRegsPath, sizeof(plan->customRegsPath), folder, regsFileName)) {
+        alloc_free(plan);
         e9ui_showTransientMessage("RAM SAVE FAILED");
         return;
     }
-    if (settings_pathExistsFile(customRegsPath)) {
-        overwritePaths[overwriteCount++] = customRegsPath;
-    }
-
-    if (overwriteCount > 0) {
-        char message[1024];
-
-        if (!amiga_memview_buildOverwriteMessage(message, sizeof(message), overwritePaths, overwriteCount) ||
-            !tinyfd_messageBox("Overwrite RAM dumps?", message, "yesno", "warning", 0)) {
-            return;
-        }
-    }
-
-    for (int i = 0; i < exportTypeCount; ++i) {
-        int ramType = exportTypes[i];
-
-        if (!amiga_memview_writeExportType(ui, ranges, rangeCount, ramType, exportPaths[ramType])) {
+    if (settings_pathExistsFile(plan->customRegsPath)) {
+        if (!plan->collisionMessage[0] &&
+            !amiga_memview_buildCollisionMessage(plan->collisionMessage,
+                                                 sizeof(plan->collisionMessage),
+                                                 plan->customRegsPath)) {
+            alloc_free(plan);
             e9ui_showTransientMessage("RAM SAVE FAILED");
             return;
         }
+        if (!plan->sequenceButtonLabel[0] &&
+            !amiga_memview_buildSequenceButtonLabel(plan->sequenceButtonLabel,
+                                                    sizeof(plan->sequenceButtonLabel),
+                                                    plan->customRegsPath)) {
+            alloc_free(plan);
+            e9ui_showTransientMessage("RAM SAVE FAILED");
+            return;
+        }
+        overwriteCount++;
     }
-    if (!amiga_memview_writeCustomRegsExportPath(customRegsPath)) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
+
+    if (overwriteCount > 0) {
+        if (!amiga_memview_showSaveCollisionModal(ctx, plan)) {
+            alloc_free(plan);
+            e9ui_showTransientMessage("RAM SAVE FAILED");
+            return;
+        }
         return;
     }
 
-    e9ui_showTransientMessage("RAM SAVED");
+    amiga_memview_finishSavePlan(plan, 0);
+    alloc_free(plan);
 }
 
 static void
