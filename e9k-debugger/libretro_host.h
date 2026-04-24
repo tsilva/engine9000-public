@@ -191,6 +191,15 @@ libretro_host_debugGetFixRom(e9k_debug_rom_region_t *out);
 bool
 libretro_host_debugGetGeoPaletteState(e9k_debug_palette_state_t *out);
 
+bool
+libretro_host_debugGetGeoAudioFrame(e9k_debug_audio_frame_t *out);
+
+bool
+libretro_host_debugSetGeoAudioVisEnabled(int enabled);
+
+bool
+libretro_host_debugSetGeoAudioMuteMask(uint32_t mask);
+
 size_t
 libretro_host_debugReadCheckpoints(e9k_debug_checkpoint_t *out, size_t cap);
 

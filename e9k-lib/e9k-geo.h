@@ -8,6 +8,24 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+
+#define E9K_DEBUG_GEO_ADPCM_A_CHANNELS 6
+#define E9K_DEBUG_GEO_AUDIO_MUTE_FM (1u << 0)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_SSG (1u << 1)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A0 (1u << 2)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A1 (1u << 3)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A2 (1u << 4)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A3 (1u << 5)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A4 (1u << 6)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A5 (1u << 7)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_B (1u << 8)
+#define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A_MASK \
+    (E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A0 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A1 | \
+     E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A2 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A3 | \
+     E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A4 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A5)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,6 +52,21 @@ typedef struct geo_debug_palette_state {
     size_t color_count;
     unsigned active_bank;
 } e9k_debug_palette_state_t;
+
+typedef struct geo_debug_audio_source {
+    int32_t peakL;
+    int32_t peakR;
+} e9k_debug_audio_source_t;
+
+typedef struct geo_debug_audio_frame {
+    uint64_t frameNo;
+    e9k_debug_audio_source_t fm;
+    e9k_debug_audio_source_t ssg;
+    e9k_debug_audio_source_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS];
+    e9k_debug_audio_source_t adpcmB;
+    e9k_debug_audio_source_t mixed;
+    uint32_t adpcmBPlaybackMilliHz;
+} e9k_debug_audio_frame_t;
 
 
 #ifdef __cplusplus

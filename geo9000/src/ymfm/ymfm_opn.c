@@ -52,6 +52,13 @@ static uint8_t m_fm_samples_per_output;    // how many samples to repeat
 static uint8_t m_eos_status;               // end-of-sample signals
 static uint8_t m_flag_mask;                // flag mask control
 static int32_t m_last_fm[3];               // last FM output
+#ifdef E9K_HACK_AUDIO_VIS
+static int m_debug_audio_vis_enabled;
+static uint32_t m_debug_audio_mute_mask;
+static int32_t m_debug_last_fm[3];
+static int32_t m_debug_last_adpcm_a[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][3];
+static int32_t m_debug_last_adpcm_b[3];
+#endif
 static uint16_t m_dac_data;             // 9-bit DAC data
 static uint8_t m_dac_enable;            // DAC enabled?
 
@@ -1023,6 +1030,9 @@ void ym2610_write(uint32_t offset, uint8_t data)
 
 static inline void ym2610_clock_fm_and_adpcm(void)
 {
+#ifdef E9K_HACK_AUDIO_VIS
+	int32_t debug_adpcm_b[3] = { 0, 0, 0 };
+#endif
 	// clock the system
 	uint32_t env_counter = fm_engine_clock(m_fm_mask);
 
@@ -1043,9 +1053,56 @@ static inline void ym2610_clock_fm_and_adpcm(void)
 	m_last_fm[0] = m_last_fm[1] = m_last_fm[2] = 0;
 	fm_engine_output(m_last_fm, 1, 32767, m_fm_mask);
 
+#ifdef E9K_HACK_AUDIO_VIS
+	if (m_debug_audio_vis_enabled)
+	{
+		m_debug_last_fm[0] = m_last_fm[0];
+		m_debug_last_fm[1] = m_last_fm[1];
+		m_debug_last_fm[2] = m_last_fm[2];
+		if (m_debug_audio_mute_mask & E9K_DEBUG_GEO_AUDIO_MUTE_FM)
+		{
+			m_last_fm[0] = 0;
+			m_last_fm[1] = 0;
+			m_last_fm[2] = 0;
+		}
+
+		for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++)
+		{
+			int32_t debug_adpcm_a[3] = { 0, 0, 0 };
+			adpcm_a_engine_output(debug_adpcm_a, 1u << chnum);
+			m_debug_last_adpcm_a[chnum][0] = debug_adpcm_a[0];
+			m_debug_last_adpcm_a[chnum][1] = debug_adpcm_a[1];
+			m_debug_last_adpcm_a[chnum][2] = debug_adpcm_a[2];
+			if (!(m_debug_audio_mute_mask & (E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A0 << chnum)))
+			{
+				m_last_fm[0] += debug_adpcm_a[0];
+				m_last_fm[1] += debug_adpcm_a[1];
+				m_last_fm[2] += debug_adpcm_a[2];
+			}
+		}
+
+		adpcm_b_engine_output(debug_adpcm_b, 1);
+		m_debug_last_adpcm_b[0] = debug_adpcm_b[0];
+		m_debug_last_adpcm_b[1] = debug_adpcm_b[1];
+		m_debug_last_adpcm_b[2] = debug_adpcm_b[2];
+		if (!(m_debug_audio_mute_mask & E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_B))
+		{
+			m_last_fm[0] += debug_adpcm_b[0];
+			m_last_fm[1] += debug_adpcm_b[1];
+			m_last_fm[2] += debug_adpcm_b[2];
+		}
+	}
+	else
+	{
+		// mix in the ADPCM and clamp
+		adpcm_a_engine_output(m_last_fm, 0x3f);
+		adpcm_b_engine_output(m_last_fm, 1);
+	}
+#else
 	// mix in the ADPCM and clamp
 	adpcm_a_engine_output(m_last_fm, 0x3f);
 	adpcm_b_engine_output(m_last_fm, 1);
+#endif
 
 	m_last_fm[0] = clamp(m_last_fm[0], -32768, 32767);
 	m_last_fm[1] = clamp(m_last_fm[1], -32768, 32767);
@@ -1068,6 +1125,57 @@ void ym2610_generate(int32_t *output)
 	// resample the SSG as configured
 	ssg_resampler_resample(output);
 }
+
+#ifdef E9K_HACK_AUDIO_VIS
+void ym2610_debug_set_audio_vis_enabled(int enabled)
+{
+	m_debug_audio_vis_enabled = enabled ? 1 : 0;
+	if (!m_debug_audio_vis_enabled)
+	{
+		m_debug_audio_mute_mask = 0;
+		m_debug_last_fm[0] = m_debug_last_fm[1] = m_debug_last_fm[2] = 0;
+		for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++)
+		{
+			m_debug_last_adpcm_a[chnum][0] = 0;
+			m_debug_last_adpcm_a[chnum][1] = 0;
+			m_debug_last_adpcm_a[chnum][2] = 0;
+		}
+		m_debug_last_adpcm_b[0] = m_debug_last_adpcm_b[1] = m_debug_last_adpcm_b[2] = 0;
+	}
+}
+
+void ym2610_debug_set_audio_mute_mask(uint32_t mask)
+{
+	m_debug_audio_mute_mask = m_debug_audio_vis_enabled ? mask : 0;
+}
+
+void ym2610_debug_get_source_outputs(int32_t *fm,
+									 int32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][3],
+									 int32_t *adpcmB)
+{
+	if (fm)
+	{
+		fm[0] = m_debug_last_fm[0];
+		fm[1] = m_debug_last_fm[1];
+		fm[2] = m_debug_last_fm[2];
+	}
+	if (adpcmA)
+	{
+		for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++)
+		{
+			adpcmA[chnum][0] = m_debug_last_adpcm_a[chnum][0];
+			adpcmA[chnum][1] = m_debug_last_adpcm_a[chnum][1];
+			adpcmA[chnum][2] = m_debug_last_adpcm_a[chnum][2];
+		}
+	}
+	if (adpcmB)
+	{
+		adpcmB[0] = m_debug_last_adpcm_b[0];
+		adpcmB[1] = m_debug_last_adpcm_b[1];
+		adpcmB[2] = m_debug_last_adpcm_b[2];
+	}
+}
+#endif
 
 
 //*********************************************************

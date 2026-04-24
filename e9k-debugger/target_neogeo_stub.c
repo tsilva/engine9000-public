@@ -14,6 +14,7 @@
 #include "debug.h"
 #include "emu_geo.h"
 #include "neogeo_core_options.h"
+#include "neogeo_audio_vis.h"
 #include "neogeo_sprite_debug.h"
 #include "neogeo_register_log.h"
 
@@ -369,6 +370,13 @@ emu_geo_setSpriteState(const e9k_debug_sprite_state_t *state, int ready)
 }
 
 void
+emu_geo_setAudioFrame(const e9k_debug_audio_frame_t *frame, int ready)
+{
+    (void)frame;
+    (void)ready;
+}
+
+void
 emu_geo_shutdown(void)
 {
 }
@@ -413,6 +421,50 @@ neogeo_sprite_debug_persistConfig(FILE *file)
 
 int
 neogeo_sprite_debug_loadConfigProperty(const char *prop, const char *value)
+{
+    (void)prop;
+    (void)value;
+    return 0;
+}
+
+void
+neogeo_audio_vis_toggle(void)
+{
+}
+
+int
+neogeo_audio_vis_isOpen(void)
+{
+    return 0;
+}
+
+void
+neogeo_audio_vis_render(const e9k_debug_audio_frame_t *frame)
+{
+    (void)frame;
+}
+
+int
+neogeo_audio_vis_handleKeydown(const SDL_KeyboardEvent *kev)
+{
+    (void)kev;
+    return 0;
+}
+
+void
+neogeo_audio_vis_setMainWindowFocused(int focused)
+{
+    (void)focused;
+}
+
+void
+neogeo_audio_vis_persistConfig(FILE *file)
+{
+    (void)file;
+}
+
+int
+neogeo_audio_vis_loadConfigProperty(const char *prop, const char *value)
 {
     (void)prop;
     (void)value;

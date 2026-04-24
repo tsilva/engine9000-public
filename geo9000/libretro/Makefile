@@ -701,7 +701,12 @@ WARNINGS := -Wall \
 	-fno-strict-overflow
 endif
 
+E9K_HACK_AUDIO_VIS ?= 1
+
 FLAGS += -D__LIBRETRO__ -DE9K_HACK_REGISTER_LOG $(WARNINGS)
+ifeq ($(E9K_HACK_AUDIO_VIS),1)
+FLAGS += -DE9K_HACK_AUDIO_VIS
+endif
 
 CFLAGS += $(FLAGS)
 

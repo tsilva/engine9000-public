@@ -86,6 +86,9 @@ typedef size_t (*e9k_debug_neogeo_get_p1_rom_fn_t)(e9k_debug_rom_region_t *out, 
 typedef size_t (*e9k_debug_neogeo_get_c_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_fix_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_palette_state_fn_t)(e9k_debug_palette_state_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_audio_frame_fn_t)(e9k_debug_audio_frame_t *out, size_t cap);
+typedef void (*e9k_debug_neogeo_set_audio_vis_enabled_fn_t)(int enabled);
+typedef void (*e9k_debug_neogeo_set_audio_mute_mask_fn_t)(uint32_t mask);
 typedef size_t (*e9k_debug_mega_get_sprite_state_fn_t)(e9k_debug_mega_sprite_state_t *out, size_t cap);
 typedef size_t (*e9k_debug_disassemble_quick_fn_t)(uint32_t pc, char *out, size_t cap);
 typedef size_t (*e9k_debug_read_known_pcs_fn_t)(uint32_t startAddr, uint32_t endAddr, uint32_t *out, size_t cap);
@@ -243,6 +246,9 @@ typedef struct  {
     e9k_debug_neogeo_get_c_rom_fn_t debugNeoGeoGetCRom;
     e9k_debug_neogeo_get_fix_rom_fn_t debugNeoGeoGetFixRom;
     e9k_debug_neogeo_get_palette_state_fn_t debugNeoGeoGetPaletteState;
+    e9k_debug_neogeo_get_audio_frame_fn_t debugNeoGeoGetAudioFrame;
+    e9k_debug_neogeo_set_audio_vis_enabled_fn_t debugNeoGeoSetAudioVisEnabled;
+    e9k_debug_neogeo_set_audio_mute_mask_fn_t debugNeoGeoSetAudioMuteMask;
     e9k_debug_mega_get_sprite_state_fn_t debugMegaGetSpriteState;
     e9k_debug_disassemble_quick_fn_t debugDisassembleQuick;
     e9k_debug_read_known_pcs_fn_t debugReadKnownPcs;
@@ -2047,6 +2053,9 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugNeoGeoGetSpriteState = NULL;
     libretro_host.debugNeoGeoGetP1Rom = NULL;
     libretro_host.debugNeoGeoGetPaletteState = NULL;
+    libretro_host.debugNeoGeoGetAudioFrame = NULL;
+    libretro_host.debugNeoGeoSetAudioVisEnabled = NULL;
+    libretro_host.debugNeoGeoSetAudioMuteMask = NULL;
     libretro_host.debugDisassembleQuick = (e9k_debug_disassemble_quick_fn_t)libretro_host_loadSymbol("e9k_debug_disassemble_quick");
     libretro_host.debugReadKnownPcs = (e9k_debug_read_known_pcs_fn_t)libretro_host_loadSymbol("e9k_debug_read_known_pcs");
     libretro_host.debugResetKnownPcs = (e9k_debug_reset_known_pcs_fn_t)libretro_host_loadSymbol("e9k_debug_reset_known_pcs");
@@ -3217,6 +3226,36 @@ libretro_host_debugGetGeoPaletteState(e9k_debug_palette_state_t *out)
     return true;
 }
 
+bool
+libretro_host_debugGetGeoAudioFrame(e9k_debug_audio_frame_t *out)
+{
+    if (!out || !libretro_host.debugNeoGeoGetAudioFrame) {
+        return false;
+    }
+    size_t n = libretro_host.debugNeoGeoGetAudioFrame(out, sizeof(*out));
+    return n == sizeof(*out);
+}
+
+bool
+libretro_host_debugSetGeoAudioVisEnabled(int enabled)
+{
+    if (!libretro_host.debugNeoGeoSetAudioVisEnabled) {
+        return false;
+    }
+    libretro_host.debugNeoGeoSetAudioVisEnabled(enabled ? 1 : 0);
+    return true;
+}
+
+bool
+libretro_host_debugSetGeoAudioMuteMask(uint32_t mask)
+{
+    if (!libretro_host.debugNeoGeoSetAudioMuteMask) {
+        return false;
+    }
+    libretro_host.debugNeoGeoSetAudioMuteMask(mask);
+    return true;
+}
+
 size_t
 libretro_host_debugReadCheckpoints(e9k_debug_checkpoint_t *out, size_t cap)
 {
@@ -3538,6 +3577,12 @@ libretro_host_bindNeogeoDebugApis(void)
         (e9k_debug_neogeo_get_fix_rom_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_fix_rom");
     libretro_host.debugNeoGeoGetPaletteState =
         (e9k_debug_neogeo_get_palette_state_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_palette_state");
+    libretro_host.debugNeoGeoGetAudioFrame =
+        (e9k_debug_neogeo_get_audio_frame_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_audio_frame");
+    libretro_host.debugNeoGeoSetAudioVisEnabled =
+        (e9k_debug_neogeo_set_audio_vis_enabled_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_set_audio_vis_enabled");
+    libretro_host.debugNeoGeoSetAudioMuteMask =
+        (e9k_debug_neogeo_set_audio_mute_mask_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_set_audio_mute_mask");
 }
 
 void
@@ -3548,6 +3593,9 @@ libretro_host_unbindNeogeoDebugApis(void)
     libretro_host.debugNeoGeoGetCRom = NULL;
     libretro_host.debugNeoGeoGetFixRom = NULL;
     libretro_host.debugNeoGeoGetPaletteState = NULL;
+    libretro_host.debugNeoGeoGetAudioFrame = NULL;
+    libretro_host.debugNeoGeoSetAudioVisEnabled = NULL;
+    libretro_host.debugNeoGeoSetAudioMuteMask = NULL;
 }
 
 void

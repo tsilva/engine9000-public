@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ymfm_adpcm.h"
 #include "ymfm_fm.h"
 #include "ymfm_ssg.h"
+#include "e9k-geo.h"
 
 //*********************************************************
 //  OPN IMPLEMENTATION CLASSES
@@ -167,6 +168,13 @@ void ym2610_invalidate_caches(void);
 uint8_t ym2610_read(uint32_t offset);
 void ym2610_write(uint32_t offset, uint8_t data);
 void ym2610_generate(int32_t *output);
+#ifdef E9K_HACK_AUDIO_VIS
+void ym2610_debug_set_audio_vis_enabled(int enabled);
+void ym2610_debug_set_audio_mute_mask(uint32_t mask);
+void ym2610_debug_get_source_outputs(int32_t *fm,
+                                     int32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][3],
+                                     int32_t *adpcmB);
+#endif
 
 
 // ======================> ym2612

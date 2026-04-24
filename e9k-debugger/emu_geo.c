@@ -10,6 +10,7 @@
 #include "debugger_input_bindings.h"
 #include "e9ui.h"
 #include "neogeo_memview.h"
+#include "neogeo_audio_vis.h"
 #include "neogeo_palette_debug.h"
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
@@ -48,6 +49,8 @@ static int emu_geo_spriteShadowReady = 0;
 static e9k_debug_sprite_state_t emu_geo_spriteShadow;
 static uint16_t *emu_geo_spriteShadowVram = NULL;
 static size_t emu_geo_spriteShadowWords = 0;
+static int emu_geo_audioFrameReady = 0;
+static e9k_debug_audio_frame_t emu_geo_audioFrame;
 
 void
 emu_geo_setSpriteState(const e9k_debug_sprite_state_t *state, int ready)
@@ -76,12 +79,24 @@ emu_geo_setSpriteState(const e9k_debug_sprite_state_t *state, int ready)
 }
 
 void
+emu_geo_setAudioFrame(const e9k_debug_audio_frame_t *frame, int ready)
+{
+    if (!ready || !frame) {
+        emu_geo_audioFrameReady = 0;
+        return;
+    }
+    emu_geo_audioFrame = *frame;
+    emu_geo_audioFrameReady = 1;
+}
+
+void
 emu_geo_shutdown(void)
 {
     free(emu_geo_spriteShadowVram);
     emu_geo_spriteShadowVram = NULL;
     emu_geo_spriteShadowWords = 0;
     emu_geo_spriteShadowReady = 0;
+    emu_geo_audioFrameReady = 0;
 }
 
 static void
@@ -127,6 +142,14 @@ emu_geo_togglePaletteDebug(e9ui_context_t *ctx, void *user)
     neogeo_palette_debug_toggle();
 }
 
+static void
+emu_geo_toggleAudioVis(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    neogeo_audio_vis_toggle();
+}
+
 void
 emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
 {
@@ -166,6 +189,14 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_setFocusTarget(btn_palette_debug, comp);
     void *paletteDebugBtnMeta = alloc_strdup("palette_debug");
     e9ui_child_add(button_stack, btn_palette_debug, paletteDebugBtnMeta);
+  }
+
+  e9ui_component_t *btn_audio_vis = e9ui_button_make("Audio", emu_geo_toggleAudioVis, comp);
+  if (btn_audio_vis) {
+    e9ui_button_setMini(btn_audio_vis, 1);
+    e9ui_setFocusTarget(btn_audio_vis, comp);
+    void *audioVisBtnMeta = alloc_strdup("audio_vis");
+    e9ui_child_add(button_stack, btn_audio_vis, audioVisBtnMeta);
   }
 }
 
@@ -706,6 +737,9 @@ emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst)
   if (neogeo_sprite_debug_is_open() && emu_geo_spriteShadowReady) {
     neogeo_sprite_debug_render(&emu_geo_spriteShadow);
   }  
+  if (neogeo_audio_vis_isOpen() && emu_geo_audioFrameReady) {
+    neogeo_audio_vis_render(&emu_geo_audioFrame);
+  }
 }
 
 const emu_system_iface_t emu_geo_iface = {  

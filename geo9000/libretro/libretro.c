@@ -43,6 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "geo_mixer.h"
 #include "geo_neo.h"
 #include "geo_profiler.h"
+#include "geo_ymfm.h"
 #include "e9k_debugger.h"
 #include "geo_notify.h"
 #include "e9k_debugger.h"
@@ -129,6 +130,20 @@ E9K_DEBUG_EXPORT int e9k_debug_get_checkpoint_enabled(void) {
 E9K_DEBUG_EXPORT uint64_t e9k_debug_read_cycle_count(void) {
     return geo_cycles_get();
 }
+
+#ifdef E9K_HACK_AUDIO_VIS
+E9K_DEBUG_EXPORT void e9k_debug_neogeo_set_audio_vis_enabled(int enabled) {
+    geo_ymfm_setAudioVisEnabled(enabled);
+}
+
+E9K_DEBUG_EXPORT void e9k_debug_neogeo_set_audio_mute_mask(uint32_t mask) {
+    geo_ymfm_setAudioMuteMask(mask);
+}
+
+E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_audio_frame(e9k_debug_audio_frame_t *out, size_t cap) {
+    return geo_ymfm_readAudioFrame(out, cap);
+}
+#endif
 
 E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_p1_rom(e9k_debug_rom_region_t *out, size_t cap) {
     if (!out || cap < sizeof(*out)) {

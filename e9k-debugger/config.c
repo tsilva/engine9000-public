@@ -18,6 +18,7 @@
 #include "hex_byte_color.h"
 #include "hex_convert.h"
 #include "hotkeys.h"
+#include "neogeo_audio_vis.h"
 #include "neogeo_memview.h"
 #include "neogeo_palette_debug.h"
 #include "neogeo_register_log.h"
@@ -176,6 +177,7 @@ config_persistConfig(FILE *f)
     crt_persistConfig(f);
     neogeo_register_log_persistConfig(f);
     neogeo_sprite_debug_persistConfig(f);
+    neogeo_audio_vis_persistConfig(f);
     neogeo_palette_debug_persistConfig(f);
     neogeo_memview_persistConfig(f);
     mega_sprite_debug_persistConfig(f);
@@ -351,6 +353,11 @@ config_loadConfigFile(const char *path)
         if (strncmp(key, "comp.sprite_debug.", 18) == 0) {
             const char *prop = key + 18;
             neogeo_sprite_debug_loadConfigProperty(prop, value);
+            continue;
+        }
+        if (strncmp(key, "comp.neogeo_audio_vis.", 22) == 0) {
+            const char *prop = key + 22;
+            neogeo_audio_vis_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.neogeo_palette_debug.", 26) == 0) {

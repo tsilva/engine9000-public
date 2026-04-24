@@ -911,6 +911,13 @@ uint8_t adpcm_b_engine_status(void) {
 	return adpcm_b_channel_status();
 }
 
+#ifdef E9K_HACK_AUDIO_VIS
+uint32_t adpcm_b_engine_debug_delta_n(void)
+{
+	return adpcm_b_registers_delta_n();
+}
+#endif
+
 
 //-------------------------------------------------
 // hacks

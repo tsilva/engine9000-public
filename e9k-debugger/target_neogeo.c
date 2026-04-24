@@ -11,6 +11,7 @@
 #include "emu_geo.h"
 #include "rom_config.h"
 #include "debugger_input_bindings.h"
+#include "neogeo_audio_vis.h"
 #if E9K_ENABLE_AMIGA
 #include "amiga_uae_options.h"
 #endif
@@ -733,6 +734,16 @@ target_neogeo_onVblank(void)
   } else {
     emu_geo_setSpriteState(NULL, 0);
   }
+  if (neogeo_audio_vis_isOpen()) {
+    e9k_debug_audio_frame_t audioFrame;
+    if (libretro_host_debugGetGeoAudioFrame(&audioFrame)) {
+      emu_geo_setAudioFrame(&audioFrame, 1);
+    } else {
+      emu_geo_setAudioFrame(NULL, 0);
+    }
+  } else {
+    emu_geo_setAudioFrame(NULL, 0);
+  }
 }
 
 
@@ -783,6 +794,7 @@ static void
 target_neogeo_validateAPI(void)
 {
   emu_geo_setSpriteState(NULL, 0);
+  emu_geo_setAudioFrame(NULL, 0);
   libretro_host_unbindMegaDebugApis();
   libretro_host_bindNeogeoDebugApis();
 }

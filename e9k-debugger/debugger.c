@@ -21,6 +21,7 @@
 #include "neogeo_palette_debug.h"
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
+#include "neogeo_audio_vis.h"
 #include "machine.h"
 #include "base_map.h"
 #include "source.h"
@@ -647,6 +648,9 @@ debugger_cleanup(void)
   snapshot_saveOnExit();
   if (neogeo_sprite_debug_is_open()) {
     neogeo_sprite_debug_toggle();
+  }
+  if (neogeo_audio_vis_isOpen()) {
+    neogeo_audio_vis_toggle();
   }
   if (neogeo_palette_debug_isOpen()) {
     neogeo_palette_debug_toggle();

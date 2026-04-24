@@ -29,10 +29,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdbool.h>
+#ifdef E9K_HACK_AUDIO_VIS
+#include <string.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>
 
 #include "ymfm/ymfm.h"
+#include "ymfm/ymfm_adpcm.h"
 #include "ymfm/ymfm_opn.h"
 
 #include "geo.h"
@@ -42,6 +46,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define SIZE_YMBUF 2048
 #define DIVISOR 144 // 144 for medium fidelity, 16 for high
+#define GEO_YMFM_AUDIO_VIS_SAMPLE_RATE 56319u
 
 static romdata_t *romdata = NULL;
 
@@ -51,6 +56,22 @@ static int32_t busytimer;
 static int32_t busyfrac;
 static int32_t timer[2];
 static int32_t output[3];
+
+#ifdef E9K_HACK_AUDIO_VIS
+typedef struct geo_ymfm_audio_vis_accum {
+    int32_t peakL;
+    int32_t peakR;
+} geo_ymfm_audio_vis_accum_t;
+
+static int geo_ymfm_audioVisEnabled;
+static uint32_t geo_ymfm_audioMuteMask;
+static uint64_t geo_ymfm_audioVisFrameNo;
+static geo_ymfm_audio_vis_accum_t geo_ymfm_audioVisFm;
+static geo_ymfm_audio_vis_accum_t geo_ymfm_audioVisSsg;
+static geo_ymfm_audio_vis_accum_t geo_ymfm_audioVisAdpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS];
+static geo_ymfm_audio_vis_accum_t geo_ymfm_audioVisAdpcmB;
+static geo_ymfm_audio_vis_accum_t geo_ymfm_audioVisMixed;
+#endif
 
 uint8_t ymfm_external_read(uint32_t type, uint32_t address) {
     switch (type) {
@@ -139,6 +160,117 @@ static inline int16_t mix(int32_t samp0, int32_t samp1) {
     return samp0 + samp1;
 }
 
+#ifdef E9K_HACK_AUDIO_VIS
+static int32_t
+geo_ymfm_audioVisAbs32(int32_t value)
+{
+    if (value == INT32_MIN) {
+        return INT32_MAX;
+    }
+    return value < 0 ? -value : value;
+}
+
+static void
+geo_ymfm_audioVisResetAccum(geo_ymfm_audio_vis_accum_t *accum)
+{
+    if (!accum) {
+        return;
+    }
+    memset(accum, 0, sizeof(*accum));
+}
+
+static void
+geo_ymfm_audioVisResetAll(void)
+{
+    geo_ymfm_audioVisResetAccum(&geo_ymfm_audioVisFm);
+    geo_ymfm_audioVisResetAccum(&geo_ymfm_audioVisSsg);
+    for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
+        geo_ymfm_audioVisResetAccum(&geo_ymfm_audioVisAdpcmA[chnum]);
+    }
+    geo_ymfm_audioVisResetAccum(&geo_ymfm_audioVisAdpcmB);
+    geo_ymfm_audioVisResetAccum(&geo_ymfm_audioVisMixed);
+}
+
+static void
+geo_ymfm_audioVisAdd(geo_ymfm_audio_vis_accum_t *accum, int32_t left, int32_t right)
+{
+    if (!accum) {
+        return;
+    }
+
+    int32_t absL = geo_ymfm_audioVisAbs32(left);
+    int32_t absR = geo_ymfm_audioVisAbs32(right);
+    if (absL > accum->peakL) {
+        accum->peakL = absL;
+    }
+    if (absR > accum->peakR) {
+        accum->peakR = absR;
+    }
+}
+
+static void
+geo_ymfm_audioVisFillSource(e9k_debug_audio_source_t *out, const geo_ymfm_audio_vis_accum_t *accum)
+{
+    if (!out || !accum) {
+        return;
+    }
+    out->peakL = accum->peakL;
+    out->peakR = accum->peakR;
+}
+
+static uint32_t
+geo_ymfm_audioVisAdpcmBPlaybackMilliHz(void)
+{
+    uint32_t deltaN = adpcm_b_engine_debug_delta_n();
+    uint64_t milliHz = ((uint64_t)GEO_YMFM_AUDIO_VIS_SAMPLE_RATE * (uint64_t)deltaN * 1000u) >> 16;
+    if (milliHz > UINT32_MAX) {
+        return UINT32_MAX;
+    }
+    return (uint32_t)milliHz;
+}
+
+void
+geo_ymfm_setAudioVisEnabled(int enabled)
+{
+    geo_ymfm_audioVisEnabled = enabled ? 1 : 0;
+    if (!geo_ymfm_audioVisEnabled) {
+        geo_ymfm_audioMuteMask = 0;
+    }
+    geo_ymfm_audioVisFrameNo = 0;
+    geo_ymfm_audioVisResetAll();
+    ym2610_debug_set_audio_vis_enabled(geo_ymfm_audioVisEnabled);
+    ym2610_debug_set_audio_mute_mask(geo_ymfm_audioMuteMask);
+}
+
+void
+geo_ymfm_setAudioMuteMask(uint32_t mask)
+{
+    geo_ymfm_audioMuteMask = geo_ymfm_audioVisEnabled ? mask : 0;
+    ym2610_debug_set_audio_mute_mask(geo_ymfm_audioMuteMask);
+}
+
+size_t
+geo_ymfm_readAudioFrame(e9k_debug_audio_frame_t *out, size_t cap)
+{
+    if (!out || cap < sizeof(*out)) {
+        return 0;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->frameNo = geo_ymfm_audioVisFrameNo++;
+    geo_ymfm_audioVisFillSource(&out->fm, &geo_ymfm_audioVisFm);
+    geo_ymfm_audioVisFillSource(&out->ssg, &geo_ymfm_audioVisSsg);
+    for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
+        geo_ymfm_audioVisFillSource(&out->adpcmA[chnum], &geo_ymfm_audioVisAdpcmA[chnum]);
+    }
+    geo_ymfm_audioVisFillSource(&out->adpcmB, &geo_ymfm_audioVisAdpcmB);
+    geo_ymfm_audioVisFillSource(&out->mixed, &geo_ymfm_audioVisMixed);
+    out->adpcmBPlaybackMilliHz = geo_ymfm_audioVisAdpcmBPlaybackMilliHz();
+    geo_ymfm_audioVisResetAll();
+    return sizeof(*out);
+}
+#endif
+
 // Clock the YM2610
 size_t geo_ymfm_exec(void) {
     geo_ymfm_timer_tick();
@@ -149,8 +281,31 @@ size_t geo_ymfm_exec(void) {
         bufpos = 0;
 
     // Mix stereo FM/ADPCM output (0,1) with mono SSG output (2)
-    ymbuf[bufpos++] = mix(output[0], output[2]);
-    ymbuf[bufpos++] = mix(output[1], output[2]);
+#ifdef E9K_HACK_AUDIO_VIS
+    int32_t ssgOutput = output[2];
+    if (geo_ymfm_audioVisEnabled && (geo_ymfm_audioMuteMask & E9K_DEBUG_GEO_AUDIO_MUTE_SSG)) {
+        output[2] = 0;
+    }
+#endif
+    int16_t mixedL = mix(output[0], output[2]);
+    int16_t mixedR = mix(output[1], output[2]);
+#ifdef E9K_HACK_AUDIO_VIS
+    if (geo_ymfm_audioVisEnabled) {
+        int32_t fm[3];
+        int32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][3];
+        int32_t adpcmB[3];
+        ym2610_debug_get_source_outputs(fm, adpcmA, adpcmB);
+        geo_ymfm_audioVisAdd(&geo_ymfm_audioVisFm, fm[0], fm[1]);
+        geo_ymfm_audioVisAdd(&geo_ymfm_audioVisSsg, ssgOutput, ssgOutput);
+        for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
+            geo_ymfm_audioVisAdd(&geo_ymfm_audioVisAdpcmA[chnum], adpcmA[chnum][0], adpcmA[chnum][1]);
+        }
+        geo_ymfm_audioVisAdd(&geo_ymfm_audioVisAdpcmB, adpcmB[0], adpcmB[1]);
+        geo_ymfm_audioVisAdd(&geo_ymfm_audioVisMixed, mixedL, mixedR);
+    }
+#endif
+    ymbuf[bufpos++] = mixedL;
+    ymbuf[bufpos++] = mixedR;
 
     return 1;
 }
