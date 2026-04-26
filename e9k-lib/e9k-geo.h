@@ -56,6 +56,9 @@ typedef struct geo_debug_palette_state {
 typedef struct geo_debug_audio_source {
     int32_t peakL;
     int32_t peakR;
+    int32_t volumeL;
+    int32_t volumeR;
+    uint8_t hasVolume;
 } e9k_debug_audio_source_t;
 
 typedef struct geo_debug_audio_frame {

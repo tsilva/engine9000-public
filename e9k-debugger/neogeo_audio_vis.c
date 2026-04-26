@@ -35,7 +35,7 @@
 #define NEOGEO_AUDIO_VIS_SEGMENT_BRIGHTNESS_MAX 255
 #define NEOGEO_AUDIO_VIS_SEGMENT_HALF_LIFE_SECONDS 0.2
 #define NEOGEO_AUDIO_VIS_ROW_COUNT (4 + E9K_DEBUG_GEO_ADPCM_A_CHANNELS)
-#define NEOGEO_AUDIO_VIS_METER_COUNT (6 + E9K_DEBUG_GEO_ADPCM_A_CHANNELS)
+#define NEOGEO_AUDIO_VIS_METER_COUNT (8 + E9K_DEBUG_GEO_ADPCM_A_CHANNELS * 2)
 #define NEOGEO_AUDIO_VIS_MUTE_ROW_COUNT (3 + E9K_DEBUG_GEO_ADPCM_A_CHANNELS)
 
 typedef struct neogeo_audio_vis_state {
@@ -145,12 +145,6 @@ neogeo_audio_vis_clampPeak(int value)
         value = NEOGEO_AUDIO_VIS_SCALE_DENOM;
     }
     return value;
-}
-
-static int
-neogeo_audio_vis_maxValue(int a, int b)
-{
-    return a > b ? a : b;
 }
 
 static void
@@ -435,7 +429,7 @@ neogeo_audio_vis_drawTooltip(e9ui_context_t *ctx, TTF_Font *font, int mouseX, in
 static void
 neogeo_audio_vis_drawSource(e9ui_context_t *ctx, TTF_Font *font, int x, int y, int w, int rowH,
                             const char *label, const e9k_debug_audio_source_t *source,
-                            int stereo, int meterIndex, int muted)
+                            int meterIndex, int muted)
 {
     SDL_Renderer *renderer = ctx ? ctx->renderer : NULL;
     int labelW = NEOGEO_AUDIO_VIS_LABEL_WIDTH;
@@ -461,30 +455,18 @@ neogeo_audio_vis_drawSource(e9ui_context_t *ctx, TTF_Font *font, int x, int y, i
                                      labelW - labelPad * 2,
                                      label,
                                      textColor);
-    if (stereo) {
-        int meterH = (rowH - 6) / 2;
-        if (meterH <= 0) {
-            return;
-        }
-        neogeo_audio_vis_drawMeter(renderer, meterX, y, meterW, meterH,
-                                   source->peakL,
-                                   meterIndex,
-                                   muted);
-        neogeo_audio_vis_drawMeter(renderer, meterX, y + meterH + 4, meterW, meterH,
-                                   source->peakR,
-                                   meterIndex + 1,
-                                   muted);
-    } else {
-        int meterH = rowH - 6;
-        int peak = neogeo_audio_vis_maxValue(source->peakL, source->peakR);
-        if (meterH <= 0) {
-            return;
-        }
-        neogeo_audio_vis_drawMeter(renderer, meterX, y + 3, meterW, meterH,
-                                   peak,
-                                   meterIndex,
-                                   muted);
+    int meterH = (rowH - 6) / 2;
+    if (meterH <= 0) {
+        return;
     }
+    neogeo_audio_vis_drawMeter(renderer, meterX, y, meterW, meterH,
+                               source->peakL,
+                               meterIndex,
+                               muted);
+    neogeo_audio_vis_drawMeter(renderer, meterX, y + meterH + 4, meterW, meterH,
+                               source->peakR,
+                               meterIndex + 1,
+                               muted);
 }
 
 static void
@@ -500,16 +482,14 @@ neogeo_audio_vis_updateSegmentBrightnessAll(const e9k_debug_audio_frame_t *frame
     fadeFactor = neogeo_audio_vis_fadeFactor();
     neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->fm.peakL, fadeFactor);
     neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->fm.peakR, fadeFactor);
-    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, neogeo_audio_vis_maxValue(frame->ssg.peakL, frame->ssg.peakR), fadeFactor);
+    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->ssg.peakL, fadeFactor);
+    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->ssg.peakR, fadeFactor);
     for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
-        neogeo_audio_vis_updateSegmentBrightness(meterIndex++,
-                                                 neogeo_audio_vis_maxValue(frame->adpcmA[chnum].peakL,
-                                                                          frame->adpcmA[chnum].peakR),
-                                                 fadeFactor);
+        neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->adpcmA[chnum].peakL, fadeFactor);
+        neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->adpcmA[chnum].peakR, fadeFactor);
     }
-    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, neogeo_audio_vis_maxValue(frame->adpcmB.peakL,
-                                                                                     frame->adpcmB.peakR),
-                                             fadeFactor);
+    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->adpcmB.peakL, fadeFactor);
+    neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->adpcmB.peakR, fadeFactor);
     neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->mixed.peakL, fadeFactor);
     neogeo_audio_vis_updateSegmentBrightness(meterIndex++, frame->mixed.peakR, fadeFactor);
 }
@@ -637,26 +617,38 @@ neogeo_audio_vis_bodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
     int showTooltip = 0;
     const e9k_debug_audio_frame_t *frame = &neogeo_audio_vis_state.lastFrame;
     uint32_t muteBit = neogeo_audio_vis_rowMuteMask(rowIndex++);
-    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "FM", &frame->fm, 1, meterIndex,
+    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "FM", &frame->fm, meterIndex,
                                 (neogeo_audio_vis_state.muteMask & muteBit) ? 1 : 0);
     meterIndex += 2;
     top += rowH + rowGap;
     muteBit = neogeo_audio_vis_rowMuteMask(rowIndex++);
-    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "SSG", &frame->ssg, 0, meterIndex,
+    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "SSG", &frame->ssg, meterIndex,
                                 (neogeo_audio_vis_state.muteMask & muteBit) ? 1 : 0);
-    meterIndex++;
+    meterIndex += 2;
     top += rowH + rowGap;
     for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
-        char label[16];
-        snprintf(label, sizeof(label), "ADPCM-A%d", chnum);
+        char label[32];
+        if (frame->adpcmA[chnum].hasVolume) {
+            snprintf(label, sizeof(label), "ADPCM-A%d %d/%d", chnum,
+                     frame->adpcmA[chnum].volumeL,
+                     frame->adpcmA[chnum].volumeR);
+        } else {
+            snprintf(label, sizeof(label), "ADPCM-A%d", chnum);
+        }
         muteBit = neogeo_audio_vis_rowMuteMask(rowIndex++);
-        neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, label, &frame->adpcmA[chnum], 0, meterIndex,
+        neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, label, &frame->adpcmA[chnum], meterIndex,
                                     (neogeo_audio_vis_state.muteMask & muteBit) ? 1 : 0);
-        meterIndex++;
+        meterIndex += 2;
         top += rowH + rowGap;
     }
     muteBit = neogeo_audio_vis_rowMuteMask(rowIndex++);
-    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "ADPCM-B", &frame->adpcmB, 0, meterIndex,
+    char adpcmBLabel[32];
+    if (frame->adpcmB.hasVolume) {
+        snprintf(adpcmBLabel, sizeof(adpcmBLabel), "ADPCM-B %d/%d", frame->adpcmB.volumeL, frame->adpcmB.volumeR);
+    } else {
+        snprintf(adpcmBLabel, sizeof(adpcmBLabel), "ADPCM-B");
+    }
+    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, adpcmBLabel, &frame->adpcmB, meterIndex,
                                 (neogeo_audio_vis_state.muteMask & muteBit) ? 1 : 0);
     if (neogeo_audio_vis_pointInRect(ctx->mouseX, ctx->mouseY, x, top, w, rowH)) {
         uint32_t hz = frame->adpcmBPlaybackMilliHz / 1000u;
@@ -664,9 +656,9 @@ neogeo_audio_vis_bodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
         snprintf(tooltip, sizeof(tooltip), "Playback frequency: %u.%03u Hz", hz, frac);
         showTooltip = 1;
     }
-    meterIndex++;
+    meterIndex += 2;
     top += rowH + rowGap;
-    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "MIXED", &frame->mixed, 1, meterIndex, 0);
+    neogeo_audio_vis_drawSource(ctx, font, sourceX, top, sourceW, rowH, "MIXED", &frame->mixed, meterIndex, 0);
     if (self->children) {
         e9ui_child_iterator iter;
         if (e9ui_child_iterateChildren(self, &iter)) {

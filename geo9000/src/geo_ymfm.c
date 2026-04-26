@@ -218,6 +218,23 @@ geo_ymfm_audioVisFillSource(e9k_debug_audio_source_t *out, const geo_ymfm_audio_
     out->peakR = accum->peakR;
 }
 
+static void
+geo_ymfm_audioVisFillSourceVolume(e9k_debug_audio_source_t *out, uint32_t left, uint32_t right)
+{
+    if (!out) {
+        return;
+    }
+    if (left > INT32_MAX) {
+        left = INT32_MAX;
+    }
+    if (right > INT32_MAX) {
+        right = INT32_MAX;
+    }
+    out->volumeL = (int32_t)left;
+    out->volumeR = (int32_t)right;
+    out->hasVolume = 1;
+}
+
 static uint32_t
 geo_ymfm_audioVisAdpcmBPlaybackMilliHz(void)
 {
@@ -265,6 +282,15 @@ geo_ymfm_readAudioFrame(e9k_debug_audio_frame_t *out, size_t cap)
     }
     geo_ymfm_audioVisFillSource(&out->adpcmB, &geo_ymfm_audioVisAdpcmB);
     geo_ymfm_audioVisFillSource(&out->mixed, &geo_ymfm_audioVisMixed);
+    uint32_t adpcmAVolumes[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][2];
+    uint32_t adpcmBVolumes[2];
+    ym2610_debug_get_source_volumes(adpcmAVolumes, adpcmBVolumes);
+    for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
+        geo_ymfm_audioVisFillSourceVolume(&out->adpcmA[chnum],
+                                          adpcmAVolumes[chnum][0],
+                                          adpcmAVolumes[chnum][1]);
+    }
+    geo_ymfm_audioVisFillSourceVolume(&out->adpcmB, adpcmBVolumes[0], adpcmBVolumes[1]);
     out->adpcmBPlaybackMilliHz = geo_ymfm_audioVisAdpcmBPlaybackMilliHz();
     geo_ymfm_audioVisResetAll();
     return sizeof(*out);

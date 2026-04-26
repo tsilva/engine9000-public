@@ -1175,6 +1175,21 @@ void ym2610_debug_get_source_outputs(int32_t *fm,
 		adpcmB[2] = m_debug_last_adpcm_b[2];
 	}
 }
+
+void ym2610_debug_get_source_volumes(uint32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][2],
+									 uint32_t adpcmB[2])
+{
+	if (adpcmA) {
+		for (int chnum = 0; chnum < E9K_DEBUG_GEO_ADPCM_A_CHANNELS; chnum++) {
+			ymfm_adpcm_debugAdpcmAVolumes((uint32_t)chnum,
+										  &adpcmA[chnum][0],
+										  &adpcmA[chnum][1]);
+		}
+	}
+	if (adpcmB) {
+		ymfm_adpcm_debugAdpcmBVolumes(&adpcmB[0], &adpcmB[1]);
+	}
+}
 #endif
 
 

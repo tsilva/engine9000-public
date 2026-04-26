@@ -912,6 +912,56 @@ uint8_t adpcm_b_engine_status(void) {
 }
 
 #ifdef E9K_HACK_AUDIO_VIS
+static uint32_t
+ymfm_adpcm_debugEffectiveAdpcmAVolume(uint32_t choffs)
+{
+	int vol = (adpcm_a_registers_ch_instrument_level(m_channel_a[choffs].m_choffs) ^ 0x1f) +
+		(adpcm_a_registers_total_level() ^ 0x3f);
+	if (vol >= 63) {
+		return 0;
+	}
+	return (uint32_t)(63 - vol);
+}
+
+void
+ymfm_adpcm_debugAdpcmAVolumes(uint32_t chnum, uint32_t *left, uint32_t *right)
+{
+	uint32_t volume = 0;
+	uint32_t leftVolume = 0;
+	uint32_t rightVolume = 0;
+
+	if (chnum < CHANNELS_A) {
+		volume = ymfm_adpcm_debugEffectiveAdpcmAVolume(chnum);
+		if (adpcm_a_registers_ch_pan_left(m_channel_a[chnum].m_choffs)) {
+			leftVolume = volume;
+		}
+		if (adpcm_a_registers_ch_pan_right(m_channel_a[chnum].m_choffs)) {
+			rightVolume = volume;
+		}
+	}
+	if (left) {
+		*left = leftVolume;
+	}
+	if (right) {
+		*right = rightVolume;
+	}
+}
+
+void
+ymfm_adpcm_debugAdpcmBVolumes(uint32_t *left, uint32_t *right)
+{
+	uint32_t volume = adpcm_b_registers_level();
+	uint32_t leftVolume = adpcm_b_registers_pan_left() ? volume : 0;
+	uint32_t rightVolume = adpcm_b_registers_pan_right() ? volume : 0;
+
+	if (left) {
+		*left = leftVolume;
+	}
+	if (right) {
+		*right = rightVolume;
+	}
+}
+
 uint32_t adpcm_b_engine_debug_delta_n(void)
 {
 	return adpcm_b_registers_delta_n();

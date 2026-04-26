@@ -174,6 +174,8 @@ void ym2610_debug_set_audio_mute_mask(uint32_t mask);
 void ym2610_debug_get_source_outputs(int32_t *fm,
                                      int32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][3],
                                      int32_t *adpcmB);
+void ym2610_debug_get_source_volumes(uint32_t adpcmA[E9K_DEBUG_GEO_ADPCM_A_CHANNELS][2],
+                                     uint32_t adpcmB[2]);
 #endif
 
 
