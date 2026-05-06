@@ -617,9 +617,6 @@ source_pane_asm_view_areStepButtonsEnabled(const source_pane_state_t *st)
     if (!st || !source_pane_asm_view_isAsmLikeMode(st->viewMode)) {
         return 0;
     }
-    if (st->viewMode == source_pane_mode_z80) {
-        return 0;
-    }
     return 1;
 }
 

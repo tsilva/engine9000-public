@@ -2175,6 +2175,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
         goto done;
     }
     if (st && st->viewMode == source_pane_mode_z80) {
+        source_pane_symbols_refreshAsmSymbols(self, st);
         source_pane_renderAsm(self, ctx);
         goto done;
     }

@@ -9,6 +9,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 #include "source_pane_internal.h"
 
@@ -27,3 +28,12 @@ source_z80_getCurrentAddr(source_pane_state_t *st);
 int
 source_z80_getWindow(source_pane_state_t *st, int maxLines, uint64_t *outCurAddr,
                      const char ***outLines, const uint64_t **outAddrs, int *outCount);
+
+void
+source_z80_copySymbolBaseDir(char *out, size_t cap);
+
+int
+source_z80_getSymbolCount(void);
+
+int
+source_z80_getSymbol(int index, const char **outName, uint16_t *outAddr);

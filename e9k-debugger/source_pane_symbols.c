@@ -21,6 +21,7 @@
 #include "strutil.h"
 #include "addr2line.h"
 #include "print_eval.h"
+#include "source_z80.h"
 #include "symbol_text_map.h"
 
 void
@@ -37,7 +38,8 @@ source_pane_symbols_isAsmLikeMode(source_pane_mode_t mode)
     return (mode == source_pane_mode_a ||
             mode == source_pane_mode_sym ||
             mode == source_pane_mode_h ||
-            mode == source_pane_mode_cpr) ? 1 : 0;
+            mode == source_pane_mode_cpr ||
+            mode == source_pane_mode_z80) ? 1 : 0;
 }
 
 static const char *
@@ -1099,6 +1101,27 @@ source_pane_symbols_collectAsmSymbols(source_pane_state_t *st, const char *elf_p
     return added;
 }
 
+static int
+source_pane_symbols_collectZ80AsmSymbols(source_pane_state_t *st)
+{
+    if (!st) {
+        return 0;
+    }
+
+    int added = 0;
+    int count = source_z80_getSymbolCount();
+    for (int i = 0; i < count; ++i) {
+        const char *name = NULL;
+        uint16_t addr = 0;
+
+        if (!source_z80_getSymbol(i, &name, &addr)) {
+            continue;
+        }
+        added += source_pane_symbols_addAsmSymbol(st, name, (uint64_t)addr, NULL);
+    }
+    return added;
+}
+
 void
 source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_t *st)
 {
@@ -1115,6 +1138,34 @@ source_pane_symbols_refreshAsmSymbols(e9ui_component_t *comp, source_pane_state_
         return;
     }
     int editingSelect = (e9ui && e9ui_getFocus(&e9ui->ctx) == select) ? 1 : 0;
+
+    if (st->viewMode == source_pane_mode_z80) {
+        char symbolBaseDir[PATH_MAX];
+
+        source_z80_copySymbolBaseDir(symbolBaseDir, sizeof(symbolBaseDir));
+        if (st->asmSymbolsLoaded &&
+            strcmp(st->asmSymbolsElf, symbolBaseDir) == 0 &&
+            strcmp(st->asmSymbolsToolchain, "z80-noi") == 0) {
+            if (!editingSelect) {
+                e9ui_textbox_setOptions(select, st->asmSymbolOptions, st->asmSymbolCount);
+            }
+            select->disabled = st->asmSymbolCount <= 0 ? 1 : 0;
+            return;
+        }
+
+        e9ui_textbox_setOptions(select, NULL, 0);
+        source_pane_symbols_clearAsmSymbols(st);
+        (void)source_pane_symbols_collectZ80AsmSymbols(st);
+        st->asmSymbolsLoaded = 1;
+        st->asmSymbolsTextMapRevision = 0;
+        strutil_strlcpy(st->asmSymbolsElf, sizeof(st->asmSymbolsElf), symbolBaseDir);
+        strutil_strlcpy(st->asmSymbolsToolchain, sizeof(st->asmSymbolsToolchain), "z80-noi");
+        if (!editingSelect) {
+            e9ui_textbox_setOptions(select, st->asmSymbolOptions, st->asmSymbolCount);
+        }
+        select->disabled = st->asmSymbolCount <= 0 ? 1 : 0;
+        return;
+    }
 
     const char *elf = debugger.libretro.exePath;
     const char *toolchain = debugger.libretro.toolchainPrefix;
