@@ -20,6 +20,7 @@
 #include "print_eval.h"
 #include "source.h"
 #include "source_pane_internal.h"
+#include "source_z80.h"
 #include "syntax_highlight.h"
 
 typedef struct source_pane_source_window {
@@ -198,7 +199,8 @@ source_pane_source_view_loadWindow(e9ui_component_t *self,
     }
     memset(out, 0, sizeof(*out));
 
-    if (!self || !ctx || !st || st->viewMode != source_pane_mode_c) {
+    if (!self || !ctx || !st ||
+        (st->viewMode != source_pane_mode_c && st->viewMode != source_pane_mode_z80s)) {
         return;
     }
 
@@ -484,20 +486,39 @@ source_pane_source_view_updateSourceLocation(source_pane_state_t *st, int allowW
         return;
     }
 
-    unsigned long pc = 0;
-    if (st->overrideActive) {
-        pc = (unsigned long)st->overrideAddr;
+    uint64_t pc = 0;
+    if (st->viewMode == source_pane_mode_z80s) {
+        pc = st->overrideActive ? source_z80_resolveAnchorAddr(st->overrideAddr) : source_z80_getCurrentAddr(st);
     } else {
-        (void)machine_findReg(&debugger.machine, "PC", &pc);
+        unsigned long primaryPc = 0;
+        if (st->overrideActive) {
+            primaryPc = (unsigned long)st->overrideAddr;
+        } else {
+            (void)machine_findReg(&debugger.machine, "PC", &primaryPc);
+        }
+        pc = (uint64_t)(primaryPc & 0x00ffffffu);
     }
-    pc &= 0x00ffffffu;
-    if (st->lastResolvedPc == (uint64_t)pc && st->curSrcLine > 0 && st->curSrcPath[0]) {
+    if (st->lastResolvedPc == (uint64_t)pc &&
+        st->lastResolvedMode == st->viewMode &&
+        st->curSrcLine > 0 &&
+        st->curSrcPath[0]) {
         return;
     }
 
     st->lastResolvedPc = (uint64_t)pc;
+    st->lastResolvedMode = st->viewMode;
     st->curSrcLine = 0;
     st->curSrcPath[0] = '\0';
+
+    if (st->viewMode == source_pane_mode_z80s) {
+        char path[PATH_MAX];
+        int line = 0;
+        if (source_z80_resolveSourceLocation((uint16_t)pc, path, sizeof(path), &line)) {
+            source_pane_resolveSourcePath(path, st->curSrcPath, sizeof(st->curSrcPath));
+            st->curSrcLine = line;
+        }
+        return;
+    }
 
     const char *elf = debugger.libretro.exePath;
     if (!elf || !*elf || !debugger.elfValid) {
@@ -540,7 +561,7 @@ source_pane_source_view_beginSourceGutterPress(e9ui_component_t *self, e9ui_cont
     }
 
     st->gutterPending = 1;
-    st->gutterMode = source_pane_mode_c;
+    st->gutterMode = st->viewMode;
     st->gutterLine = view.first + row;
     st->gutterDownX = mx;
     st->gutterDownY = my;
@@ -551,7 +572,8 @@ int
 source_pane_source_view_handleCScrollEvent(e9ui_component_t *self, e9ui_context_t *ctx,
                                            source_pane_state_t *st, const e9ui_event_t *ev)
 {
-    if (!self || !ctx || !st || !ev || st->viewMode != source_pane_mode_c) {
+    if (!self || !ctx || !st || !ev ||
+        (st->viewMode != source_pane_mode_c && st->viewMode != source_pane_mode_z80s)) {
         return 0;
     }
 
@@ -706,6 +728,8 @@ source_pane_source_view_updateHoverTooltip(e9ui_component_t *self, e9ui_context_
     uint32_t pc = (uint32_t)pcReg;
     int sameTarget = st->hoverActive &&
                      st->hoverLine == lineNo &&
+                     st->hoverCol == column &&
+                     st->hoverPc == pc &&
                      strcmp(st->hoverExpr, expr) == 0;
 
     char tip[1024];
@@ -767,7 +791,10 @@ source_pane_source_view_render(e9ui_component_t *self, e9ui_context_t *ctx)
     }
 
     source_pane_source_view_updateSourceLocation(st, st->scrollLocked ? 1 : 0);
-    source_pane_symbols_refreshSourceFiles(self, st);
+    if (st->viewMode == source_pane_mode_c ||
+        st->viewMode == source_pane_mode_z80s) {
+        source_pane_symbols_refreshSourceFiles(self, st);
+    }
 
     int manualView = st->manualSrcActive && st->manualSrcPath;
     const char *path = manualView ? st->manualSrcPath : st->curSrcPath;
@@ -778,8 +805,12 @@ source_pane_source_view_render(e9ui_component_t *self, e9ui_context_t *ctx)
     if (st->manualSrcActive && st->manualSrcPath && st->manualSrcPath[0] == '\0') {
         functionPath = NULL;
     }
-    source_pane_symbols_refreshSourceFunctions(self, st, functionPath);
-    if (!st->functionScrollLock && !manualView) {
+    if (st->viewMode == source_pane_mode_c ||
+        st->viewMode == source_pane_mode_z80s) {
+        source_pane_symbols_refreshSourceFunctions(self, st, functionPath);
+    }
+    if ((st->viewMode == source_pane_mode_c ||
+         st->viewMode == source_pane_mode_z80s) && !st->functionScrollLock && !manualView) {
         source_pane_symbols_trackCurrentFunction(self, st, path, curLine);
     }
 

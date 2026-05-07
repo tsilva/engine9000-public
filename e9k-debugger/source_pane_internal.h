@@ -33,6 +33,40 @@ typedef enum source_pane_inline_edit_kind {
     source_pane_inline_edit_cpr_value,
 } source_pane_inline_edit_kind_t;
 
+typedef struct source_pane_symbols_cache {
+    char **sourceFiles;
+    char **sourceLabels;
+    e9ui_textbox_option_t *sourceOptions;
+    int sourceFileCount;
+    int sourceFileCap;
+    int sourceFilesLoaded;
+    char sourceFilesElf[PATH_MAX];
+    char sourceFilesToolchain[PATH_MAX];
+    char **sourceFunctionNames;
+    char **sourceFunctionFiles;
+    char **sourceFunctionLabels;
+    char **sourceFunctionValues;
+    int *sourceFunctionLines;
+    e9ui_textbox_option_t *sourceFunctionOptions;
+    int sourceFunctionCount;
+    int sourceFunctionCap;
+    int sourceFunctionsLoaded;
+    char sourceFunctionsElf[PATH_MAX];
+    char sourceFunctionsToolchain[PATH_MAX];
+    char sourceFunctionsFile[PATH_MAX];
+    char **asmSymbolNames;
+    char **asmSymbolLabels;
+    char **asmSymbolValues;
+    uint64_t *asmSymbolAddrs;
+    e9ui_textbox_option_t *asmSymbolOptions;
+    int asmSymbolCount;
+    int asmSymbolCap;
+    int asmSymbolsLoaded;
+    uint64_t asmSymbolsTextMapRevision;
+    char asmSymbolsElf[PATH_MAX];
+    char asmSymbolsToolchain[PATH_MAX];
+} source_pane_symbols_cache_t;
+
 typedef struct source_pane_state {
     source_pane_mode_t viewMode;
     int scrollLine;
@@ -42,6 +76,7 @@ typedef struct source_pane_state {
     int scrollAnchorValid;
     uint64_t lastPcAddr;
     uint64_t lastResolvedPc;
+    source_pane_mode_t lastResolvedMode;
     uint64_t overrideAddr;
     int overrideActive;
     int frozenActive;
@@ -74,38 +109,10 @@ typedef struct source_pane_state {
     char *asmAddressMeta;
     char *manualSrcPath;
     int manualSrcActive;
-    char **sourceFiles;
-    char **sourceLabels;
-    e9ui_textbox_option_t *sourceOptions;
-    int sourceFileCount;
-    int sourceFileCap;
-    int sourceFilesLoaded;
-    char sourceFilesElf[PATH_MAX];
-    char sourceFilesToolchain[PATH_MAX];
     char *functionSelectMeta;
-    char **sourceFunctionNames;
-    char **sourceFunctionFiles;
-    char **sourceFunctionLabels;
-    char **sourceFunctionValues;
-    int *sourceFunctionLines;
-    e9ui_textbox_option_t *sourceFunctionOptions;
-    int sourceFunctionCount;
-    int sourceFunctionCap;
-    int sourceFunctionsLoaded;
-    char sourceFunctionsElf[PATH_MAX];
-    char sourceFunctionsToolchain[PATH_MAX];
-    char sourceFunctionsFile[PATH_MAX];
-    char **asmSymbolNames;
-    char **asmSymbolLabels;
-    char **asmSymbolValues;
-    uint64_t *asmSymbolAddrs;
-    e9ui_textbox_option_t *asmSymbolOptions;
-    int asmSymbolCount;
-    int asmSymbolCap;
-    int asmSymbolsLoaded;
-    uint64_t asmSymbolsTextMapRevision;
-    char asmSymbolsElf[PATH_MAX];
-    char asmSymbolsToolchain[PATH_MAX];
+    source_pane_symbols_cache_t primarySymbols;
+    source_pane_symbols_cache_t z80Symbols;
+    source_pane_symbols_cache_t *activeSymbols;
     int functionScrollLock;
     int searchActive;
     int searchMatchValid;
@@ -135,6 +142,38 @@ typedef struct source_pane_state {
     int hoverActive;
     e9ui_step_buttons_state_t asmStepButtons;
 } source_pane_state_t;
+
+#define sourceFiles activeSymbols->sourceFiles
+#define sourceLabels activeSymbols->sourceLabels
+#define sourceOptions activeSymbols->sourceOptions
+#define sourceFileCount activeSymbols->sourceFileCount
+#define sourceFileCap activeSymbols->sourceFileCap
+#define sourceFilesLoaded activeSymbols->sourceFilesLoaded
+#define sourceFilesElf activeSymbols->sourceFilesElf
+#define sourceFilesToolchain activeSymbols->sourceFilesToolchain
+#define sourceFunctionNames activeSymbols->sourceFunctionNames
+#define sourceFunctionFiles activeSymbols->sourceFunctionFiles
+#define sourceFunctionLabels activeSymbols->sourceFunctionLabels
+#define sourceFunctionValues activeSymbols->sourceFunctionValues
+#define sourceFunctionLines activeSymbols->sourceFunctionLines
+#define sourceFunctionOptions activeSymbols->sourceFunctionOptions
+#define sourceFunctionCount activeSymbols->sourceFunctionCount
+#define sourceFunctionCap activeSymbols->sourceFunctionCap
+#define sourceFunctionsLoaded activeSymbols->sourceFunctionsLoaded
+#define sourceFunctionsElf activeSymbols->sourceFunctionsElf
+#define sourceFunctionsToolchain activeSymbols->sourceFunctionsToolchain
+#define sourceFunctionsFile activeSymbols->sourceFunctionsFile
+#define asmSymbolNames activeSymbols->asmSymbolNames
+#define asmSymbolLabels activeSymbols->asmSymbolLabels
+#define asmSymbolValues activeSymbols->asmSymbolValues
+#define asmSymbolAddrs activeSymbols->asmSymbolAddrs
+#define asmSymbolOptions activeSymbols->asmSymbolOptions
+#define asmSymbolCount activeSymbols->asmSymbolCount
+#define asmSymbolCap activeSymbols->asmSymbolCap
+#define asmSymbolsLoaded activeSymbols->asmSymbolsLoaded
+#define asmSymbolsTextMapRevision activeSymbols->asmSymbolsTextMapRevision
+#define asmSymbolsElf activeSymbols->asmSymbolsElf
+#define asmSymbolsToolchain activeSymbols->asmSymbolsToolchain
 
 void
 source_pane_freeFrozenAsm(source_pane_state_t *st);
@@ -266,6 +305,9 @@ source_pane_symbols_clearSourceFunctions(source_pane_state_t *st);
 
 void
 source_pane_symbols_clearAsmSymbols(source_pane_state_t *st);
+
+void
+source_pane_symbols_clearAllCaches(source_pane_state_t *st);
 
 void
 source_pane_symbols_syncFileSelect(e9ui_component_t *comp, source_pane_state_t *st);

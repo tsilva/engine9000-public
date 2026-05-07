@@ -37,3 +37,18 @@ source_z80_getSymbolCount(void);
 
 int
 source_z80_getSymbol(int index, const char **outName, uint16_t *outAddr);
+
+int
+source_z80_resolveSourceLocation(uint16_t addr, char *outPath, size_t pathCap, int *outLine);
+
+int
+source_z80_resolveSourceLineAddress(const char *path, int line, uint16_t *outAddr);
+
+int
+source_z80_getSourceLocationCount(void);
+
+int
+source_z80_getSourceLocation(int index, uint16_t *outAddr, const char **outPath, int *outLine);
+
+uint64_t
+source_z80_getSourceMapRevision(void);

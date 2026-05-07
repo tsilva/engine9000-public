@@ -35,3 +35,10 @@ releases
 silents.uae
 *.uae
 tests/neogeo/sound/st.neo
+!tests/neogeo/neogeoz80/
+!tests/neogeo/neogeoz80/build/
+!tests/neogeo/neogeoz80/build/neogeoz80.neo
+!tests/neogeo/neogeoz80/build/rom.elf
+!tests/neogeo/neogeoz80/build/demo_driver.map
+!tests/neogeo/neogeoz80/build/demo_driver.noi
+!tests/neogeo/neogeoz80/build/demo_driver.z80srcmap

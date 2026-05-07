@@ -1,0 +1,574 @@
+ASxxxx Linker V03.00/V05.40 + sdld,  page 1.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+.  .ABS.               00000000    00000000 =           0. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00000000  .__.ABS.  |    00000000  .__.CPU.  |    00000000  .__.H$L. 
+     00000000  A_START_L |    00000000  B_START_L |    00000000  CH_STREAM
+     00000000  PORT_FROM |    00000000  REG_ADPCM |    00000000  REG_SSG_A
+     00000000  TIMER_CON |    00000000  l__CODE   |    00000000  op_id_wri
+     00000000  s_CODE    |    00000000  s_START   |    00000000  s_START0 
+     00000000  s_START1  |    00000000  s_START2  |    00000000  s_START3 
+     00000000  s_START4  |    00000000  s_START5  |    00000000  s_START6 
+     00000000  s_START7  |    00000000  s_START8  |    00000000  s__CODE  
+     00000001  A_START_M |    00000001  B_START_M |    00000001  REG_ADPCM
+     00000001  REG_SSG_A |    00000001  TIMER_CON |    00000001  YM2610_FM
+     00000001  l_START0  |    00000001  l_START1  |    00000001  l_START2 
+     00000001  l_START3  |    00000001  l_START4  |    00000001  l_START5 
+     00000001  op_id_wri |    00000002  A_STOP_LS |    00000002  B_STOP_LS
+     00000002  CH_STREAM |    00000002  REG_ADPCM |    00000002  REG_SSG_B
+     00000002  YM2610_FM |    00000002  op_id_nss |    00000003  A_STOP_MS
+     00000003  B_STOP_MS |    00000003  REG_SSG_B |    00000003  op_id_nss
+     00000004  A_CHANNEL |    00000004  B_DELTA_N |    00000004  CH_STREAM
+     00000004  NSS_ADPCM |    00000004  NSS_ADPCM |    00000004  PORT_YM26
+     00000004  PORT_YM26 |    00000004  REG_SSG_C |    00000004  l_START  
+     00000004  op_id_tim |    00000005  A_PAN_VOL |    00000005  B_DELTA_N
+     00000005  PORT_YM26 |    00000005  REG_SSG_C |    00000005  YM2610_FM
+     00000005  op_id_wai |    00000006  A_CHANNEL |    00000006  B_PAN    
+     00000006  CH_STREAM |    00000006  PORT_PLAY |    00000006  PORT_YM26
+     00000006  REG_SSG_N |    00000006  YM2610_FM |    00000006  op_id_nss
+     00000007  B_VOLUME  |    00000007  CH_STREAM |    00000007  PORT_YM26
+     00000007  REG_SSG_E |    00000007  l_START6  |    00000007  op_id_nss
+     00000008  NSS_ADPCM |    00000008  NSS_ADPCM |    00000008  PORT_BANK
+     00000008  PORT_ENAB |    00000008  REG_ADPCM |    00000008  REG_SSG_A
+     00000008  op_id_nss |    00000009  PORT_BANK |    00000009  REG_ADPCM
+     00000009  REG_SSG_B |    00000009  op_id_row |    0000000A  PORT_BANK
+     0000000A  REG_ADPCM |    0000000A  REG_SSG_C |    0000000A  op_id_row
+     0000000B  PORT_BANK |    0000000B  REG_ADPCM |    0000000B  REG_SSG_E
+     0000000B  op_id_wai |    0000000C  PORT_TO_6 |    0000000C  REG_ADPCM
+     0000000C  REG_SSG_E |    0000000C  op_id_adp |    0000000D  REG_ADPCM
+     0000000D  REG_SSG_E |    0000000D  op_id_adp |    0000000E  NB_YM2610
+     0000000E  op_id_adp |    0000000F  op_id_fm_ |    00000010  REG_ADPCM
+     00000010  REG_ADPCM |    00000010  op_id_fm_ |    00000011  REG_ADPCM
+     00000011  REG_ADPCM |    00000011  op_id_fm_ |    00000012  REG_ADPCM
+     00000012  REG_ADPCM |    00000012  l_START7  |    00000012  op_id_fm_
+     00000013  REG_ADPCM |    00000013  REG_ADPCM |    00000013  op_id_fm_
+     00000014  REG_ADPCM |    00000014  REG_ADPCM |    00000014  op_id_fm_
+     00000015  REG_ADPCM |    00000015  REG_ADPCM |    00000015  op_id_fm_
+     00000016  op_id_adp |    00000017  op_id_adp |    00000018  PORT_DISA
+     00000018  REG_ADPCM |    00000018  op_id_adp |    00000019  REG_ADPCM
+     00000019  REG_ADPCM |    00000019  op_id_adp |    0000001A  REG_ADPCM
+     0000001A  REG_ADPCM |    0000001A  op_id_adp |    0000001B  REG_ADPCM
+     0000001B  REG_ADPCM |    0000001B  op_id_adp |    0000001C  REG_ADPCM
+     0000001C  REG_ADPCM |    0000001C  op_id_adp |    0000001D  REG_ADPCM
+     0000001D  op_id_adp |    0000001E  op_id_adp |    0000001F  op_id_op1
+     00000020  REG_ADPCM |    00000020  op_id_op2 |    00000021  REG_ADPCM
+ASxxxx Linker V03.00/V05.40 + sdld,  page 2.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+.  .ABS.               00000000    00000000 =           0. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00000021  op_id_op3 |    00000022  REG_ADPCM |    00000022  REG_FM_LF
+     00000022  op_id_op4 |    00000023  REG_ADPCM |    00000023  op_id_fm_
+     00000024  REG_ADPCM |    00000024  REG_TIMER |    00000024  op_id_ssg
+     00000025  REG_ADPCM |    00000025  REG_TIMER |    00000025  op_id_ssg
+     00000026  REG_TIMER |    00000026  op_id_ssg |    00000027  REG_TIMER
+     00000027  op_id_ssg |    00000028  REG_ADPCM |    00000028  REG_FM_KE
+     00000028  op_id_ssg |    00000029  REG_ADPCM |    00000029  op_id_ssg
+     0000002A  REG_ADPCM |    0000002A  op_id_ssg |    0000002B  REG_ADPCM
+     0000002B  op_id_fm_ |    0000002C  REG_ADPCM |    0000002C  op_id_ssg
+     0000002D  REG_ADPCM |    00000031  REG_FM1_O |    00000031  REG_FM3_O
+     00000032  REG_FM2_O |    00000032  REG_FM4_O |    00000033  op_id_adp
+     00000034  op_id_adp |    00000035  REG_FM1_O |    00000035  REG_FM3_O
+     00000035  op_id_fm_ |    00000036  REG_FM2_O |    00000036  REG_FM4_O
+     00000037  l_START8  |    00000039  REG_FM1_O |    00000039  REG_FM3_O
+     00000039  op_id_ssg |    0000003A  REG_FM2_O |    0000003A  REG_FM4_O
+     0000003A  op_id_fm_ |    0000003B  op_id_adp |    0000003C  op_id_adp
+     0000003D  REG_FM1_O |    0000003D  REG_FM3_O |    0000003E  REG_FM2_O
+     0000003E  REG_FM4_O |    0000003F  op_id_ssg |    00000040  MAX_PENDI
+     00000040  VIBRATO_P |    00000041  REG_FM1_O |    00000041  REG_FM3_O
+     00000042  REG_FM2_O |    00000042  REG_FM4_O |    00000045  REG_FM1_O
+     00000045  REG_FM3_O |    00000045  op_id_fm_ |    00000046  REG_FM2_O
+     00000046  REG_FM4_O |    00000046  op_id_ssg |    00000047  op_id_adp
+     00000048  op_id_adp |    00000049  REG_FM1_O |    00000049  REG_FM3_O
+     00000049  op_id_adp |    0000004A  REG_FM2_O |    0000004A  REG_FM4_O
+     0000004A  op_id_adp |    0000004B  op_id_adp |    0000004C  op_id_adp
+     0000004D  REG_FM1_O |    0000004D  REG_FM3_O |    0000004E  REG_FM2_O
+     0000004E  REG_FM4_O |    0000004E  op_id_nss |    0000004F  op_id_fm_
+     00000050  op_id_ssg |    00000051  REG_FM1_O |    00000051  REG_FM3_O
+     00000051  op_id_adp |    00000052  REG_FM2_O |    00000052  REG_FM4_O
+     00000053  op_id_arp |    00000054  op_id_arp |    00000055  REG_FM1_O
+     00000055  REG_FM3_O |    00000055  op_id_arp |    00000056  REG_FM2_O
+     00000056  REG_FM4_O |    00000056  op_id_qui |    00000057  op_id_qui
+     00000058  op_id_vol |    00000059  REG_FM1_O |    00000059  REG_FM3_O
+     00000059  op_id_vol |    0000005A  REG_FM2_O |    0000005A  REG_FM4_O
+     0000005A  op_id_vol |    0000005B  op_id_not |    0000005C  op_id_not
+     0000005D  REG_FM1_O |    0000005D  REG_FM3_O |    0000005D  op_id_not
+     0000005E  REG_FM2_O |    0000005E  REG_FM4_O |    0000005E  op_id_not
+     0000005F  op_id_not |    00000060  op_id_not |    00000061  REG_FM1_O
+     00000061  REG_FM3_O |    00000061  op_id_vib |    00000062  REG_FM2_O
+     00000062  REG_FM4_O |    00000062  op_id_vib |    00000063  op_id_leg
+     00000064  op_id_leg |    00000065  REG_FM1_O |    00000065  REG_FM3_O
+     00000066  REG_FM2_O |    00000066  REG_FM4_O |    00000069  REG_FM1_O
+     00000069  REG_FM3_O |    0000006A  REG_FM2_O |    0000006A  REG_FM4_O
+     0000006D  REG_FM1_O |    0000006D  REG_FM3_O |    0000006E  REG_FM2_O
+     0000006E  REG_FM4_O |    00000071  REG_FM1_O |    00000071  REG_FM3_O
+     00000072  REG_FM2_O |    00000072  REG_FM4_O |    00000075  REG_FM1_O
+     00000075  REG_FM3_O |    00000076  REG_FM2_O |    00000076  REG_FM4_O
+     00000079  REG_FM1_O |    00000079  REG_FM3_O |    0000007A  REG_FM2_O
+     0000007A  REG_FM4_O |    0000007D  REG_FM1_O |    0000007D  REG_FM3_O
+     0000007E  REG_FM2_O |    0000007E  REG_FM4_O |    00000081  REG_FM1_O
+     00000081  REG_FM3_O |    00000082  REG_FM2_O |    00000082  REG_FM4_O
+ASxxxx Linker V03.00/V05.40 + sdld,  page 3.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+.  .ABS.               00000000    00000000 =           0. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00000085  REG_FM1_O |    00000085  REG_FM3_O |    00000086  REG_FM2_O
+     00000086  REG_FM4_O |    00000089  REG_FM1_O |    00000089  REG_FM3_O
+     0000008A  REG_FM2_O |    0000008A  REG_FM4_O |    0000008D  REG_FM1_O
+     0000008D  REG_FM3_O |    0000008E  REG_FM2_O |    0000008E  REG_FM4_O
+     00000091  REG_FM1_O |    00000091  REG_FM3_O |    00000092  REG_FM2_O
+     00000092  REG_FM4_O |    00000095  REG_FM1_O |    00000095  REG_FM3_O
+     00000096  REG_FM2_O |    00000096  REG_FM4_O |    00000099  REG_FM1_O
+     00000099  REG_FM3_O |    0000009A  REG_FM2_O |    0000009A  REG_FM4_O
+     0000009D  REG_FM1_O |    0000009D  REG_FM3_O |    0000009E  REG_FM2_O
+     0000009E  REG_FM4_O |    000000A1  REG_FM1_F |    000000A1  REG_FM3_F
+     000000A2  REG_FM2_F |    000000A2  REG_FM4_F |    000000A5  REG_FM1_B
+     000000A5  REG_FM3_B |    000000A6  REG_FM2_B |    000000A6  REG_FM4_B
+     000000B1  REG_FM1_F |    000000B1  REG_FM3_F |    000000B2  REG_FM2_F
+     000000B2  REG_FM4_F |    000000B5  REG_FM1_L |    000000B5  REG_FM3_L
+     000000B6  REG_FM2_L |    000000B6  REG_FM4_L |    000000FF  TIMER_CON
+     000002F7  l_struct  |    000004F4  l_DATA    |    00002710  .__.$$$. 
+     00002C2F  l_CODE    |    0000F800  s_DATA    |    0000FCF4  s_struct 
+     0000FFFD  START_OF_
+ASxxxx Linker V03.00/V05.40 + sdld,  page 4.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START                  00000000    00000004 =           4. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 5.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START0                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 6.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START1                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 7.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START2                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 8.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START3                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 9.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START4                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 10.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START5                 00000000    00000001 =           1. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 11.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START6                 00000000    00000007 =           7. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 12.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START7                 00000000    00000012 =          18. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 13.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+START8                 00000000    00000037 =          55. bytes (ABS,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 14.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+CODE                   00000000    00002C2F =       11311. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00000100  init_z80_ |    00000112  snd_init_ |    00000120  snd_start
+     00000149  snd_mainl |    00000158  snd_push_ |    00000172  snd_proce
+     0000017D  _loop_com |    0000019A  _ret_from |    000001A5  _no_pendi
+     00000200  note_to_o |    00000280  sine      |    00000300  ssg_tune_
+     00000400  fm_fnum_d |    00000500  ssg_dists |    00000600  ssg_tunes
+     00000700  ssg_tunes |    00000780  ssg_dists |    00000800  fm_fnums 
+     00000827  fm_dists  |    0000084B  bank_64k_ |    0000084F  bank_swit
+     0000085F  snd_comma |    00000861  snd_comma |    0000087C  snd_comma
+     00000882  init_adpc |    00000888  update_ad |    000008A4  _adpcm_no
+     000008A5  snd_adpcm |    00000901  _snd_adpc |    00000903  snd_adpcm
+     00000911  _snd_adpc |    00000913  snd_adpcm |    00000967  snd_adpcm
+     0000097D  snd_adpcm |    00000993  snd_adpcm |    000009A0  _snd_adpc
+     000009A2  snd_adpcm |    000009AF  _snd_adpc |    000009B1  ym2610_wr
+     000009C9  ym2610_wr |    000009D8  ym2610_wr |    000009E7  _ym2610_w
+     000009E9  _ym2610_w |    000009F0  ym2610_wa |    000009F7  ym2610_re
+     00000A03  _end_rest |    00000A04  ym2610_re |    00000A15  _release_
+     00000A88  init_stre |    00000A9D  update_st |    00000AA7  _tick_sub
+     00000AB0  process_s |    00000AD1  _loop_chs |    00000AEB  _loop_opc
+     00000AFC  _post_ch_ |    00000B2B  _end_proc |    00000B2C  update_st
+     00000B56  _post_pro |    00000B6A  _end_upda |    00000B6D  snd_strea
+     00000B6D  stream_re |    00000B94  _post_mem |    00000B95  snd_strea
+     00000B95  stream_pl |    00000BC7  snd_confi |    00000BCF  _stream_c
+     00000BD6  _stream_c |    00000BDF  stream_al |    00000BEE  stream_pl
+     00000C29  _stream_p |    00000C48  snd_strea |    00000C48  stream_st
+     00000C57  _op_offse |    00000C57  nss_opcod |    00000C59  _op_offse
+     00000C5B  _op_offse |    00000C5D  _op_offse |    00000C5F  _op_offse
+     00000C61  _op_offse |    00000C63  _op_offse |    00000C65  _op_offse
+     00000C67  _op_offse |    00000C69  _op_offse |    00000C6B  _op_offse
+     00000C6D  _op_offse |    00000C6F  _op_offse |    00000C71  _op_offse
+     00000C73  _op_offse |    00000C75  _op_offse |    00000C77  _op_offse
+     00000C79  _op_offse |    00000C7B  _op_offse |    00000C7D  _op_offse
+     00000C7F  _op_offse |    00000C81  _op_offse |    00000C83  _op_offse
+     00000C85  _op_offse |    00000C87  _op_offse |    00000C89  _op_offse
+     00000C8B  _op_offse |    00000C8D  _op_offse |    00000C8F  _op_offse
+     00000C91  _op_offse |    00000C93  _op_offse |    00000C95  _op_offse
+     00000C97  _op_offse |    00000C99  _op_offse |    00000C9B  _op_offse
+     00000C9D  _op_offse |    00000C9F  _op_offse |    00000CA1  _op_offse
+     00000CA3  _op_offse |    00000CA5  _op_offse |    00000CA7  _op_offse
+     00000CA9  _op_offse |    00000CAB  _op_offse |    00000CAD  _op_offse
+     00000CAF  _op_offse |    00000CBD  _op_offse |    00000CBF  _op_offse
+     00000CC1  _op_offse |    00000CC9  _op_offse |    00000CCB  _op_offse
+     00000CCD  _op_offse |    00000CCF  _op_offse |    00000CD5  _op_offse
+     00000CE1  _op_offse |    00000CE3  _op_offse |    00000CE5  _op_offse
+     00000CE7  _op_offse |    00000CE9  _op_offse |    00000CEB  _op_offse
+     00000CED  _op_offse |    00000CEF  _op_offse |    00000CF3  _op_offse
+     00000CF5  _op_offse |    00000CF7  _op_offse |    00000CF9  _op_offse
+     00000CFD  _op_offse |    00000CFF  _op_offse |    00000D01  _op_offse
+     00000D03  _op_offse |    00000D05  _op_offse |    00000D07  _op_offse
+     00000D09  _op_offse |    00000D0B  _op_offse |    00000D0D  _op_offse
+     00000D0F  _op_offse |    00000D11  _op_offse |    00000D13  _op_offse
+ASxxxx Linker V03.00/V05.40 + sdld,  page 15.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+CODE                   00000000    00002C2F =       11311. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00000D15  _op_offse |    00000D17  _op_offse |    00000D19  _op_offse
+     00000D1B  _op_offse |    00000D1D  _op_offse |    00000D1F  _op_offse
+     00000D21  process_n |    00000D36  write_por |    00000D40  write_por
+     00000D4A  nss_jmp   |    00000D63  nss_end   |    00000D70  wait_n_ro
+     00000D7D  _post_wai |    00000D8A  wait_last |    00000D98  nss_call 
+     00000DB8  nss_call_ |    00000DCD  process_t |    00000E03  nss_ret  
+     00000E20  _ret_set_ |    00000E28  nss_nop   |    00000E2B  init_time
+     00000E37  update_ti |    00000E55  timer_ini |    00000E84  timer_set
+     00000E91  timer_upd |    00000E9F  _timer_se |    00000EA7  timer_tem
+     00000ED3  row_speed |    00000EE9  row_groov |    00000EF9  mul_int24
+     00000F71  scale_int |    00000F94  state_fm_ |    00000F9A  init_nss_
+     00000FB7  _fm_init  |    00000FD5  fm_ctx_re |    00000FDB  fm_ctx_se
+     00000FEC  _fm_ctx_p |    00000FF5  _fm_ctx_p |    00000FFD  _ctx_no_2
+     00001013  _fm_ctx_1 |    0000101E  fm_set_fn |    00001035  fm_ctx_1 
+     0000103D  fm_ctx_2  |    00001045  fm_ctx_3  |    0000104D  fm_ctx_4 
+     00001055  fm_out_op |    0000105D  fm_set_ou |    00001075  fm_set_op
+     000010A1  compute_f |    000010C1  _fm_post_ |    000010C8  compute_y
+     000010E9  _c_ops_lo |    000010F6  _c_ops_po |    00001101  _c_ops_po
+     00001101  _c_ops_re |    00001106  _c_ops_ne |    0000110F  compute_y
+     00001164  run_fm_pi |    0000116E  _fm_updat |    0000118B  _fm_post_
+     000011A1  _fm_post_ |    000011B7  _fm_post_ |    000011C4  _fm_post_
+     000011D1  _fm_post_ |    000011DE  _fm_post_ |    000011E8  _fm_post_
+     00001206  fm_vol_lo |    00001214  _post_loa |    00001245  _end_fm_c
+     00001245  _post_loa |    00001250  _fm_end_p |    0000125A  fm_vol   
+     0000126B  _fm_vol_i |    0000126E  _fm_vol_e |    00001271  fm_instru
+     000012AC  _fm_port_ |    000012C5  _fm_end   |    000012D8  _fm_instr
+     000012DE  fm_set_pa |    000012F6  common_pi |    0000130A  fm_pitch 
+     00001318  fm_config |    0000132D  _fm_cfg_n |    00001349  _fm_post_
+     0000134D  _fm_cfg_n |    00001356  _fm_cfg_s |    0000135E  _fm_cfg_n
+     00001360  fm_config |    00001370  _fm_cfg_v |    0000137E  _fm_cfg_v
+     0000137F  fm_note_o |    00001390  _fm_note_ |    00001393  _fm_note_
+     00001396  fm_note_o |    000013A3  fm_note_o |    000013AA  fm_stop_p
+     000013BF  fm_note_o |    000013C5  fm_note_o |    000013D2  op1_lvl  
+     000013DE  op2_lvl   |    000013EA  op3_lvl   |    000013F6  op4_lvl  
+     00001402  fm_pan    |    00001423  fm_delay  |    00001429  fm_cut   
+     0000142F  state_ssg |    00001435  init_nss_ |    0000144B  _ssg_init
+     00001462  eval_macr |    00001471  _upd_macr |    0000147F  _end_upd_
+     00001498  _finish_m |    0000149F  ssg_ctx_s |    000014B0  _ssg_ctx_
+     000014B9  _ssg_ctx_ |    000014BB  run_ssg_p |    000014C5  _update_l
+     000014E3  _ssg_pipe |    000014EF  _ssg_post |    00001505  _ssg_post
+     0000151B  _ssg_post |    00001528  _ssg_post |    00001535  _ssg_post
+     00001542  _ssg_post |    0000154C  _ssg_post |    00001571  _post_loa
+     0000157B  _prepare_ |    0000158E  _post_ssg |    000015A7  _post_loa
+     000015D5  _end_ssg_ |    000015D5  _post_loa |    000015E3  _ssg_end_
+     000015ED  compute_s |    00001612  _ssg_post |    00001619  compute_y
+     00001665  compute_y |    00001679  _post_ssg |    0000167D  waveform_
+     00001693  _post_wav |    00001694  ssg_ctx_r |    0000169A  ssg_ctx_1
+     000016A2  ssg_ctx_2 |    000016AA  ssg_ctx_3 |    000016B2  ssg_macro
+     000016F5  ssg_stop_ |    0000171E  ssg_note_ |    00001724  ssg_note_
+     00001731  ssg_vol   |    00001742  _ssg_vol_ |    00001745  _ssg_vol_
+     00001748  ssg_confi |    0000175D  _ssg_cfg_ |    00001779  _ssg_post
+ASxxxx Linker V03.00/V05.40 + sdld,  page 16.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+CODE                   00000000    00002C2F =       11311. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     0000177D  _ssg_cfg_ |    00001789  _ssg_cfg_ |    00001791  _ssg_cfg_
+     00001793  ssg_confi |    000017A3  _ssg_cfg_ |    000017B1  _ssg_cfg_
+     000017B2  ssg_note_ |    000017C3  _ssg_note |    000017C6  _ssg_note
+     000017C9  ssg_note_ |    000017D6  ssg_note_ |    000017DD  ssg_env_p
+     000017F1  ssg_delay |    000017F7  ssg_pitch |    00001805  ssg_cut  
+     0000180B  state_a_a |    00001811  init_nss_ |    00001827  _a_init  
+     00001835  adpcm_a_c |    0000183B  adpcm_a_c |    0000184C  _adpcm_a_
+     00001855  _adpcm_a_ |    0000185E  _adpcm_a_ |    00001862  run_adpcm
+     0000186C  _a_update |    00001886  _a_post_f |    0000189C  _a_post_f
+     000018A6  _a_post_c |    000018AF  _post_loa |    000018CE  _post_loa
+     000018E0  _a_on_bit |    000018EB  _end_a_ch |    000018EB  _post_loa
+     000018F6  _a_end_pi |    00001900  adpcm_a_c |    00001905  adpcm_a_c
+     0000190A  adpcm_a_c |    0000190F  adpcm_a_c |    00001914  adpcm_a_c
+     00001919  adpcm_a_c |    0000191E  adpcm_a_i |    00001941  _adpcm_a_
+     00001957  adpcm_a_c |    00001960  adpcm_a_c |    00001970  _a_cfg_vo
+     0000197E  _a_cfg_vo |    0000197F  adpcm_a_o |    0000198B  _a_on_imm
+     0000198E  _a_on_end |    00001998  adpcm_a_o |    0000199F  adpcm_a_s
+     000019A9  _off_bit  |    000019B9  adpcm_a_o |    000019C6  adpcm_a_s
+     000019DA  _adpcm_a_ |    000019DD  compute_y |    000019EB  _a_post_g
+     000019EF  adpcm_a_v |    00001A00  _a_vol_im |    00001A03  _a_vol_en
+     00001A06  adpcm_a_d |    00001A0C  adpcm_a_c |    00001A12  adpcm_a_r
+     00001A18  adpcm_a_p |    00001A24  state_b_a |    00001A2A  init_nss_
+     00001A54  run_adpcm |    00001A76  _b_post_f |    00001A8C  _b_post_f
+     00001AA2  _b_post_f |    00001AAF  _b_post_f |    00001ABC  _b_post_f
+     00001AC9  _b_post_f |    00001AD3  _b_post_c |    00001AE8  _post_loa
+     00001AFA  _post_loa |    00001B2D  _end_b_ch |    00001B2D  _post_loa
+     00001B2D  _post_sta |    00001B33  adpcm_b_s |    00001B46  _b_level_
+     00001B4B  _b_level_ |    00001B54  _b_level_ |    00001B5D  _b_level_
+     00001B66  _b_level_ |    00001B6F  _b_level_ |    00001B78  _b_level_
+     00001B81  _b_level_ |    00001B84  adpcm_b_i |    00001BA5  _adpcm_b_
+     00001BB9  _adpcm_b_ |    00001BD7  _adpcm_b_ |    00001BDA  adpcm_b_c
+     00001BEF  _b_cfg_no |    00001C0B  _b_post_c |    00001C0F  _b_cfg_no
+     00001C16  _b_cfg_st |    00001C1E  _b_cfg_no |    00001C20  adpcm_b_c
+     00001C30  _b_cfg_vo |    00001C3E  _b_cfg_vo |    00001C3F  adpcm_b_n
+     00001C51  _b_note_o |    00001C54  _b_note_o |    00001C58  compute_y
+     00001C62  compute_a |    00001C7B  _b_post_a |    00001C82  compute_y
+     00001CCF  _b_lower  |    00001CD8  _b_raise  |    00001CDC  _post_del
+     00001CE3  adpcm_b_n |    00001CF4  adpcm_b_v |    00001D05  _b_vol_im
+     00001D08  _b_vol_en |    00001D0B  adpcm_b_c |    00001D12  adpcm_b_d
+     00001D18  adpcm_b_c |    00001D1E  adpcm_b_p |    00001D2A  vibrato_i
+     00001D3B  _post_vib |    00001D55  vibrato_s |    00001D6B  _post_bit
+     00001D74  _post_bit |    00001D7D  _post_bit |    00001D86  _post_bit
+     00001D87  eval_vibr |    00001D9E  _v_mul    |    00001DB8  _v_post_b
+     00001DBD  _v_post_b |    00001DC2  _v_post_b |    00001DC7  _v_post_b
+     00001DCE  _v_post_b |    00001DDA  _v_post_s |    00001DE1  vibrato  
+     00001DE8  vibrato_o |    00001DF3  slide_ini |    00001DF6  __slide_d
+     00001E04  slide_ini |    00001E11  _post_ini |    00001E12  slide_ini
+     00001E21  _post_neg |    00001E2A  eval_slid |    00001E3C  _slide_ad
+     00001E49  _slide_su |    00001E58  _slide_cp |    00001E6A  _slide_po
+     00001E77  _slide_in |    00001E7E  slide_ini |    00001EA1  _slide_in
+     00001EB1  slide_ini |    00001EC7  _targey_p |    00001EE8  slide_por
+ASxxxx Linker V03.00/V05.40 + sdld,  page 17.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+CODE                   00000000    00002C2F =       11311. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     00001F0A  slide_upd |    00001F16  _slide_up |    00001F25  _slide_up
+     00001F30  slide_off |    00001F3E  vol_slide |    00001F49  __vol_sli
+     00001F55  vol_slide |    00001F5A  vol_slide |    00001F5F  __note_pi
+     00001F69  note_pitc |    00001F6E  note_pitc |    00001F73  note_port
+     00001F7E  __note_sl |    00001F88  note_slid |    00001F8D  note_slid
+     00001F92  note_slid |    00001F9D  trigger_d |    00001FAE  trigger_c
+     00001FBF  trigger_r |    00001FD2  trigger_a |    00001FDD  _trigger_
+     00001FDF  eval_trig |    00001FF4  _trigger_ |    00002001  _trigger_
+     00002009  _trigger_ |    00002011  _trigger_ |    00002011  _trigger_
+     00002012  _trigger_ |    00002021  _trigger_ |    00002030  _trigger_
+     00002039  _trigger_ |    00002048  _trigger_ |    00002055  eval_arpe
+     00002060  _arpeggio |    0000206F  _arpeggio |    0000207E  _arpeggio
+     0000208A  _arpeggio |    0000208E  _arpeggio |    0000208F  arpeggio 
+     000020B7  _arpeggio |    000020BA  arpeggio_ |    000020C2  arpeggio_
+     000020D1  legato_in |    000020DC  _legato_p |    000020F6  eval_lega
+     00002101  _legato_u |    00002120  _legato_u |    00002121  quick_leg
+     00002125  quick_leg |    00002129  legato    |    0000212E  legato_of
+     00002133  state_vol |    00002144  state_vol |    00002155  state_vol
+     00002166  state_vol |    00002177  state_vol |    00002188  init_volu
+     000021AC  volume_re |    000021CB  volume_up |    000021F6  volume_le
+     00002214  _fade_pos |    0000221B  _fade_pos |    00002223  volume_up
+     00002235  _vol_upd_ |    00002241  _vol_upd_ |    0000224D  _vol_upd_
+     00002259  _vol_upd_ |    00002265  _vol_upd_ |    00002271  _vol_upd_
+     0000227D  _vol_upd_ |    0000228E  _vol_adpc |    00002296  _vol_adpc
+     000022B6  _vol_post |    000022B9  update_vo |    000022F8  fade     
+     00002308  next_fade |    0000230E  _post_vol |    0000230F  stream_vo
+     0000231B  _post_vol |    00002323  stream_vo |    0000232F  _post_vol
+     00002337  volume_fa |    00002347  cmd_jmpta |    000024C7  music_sta
+     000024D1  sfx_laser |    000024E0  nss_stars |    000024FB  nss_stars
+     000025E4  nss_stars |    000026EA  nss_stars |    0000286D  nss_stars
+     000029F4  nss_stars |    00002A48  nss_stars |    00002AB5  nss_stars
+     00002ADD  nss_stars |    00002B16  instrumen |    00002B16  nss_stars
+ASxxxx Linker V03.00/V05.40 + sdld,  page 18.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+DATA                   0000F800    000004F4 =        1268. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     0000F800  command_f |    0000F840  command_f |    0000F841  command_f
+     0000F842  state_adp |    0000F843  state_ym2 |    0000F844  state_str
+     0000F845  state_str |    0000F847  state_str |    0000F848  state_ch_
+     0000F84A  state_ch_ |    0000F858  state_ch_ |    0000F866  state_ch_
+     0000F874  state_ch_ |    0000F874  state_ch_ |    0000F876  state_ch_
+     0000F878  state_ch_ |    0000F87A  state_ch_ |    0000F87B  state_ch_
+     0000F8D6  state_cur |    0000F8D8  state_cur |    0000F8DA  state_cur
+     0000F8DC  state_cur |    0000F8DE  state_str |    0000F8DF  state_nss
+     0000F8E0  state_nss |    0000F928  _state_ti |    0000F928  state_tim
+     0000F929  state_tim |    0000F92A  state_tim |    0000F92B  state_tim
+     0000F92C  state_tim |    0000F92D  state_tim |    0000F93D  _state_ti
+     0000F93D  ym2610_wr |    0000F940  state_fm_ |    0000F942  state_fm_
+     0000FA00  _state_fm |    0000FA00  state_fm_ |    0000FA01  state_fm_
+     0000FA02  state_fm1 |    0000FA02  state_fm_ |    0000FA02  state_fm_
+     0000FA03  state_fm_ |    0000FA04  state_fm_ |    0000FA06  state_fm_
+     0000FA0C  state_fm_ |    0000FA11  state_fm_ |    0000FA17  state_fm_
+     0000FA1A  state_fm  |    0000FA1A  state_fm_ |    0000FA1B  state_fm_
+     0000FA1C  state_fm_ |    0000FA1D  state_fm_ |    0000FA1F  state_fm_
+     0000FA25  state_fm_ |    0000FA2A  state_fm_ |    0000FA2A  state_fm_
+     0000FA2B  state_fm_ |    0000FA2D  state_fm_ |    0000FA2F  state_fm_
+     0000FA31  state_fm_ |    0000FA32  state_fm_ |    0000FA33  state_fm_
+     0000FA34  state_fm_ |    0000FA35  state_fm_ |    0000FA36  state_fm_
+     0000FA37  state_fm_ |    0000FA38  state_fm_ |    0000FA39  state_fm_
+     0000FA3A  state_fm_ |    0000FA3B  state_fm2 |    0000FA3B  state_fm_
+     0000FA74  state_fm3 |    0000FAAD  state_fm4 |    0000FAE6  state_pan
+     0000FAEA  state_fm_ |    0000FAEB  _state_fm |    0000FB36  _state_ss
+     0000FB36  state_ssg |    0000FB37  state_mir |    0000FB38  state_mir
+     0000FB38  state_mir |    0000FB38  state_ssg |    0000FB39  state_ssg
+     0000FB3A  state_ssg |    0000FB3C  state_ssg |    0000FB42  state_ssg
+     0000FB47  state_ssg |    0000FB4D  state_ssg |    0000FB50  state_mir
+     0000FB50  state_ssg |    0000FB51  state_ssg |    0000FB52  state_ssg
+     0000FB53  state_ssg |    0000FB55  state_ssg |    0000FB5B  state_ssg
+     0000FB60  state_ssg |    0000FB62  state_ssg |    0000FB64  state_ssg
+     0000FB66  state_mir |    0000FB66  state_mir |    0000FB69  state_ssg
+     0000FB6A  state_mir |    0000FB6B  state_ssg |    0000FB6C  state_ssg
+     0000FB6E  state_ssg |    0000FB70  state_ssg |    0000FB72  state_ssg
+     0000FB73  state_mir |    0000FB73  state_mir |    0000FBAE  state_mir
+     0000FBE9  state_ssg |    0000FBEA  _state_ss |    0000FC3C  _state_ad
+     0000FC3C  state_a   |    0000FC3C  state_a1  |    0000FC3C  state_a_p
+     0000FC3C  state_a_s |    0000FC3D  state_a_f |    0000FC3E  state_a_v
+     0000FC3F  state_a_v |    0000FC41  state_a_f |    0000FC47  state_a_f
+     0000FC4C  state_a_o |    0000FC4D  state_a_p |    0000FC4E  state_a2 
+     0000FC4E  state_a_e |    0000FC60  state_a3  |    0000FC72  state_a4 
+     0000FC84  state_a5  |    0000FC96  state_a6  |    0000FCA8  state_a6_
+     0000FCA8  state_adp |    0000FCA9  state_adp |    0000FCAA  _state_ad
+     0000FCBA  _state_ad |    0000FCBA  state_b_n |    0000FCBA  state_b_s
+     0000FCBB  state_b_n |    0000FCBC  state_b_n |    0000FCBE  state_b_f
+     0000FCC4  state_b_f |    0000FCC9  state_b_f |    0000FCCF  state_b_f
+     0000FCD2  state_b   |    0000FCD2  state_b_p |    0000FCD3  state_b_f
+     0000FCD4  state_b_v |    0000FCD5  state_b_v |    0000FCD7  state_b_f
+ASxxxx Linker V03.00/V05.40 + sdld,  page 19.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+DATA                   0000F800    000004F4 =        1268. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+     0000FCDD  state_b_t |    0000FCE2  state_b_n |    0000FCE2  state_b_n
+     0000FCE4  state_b_n |    0000FCE6  state_b_i |    0000FCE7  state_b_i
+     0000FCE8  state_b_i |    0000FCEA  state_b_i |    0000FCEC  state_b_o
+     0000FCED  state_b_p |    0000FCEE  state_adp |    0000FCEE  state_b_e
+     0000FCEF  _state_ad |    0000FCEF  state_vol |    0000FCF0  state_vol
+     0000FCF1  state_vol |    0000FCF2  state_vol |    0000FCF3  state_vol
+ASxxxx Linker V03.00/V05.40 + sdld,  page 20.
+Hexadecimal  [32-Bits]
+
+Area                       Addr        Size        Decimal Bytes (Attributes)
+--------------------       ----        ----        ------- ----- ------------
+struct                 0000FCF4    000002F7 =         759. bytes (REL,CON)
+
+        Value  Global            Value  Global            Value  Global    
+        -----  ------            -----  ------            -----  ------    
+ASxxxx Linker V03.00/V05.40 + sdld,  page 21.
+
+Files Linked                              [ module(s) ]
+
+/opt/homebrew/Cellar/ngdevkit/0.4+202511190737-1/z80-neogeo-ihx/lib/nullsound.lib
+                                          [ nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound,
+                                            nullsound ]
+build/user_commands.rel                   [  ]
+build/nss/nss-starship-battle.rel         [  ]
+build/nss/instruments-starship-battle.rel
+                                          [  ]
+
+ASxxxx Linker V03.00/V05.40 + sdld,  page 22.
+
+User Base Address Definitions
+
+DATA=0xf800
+
+

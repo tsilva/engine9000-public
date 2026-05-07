@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 
 #include "alloc.h"
 #include "debugger.h"
@@ -42,7 +43,24 @@ typedef struct source_z80_symbol_cache {
     char symbolBaseDir[PATH_MAX];
 } source_z80_symbol_cache_t;
 
+typedef struct source_z80_source_entry {
+    uint16_t addr;
+    int line;
+    char *path;
+} source_z80_source_entry_t;
+
+typedef struct source_z80_source_cache {
+    source_z80_source_entry_t *entries;
+    int entryCount;
+    int entryCap;
+    int ready;
+    time_t sourceMapMtime;
+    char symbolBaseDir[PATH_MAX];
+} source_z80_source_cache_t;
+
 static source_z80_symbol_cache_t source_z80_symbolCache;
+static source_z80_source_cache_t source_z80_sourceCache;
+static uint64_t source_z80_sourceMapRevision;
 
 static int
 source_z80_findProcessorId(uint32_t *outProcessorId);
@@ -55,6 +73,37 @@ source_z80_resolveExactSymbol(uint16_t addr, const char **outName);
 
 static int
 source_z80_isHexDigit(char ch);
+
+static int
+source_z80_pathExistsDir(const char *path)
+{
+    struct stat st;
+
+    if (!path || !path[0]) {
+        return 0;
+    }
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+}
+
+static time_t
+source_z80_sourceMapMtime(const char *symbolBaseDir)
+{
+    if (!symbolBaseDir || !symbolBaseDir[0]) {
+        return 0;
+    }
+
+    char path[PATH_MAX];
+    strutil_pathJoinTrunc(path, sizeof(path), symbolBaseDir, "demo_driver.z80srcmap");
+
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
+    return st.st_mtime;
+}
 
 int
 source_z80_isModeAvailable(void)
@@ -100,6 +149,21 @@ source_z80_copySymbolBaseDir(char *out, size_t cap)
         return;
     }
     out[0] = '\0';
+
+    const char *sourceDir = debugger.libretro.sourceDir;
+    if (sourceDir && sourceDir[0]) {
+        char buildDir[PATH_MAX];
+        strutil_pathJoinTrunc(buildDir, sizeof(buildDir), sourceDir, "build");
+        if (source_z80_pathExistsDir(buildDir)) {
+            strutil_strlcpy(out, cap, buildDir);
+            return;
+        }
+        if (source_z80_pathExistsDir(sourceDir)) {
+            strutil_strlcpy(out, cap, sourceDir);
+            return;
+        }
+    }
+
     const char *elf = debugger.libretro.exePath;
     if (!elf || !elf[0]) {
         return;
@@ -505,6 +569,341 @@ source_z80_getSymbol(int index, const char **outName, uint16_t *outAddr)
         *outAddr = symbol->addr;
     }
     return 1;
+}
+
+static void
+source_z80_clearSourceMap(void)
+{
+    for (int i = 0; i < source_z80_sourceCache.entryCount; ++i) {
+        alloc_free(source_z80_sourceCache.entries[i].path);
+        source_z80_sourceCache.entries[i].path = NULL;
+    }
+    alloc_free(source_z80_sourceCache.entries);
+    source_z80_sourceCache.entries = NULL;
+    source_z80_sourceCache.entryCount = 0;
+    source_z80_sourceCache.entryCap = 0;
+    source_z80_sourceCache.ready = 0;
+    source_z80_sourceCache.sourceMapMtime = 0;
+    source_z80_sourceCache.symbolBaseDir[0] = '\0';
+}
+
+static int
+source_z80_sourceCompare(const void *a, const void *b)
+{
+    const source_z80_source_entry_t *ea = (const source_z80_source_entry_t *)a;
+    const source_z80_source_entry_t *eb = (const source_z80_source_entry_t *)b;
+
+    if (ea->addr < eb->addr) {
+        return -1;
+    }
+    if (ea->addr > eb->addr) {
+        return 1;
+    }
+    if (ea->line < eb->line) {
+        return -1;
+    }
+    if (ea->line > eb->line) {
+        return 1;
+    }
+    return strcmp(ea->path ? ea->path : "", eb->path ? eb->path : "");
+}
+
+static int
+source_z80_ensureSourceCapacity(int minCap)
+{
+    if (source_z80_sourceCache.entryCap >= minCap) {
+        return 1;
+    }
+
+    int nextCap = source_z80_sourceCache.entryCap > 0 ? source_z80_sourceCache.entryCap : 512;
+    while (nextCap < minCap) {
+        nextCap *= 2;
+    }
+
+    source_z80_source_entry_t *nextEntries =
+        (source_z80_source_entry_t *)alloc_realloc(source_z80_sourceCache.entries,
+                                                   (size_t)nextCap * sizeof(*nextEntries));
+    if (!nextEntries) {
+        return 0;
+    }
+    for (int i = source_z80_sourceCache.entryCap; i < nextCap; ++i) {
+        nextEntries[i].addr = 0;
+        nextEntries[i].line = 0;
+        nextEntries[i].path = NULL;
+    }
+    source_z80_sourceCache.entries = nextEntries;
+    source_z80_sourceCache.entryCap = nextCap;
+    return 1;
+}
+
+static int
+source_z80_addSourceEntry(uint16_t addr, const char *path, int line)
+{
+    if (!path || !path[0] || line <= 0) {
+        return 0;
+    }
+    if (!source_z80_ensureSourceCapacity(source_z80_sourceCache.entryCount + 1)) {
+        return 0;
+    }
+
+    char *pathDup = alloc_strdup(path);
+    if (!pathDup) {
+        return 0;
+    }
+
+    source_z80_source_entry_t *entry = &source_z80_sourceCache.entries[source_z80_sourceCache.entryCount++];
+    entry->addr = addr;
+    entry->line = line;
+    entry->path = pathDup;
+    return 1;
+}
+
+static int
+source_z80_parseSourceMapLine(const char *line, uint16_t *outAddr, char *outPath, size_t pathCap, int *outLine)
+{
+    if (outAddr) {
+        *outAddr = 0;
+    }
+    if (outPath && pathCap > 0) {
+        outPath[0] = '\0';
+    }
+    if (outLine) {
+        *outLine = 0;
+    }
+    if (!line || !outAddr || !outPath || pathCap == 0 || !outLine || line[0] == '#') {
+        return 0;
+    }
+
+    const char *tab1 = strchr(line, '\t');
+    if (!tab1) {
+        return 0;
+    }
+    const char *tab2 = strchr(tab1 + 1, '\t');
+    if (!tab2) {
+        return 0;
+    }
+
+    char addrText[16];
+    size_t addrLen = (size_t)(tab1 - line);
+    if (addrLen == 0 || addrLen >= sizeof(addrText)) {
+        return 0;
+    }
+    memcpy(addrText, line, addrLen);
+    addrText[addrLen] = '\0';
+
+    uint16_t addr = 0;
+    if (!source_z80_parseNoiAddress(addrText, &addr)) {
+        return 0;
+    }
+
+    size_t pathLen = (size_t)(tab2 - (tab1 + 1));
+    if (pathLen == 0) {
+        return 0;
+    }
+    if (pathLen >= pathCap) {
+        pathLen = pathCap - 1;
+    }
+    memcpy(outPath, tab1 + 1, pathLen);
+    outPath[pathLen] = '\0';
+
+    int sourceLine = atoi(tab2 + 1);
+    if (sourceLine <= 0) {
+        return 0;
+    }
+    *outAddr = addr;
+    *outLine = sourceLine;
+    return 1;
+}
+
+static void
+source_z80_loadSourceMap(void)
+{
+    char symbolBaseDir[PATH_MAX];
+    char path[PATH_MAX];
+
+    source_z80_copySymbolBaseDir(symbolBaseDir, sizeof(symbolBaseDir));
+    if (!symbolBaseDir[0]) {
+        source_z80_sourceCache.ready = 1;
+        source_z80_sourceMapRevision++;
+        return;
+    }
+    strutil_pathJoinTrunc(path, sizeof(path), symbolBaseDir, "demo_driver.z80srcmap");
+
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        strutil_strlcpy(source_z80_sourceCache.symbolBaseDir,
+                        sizeof(source_z80_sourceCache.symbolBaseDir),
+                        symbolBaseDir);
+        source_z80_sourceCache.sourceMapMtime = source_z80_sourceMapMtime(symbolBaseDir);
+        source_z80_sourceCache.ready = 1;
+        source_z80_sourceMapRevision++;
+        return;
+    }
+
+    char raw[PATH_MAX + 64];
+    while (fgets(raw, sizeof(raw), fp)) {
+        size_t len = strlen(raw);
+        while (len > 0 && (raw[len - 1] == '\n' || raw[len - 1] == '\r')) {
+            raw[--len] = '\0';
+        }
+        uint16_t addr = 0;
+        char sourcePath[PATH_MAX];
+        int sourceLine = 0;
+        if (source_z80_parseSourceMapLine(raw, &addr, sourcePath, sizeof(sourcePath), &sourceLine)) {
+            (void)source_z80_addSourceEntry(addr, sourcePath, sourceLine);
+        }
+    }
+    fclose(fp);
+
+    if (source_z80_sourceCache.entryCount > 1) {
+        qsort(source_z80_sourceCache.entries,
+              (size_t)source_z80_sourceCache.entryCount,
+              sizeof(*source_z80_sourceCache.entries),
+              source_z80_sourceCompare);
+    }
+    strutil_strlcpy(source_z80_sourceCache.symbolBaseDir,
+                    sizeof(source_z80_sourceCache.symbolBaseDir),
+                    symbolBaseDir);
+    source_z80_sourceCache.sourceMapMtime = source_z80_sourceMapMtime(symbolBaseDir);
+    source_z80_sourceCache.ready = 1;
+    source_z80_sourceMapRevision++;
+    printf("source_z80: loaded %d source map rows from %s\n", source_z80_sourceCache.entryCount, path);
+}
+
+static void
+source_z80_ensureSourceMap(void)
+{
+    char symbolBaseDir[PATH_MAX];
+
+    source_z80_copySymbolBaseDir(symbolBaseDir, sizeof(symbolBaseDir));
+    time_t sourceMapMtime = source_z80_sourceMapMtime(symbolBaseDir);
+    if (source_z80_sourceCache.ready &&
+        strcmp(source_z80_sourceCache.symbolBaseDir, symbolBaseDir) == 0 &&
+        source_z80_sourceCache.sourceMapMtime == sourceMapMtime) {
+        return;
+    }
+
+    source_z80_clearSourceMap();
+    source_z80_loadSourceMap();
+}
+
+int
+source_z80_resolveSourceLocation(uint16_t addr, char *outPath, size_t pathCap, int *outLine)
+{
+    if (outPath && pathCap > 0) {
+        outPath[0] = '\0';
+    }
+    if (outLine) {
+        *outLine = 0;
+    }
+    if (!outPath || pathCap == 0 || !outLine) {
+        return 0;
+    }
+
+    source_z80_ensureSourceMap();
+    if (source_z80_sourceCache.entryCount <= 0) {
+        return 0;
+    }
+
+    int lo = 0;
+    int hi = source_z80_sourceCache.entryCount - 1;
+    int best = -1;
+    while (lo <= hi) {
+        int mid = lo + ((hi - lo) / 2);
+        uint16_t entryAddr = source_z80_sourceCache.entries[mid].addr;
+        if (entryAddr == addr) {
+            best = mid;
+            break;
+        }
+        if (entryAddr < addr) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if (best < 0) {
+        return 0;
+    }
+    while (best > 0 &&
+           source_z80_sourceCache.entries[best - 1].addr == source_z80_sourceCache.entries[best].addr) {
+        best--;
+    }
+
+    source_z80_source_entry_t *entry = &source_z80_sourceCache.entries[best];
+    if (!entry->path || !entry->path[0] || entry->line <= 0) {
+        return 0;
+    }
+    strutil_strlcpy(outPath, pathCap, entry->path);
+    *outLine = entry->line;
+    return 1;
+}
+
+int
+source_z80_resolveSourceLineAddress(const char *path, int line, uint16_t *outAddr)
+{
+    if (outAddr) {
+        *outAddr = 0;
+    }
+    if (!path || !path[0] || line <= 0 || !outAddr) {
+        return 0;
+    }
+
+    source_z80_ensureSourceMap();
+    for (int i = 0; i < source_z80_sourceCache.entryCount; ++i) {
+        source_z80_source_entry_t *entry = &source_z80_sourceCache.entries[i];
+        if (entry->line != line || !entry->path || !entry->path[0]) {
+            continue;
+        }
+        if (!source_pane_fileMatches(entry->path, path)) {
+            continue;
+        }
+        *outAddr = entry->addr;
+        return 1;
+    }
+    return 0;
+}
+
+int
+source_z80_getSourceLocationCount(void)
+{
+    source_z80_ensureSourceMap();
+    return source_z80_sourceCache.entryCount;
+}
+
+int
+source_z80_getSourceLocation(int index, uint16_t *outAddr, const char **outPath, int *outLine)
+{
+    source_z80_ensureSourceMap();
+    if (outAddr) {
+        *outAddr = 0;
+    }
+    if (outPath) {
+        *outPath = NULL;
+    }
+    if (outLine) {
+        *outLine = 0;
+    }
+    if (index < 0 || index >= source_z80_sourceCache.entryCount) {
+        return 0;
+    }
+    source_z80_source_entry_t *entry = &source_z80_sourceCache.entries[index];
+    if (outAddr) {
+        *outAddr = entry->addr;
+    }
+    if (outPath) {
+        *outPath = entry->path;
+    }
+    if (outLine) {
+        *outLine = entry->line;
+    }
+    return 1;
+}
+
+uint64_t
+source_z80_getSourceMapRevision(void)
+{
+    source_z80_ensureSourceMap();
+    return source_z80_sourceMapRevision;
 }
 
 uint32_t

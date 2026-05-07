@@ -207,6 +207,9 @@ typedef struct print_index {
     int symbolCap;
     uint32_t *symbolLookup;
     uint32_t symbolLookupMask;
+    uint32_t *dwarfLocalLookup;
+    uint32_t dwarfLocalLookupMask;
+    uint32_t *dwarfLocalNext;
     print_variable_t *vars;
     int varCount;
     int varCap;

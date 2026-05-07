@@ -56,6 +56,9 @@ print_eval_getType(print_index_t *index, uint32_t offset);
 static print_type_t *
 print_eval_defaultU32(print_index_t *index);
 
+static uint32_t
+print_eval_hashString(const char *s);
+
 static print_index_t print_eval_index = {0};
 static char *print_eval_captureBuffer = NULL;
 static size_t print_eval_captureCap = 0;
@@ -312,6 +315,35 @@ print_eval_resolveAbstractOrigin(print_index_t *index, const print_dwarf_node_t 
     return 1;
 }
 
+static const char *
+print_eval_dwarfNodeNameAndType(print_index_t *index, const print_dwarf_node_t *node, uint32_t *outTypeRef)
+{
+    if (outTypeRef) {
+        *outTypeRef = 0;
+    }
+    if (!index || !node) {
+        return NULL;
+    }
+    const char *name = node->name;
+    uint32_t typeRef = node->hasTypeRef ? node->typeRef : 0;
+    if ((!name || !*name) && node->hasAbstractOrigin) {
+        const char *originName = NULL;
+        uint32_t originType = 0;
+        if (print_eval_resolveAbstractOrigin(index, node, &originName, &originType)) {
+            if (originName && *originName) {
+                name = originName;
+            }
+            if (typeRef == 0 && originType != 0) {
+                typeRef = originType;
+            }
+        }
+    }
+    if (outTypeRef) {
+        *outTypeRef = typeRef;
+    }
+    return name;
+}
+
 static int
 print_eval_resolveLocalDwarf(const char *name, print_index_t *index, print_value_t *out, int typeOnly)
 {
@@ -327,145 +359,155 @@ print_eval_resolveLocalDwarf(const char *name, print_index_t *index, print_value
     }
     uint32_t pc = (uint32_t)pcRaw & 0x00ffffffu;
 
-    uint32_t cfa = 0;
-    if (!print_eval_computeCfa(index, pc, &cfa)) {
-        return 0;
-    }
-
     print_dwarf_node_t *scope = print_eval_findScopeForPc(index, pc);
     if (!scope) {
         return 0;
     }
 
     uint32_t chain[64];
+    print_dwarf_node_t *chainNodes[64];
     int chainCount = 0;
     for (const print_dwarf_node_t *cur = scope; cur && chainCount < (int)(sizeof(chain) / sizeof(chain[0]));) {
-        chain[chainCount++] = cur->offset;
+        chain[chainCount] = cur->offset;
+        chainNodes[chainCount] = (print_dwarf_node_t *)cur;
+        ++chainCount;
         if (cur->parentOffset == 0) {
             break;
         }
         cur = print_eval_findNode(index, cur->parentOffset);
     }
 
-    // Nearest subprogram in the chain provides frame base.
-    print_dwarf_node_t *subp = NULL;
-    for (int i = 0; i < chainCount; ++i) {
-        print_dwarf_node_t *n = print_eval_findNode(index, chain[i]);
-        if (n && n->tag == print_dwarf_tag_subprogram) {
-            subp = n;
-            break;
-        }
-    }
-    uint32_t frameBase = cfa;
-    if (subp && subp->hasFrameBase && subp->frameBaseKind == print_dwarf_location_cfa) {
-        frameBase = cfa;
-    }
-
-    for (int c = 0; c < chainCount; ++c) {
-        uint32_t scopeOff = chain[c];
-        for (int i = 0; i < index->nodeCount; ++i) {
-            print_dwarf_node_t *n = &index->nodes[i];
-            if (n->parentOffset != scopeOff) {
+    print_dwarf_node_t *bestNode = NULL;
+    uint32_t bestTypeRef = 0;
+    int bestChainIndex = INT_MAX;
+    if (index->dwarfLocalLookup && index->dwarfLocalLookupMask != 0 && index->dwarfLocalNext) {
+        uint32_t h = print_eval_hashString(name);
+        uint32_t pos = h & index->dwarfLocalLookupMask;
+        for (uint32_t slot = index->dwarfLocalLookup[pos]; slot != 0; slot = index->dwarfLocalNext[slot - 1u]) {
+            uint32_t nodeIndex = slot - 1u;
+            if (nodeIndex >= (uint32_t)index->nodeCount) {
                 continue;
             }
-            if (n->tag != print_dwarf_tag_variable && n->tag != print_dwarf_tag_formal_parameter) {
-                continue;
-            }
-            const char *nName = n->name;
-            uint32_t typeRef = n->hasTypeRef ? n->typeRef : 0;
-            if ((!nName || !*nName) && n->hasAbstractOrigin) {
-                const char *originName = NULL;
-                uint32_t originType = 0;
-                if (print_eval_resolveAbstractOrigin(index, n, &originName, &originType)) {
-                    if (originName && *originName) {
-                        nName = originName;
-                    }
-                    if (typeRef == 0 && originType != 0) {
-                        typeRef = originType;
-                    }
-                }
-            }
+            print_dwarf_node_t *n = &index->nodes[nodeIndex];
+            uint32_t typeRef = 0;
+            const char *nName = print_eval_dwarfNodeNameAndType(index, n, &typeRef);
             if (!nName || strcmp(nName, name) != 0) {
                 continue;
             }
 
-            print_type_t *type = NULL;
-            if (typeRef != 0) {
-                type = print_eval_getType(index, typeRef);
+            for (int c = 0; c < chainCount; ++c) {
+                if (n->parentOffset != chain[c]) {
+                    continue;
+                }
+                if (c < bestChainIndex) {
+                    bestNode = n;
+                    bestTypeRef = typeRef;
+                    bestChainIndex = c;
+                }
+                break;
             }
-            if (!type) {
-                type = print_eval_defaultU32(index);
-            }
+        }
+    }
+    if (!bestNode) {
+        return 0;
+    }
 
-            if (n->locationKind == print_dwarf_location_fbreg) {
-                int64_t addr64 = (int64_t)(uint64_t)frameBase + (int64_t)n->locationOffset;
-                uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
-                if (typeOnly) {
-                    *out = print_eval_makeAddressValue(type, 0);
-                    out->hasAddress = 0;
-                } else {
-                    *out = print_eval_makeAddressValue(type, addr);
-                }
-                return 1;
-            }
-            if (n->locationKind == print_dwarf_location_breg) {
-                uint32_t regVal = 0;
-                if (!print_eval_getRegValueByDwarfReg(n->locationReg, &regVal)) {
-                    return 0;
-                }
-                int64_t addr64 = (int64_t)(uint64_t)regVal + (int64_t)n->locationOffset;
-                uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
-                if (typeOnly) {
-                    *out = print_eval_makeAddressValue(type, 0);
-                    out->hasAddress = 0;
-                } else {
-                    *out = print_eval_makeAddressValue(type, addr);
-                }
-                return 1;
-            }
-            if (n->locationKind == print_dwarf_location_addr && n->hasAddr) {
-                uint32_t addr = (uint32_t)n->addr & 0x00ffffffu;
-                if (typeOnly) {
-                    *out = print_eval_makeAddressValue(type, 0);
-                    out->hasAddress = 0;
-                } else {
-                    *out = print_eval_makeAddressValue(type, addr);
-                }
-                return 1;
-            }
-            if (n->locationKind == print_dwarf_location_const && n->hasConstValue) {
-                if (typeOnly) {
-                    *out = print_eval_makeImmediateValue(type, 0);
-                    out->hasImmediate = 0;
-                } else {
-                    *out = print_eval_makeImmediateValue(type, n->constValue);
-                }
-                return 1;
-            }
-            if (n->locationKind == print_dwarf_location_reg) {
-                uint32_t regVal = 0;
-                if (!print_eval_getRegValueByDwarfReg(n->locationReg, &regVal)) {
-                    return 0;
-                }
-                if (typeOnly) {
-                    *out = print_eval_makeImmediateValue(type, 0);
-                    out->hasImmediate = 0;
-                } else {
-                    *out = print_eval_makeImmediateValue(type, (uint64_t)regVal);
-                }
-                return 1;
-            }
-            if (n->locationKind == print_dwarf_location_cfa) {
-                if (typeOnly) {
-                    *out = print_eval_makeAddressValue(type, 0);
-                    out->hasAddress = 0;
-                } else {
-                    *out = print_eval_makeAddressValue(type, cfa & 0x00ffffffu);
-                }
-                return 1;
-            }
+    print_dwarf_node_t *n = bestNode;
+
+    uint32_t cfa = 0;
+    uint32_t frameBase = 0;
+    if (n->locationKind == print_dwarf_location_fbreg || n->locationKind == print_dwarf_location_cfa) {
+        if (!print_eval_computeCfa(index, pc, &cfa)) {
             return 0;
         }
+
+        print_dwarf_node_t *subp = NULL;
+        for (int i = 0; i < chainCount; ++i) {
+            if (chainNodes[i] && chainNodes[i]->tag == print_dwarf_tag_subprogram) {
+                subp = chainNodes[i];
+                break;
+            }
+        }
+        frameBase = cfa;
+        if (subp && subp->hasFrameBase && subp->frameBaseKind == print_dwarf_location_cfa) {
+            frameBase = cfa;
+        }
+    }
+
+    print_type_t *type = NULL;
+    if (bestTypeRef != 0) {
+        type = print_eval_getType(index, bestTypeRef);
+    }
+    if (!type) {
+        type = print_eval_defaultU32(index);
+    }
+
+    if (n->locationKind == print_dwarf_location_fbreg) {
+        int64_t addr64 = (int64_t)(uint64_t)frameBase + (int64_t)n->locationOffset;
+        uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
+        if (typeOnly) {
+            *out = print_eval_makeAddressValue(type, 0);
+            out->hasAddress = 0;
+        } else {
+            *out = print_eval_makeAddressValue(type, addr);
+        }
+        return 1;
+    }
+    if (n->locationKind == print_dwarf_location_breg) {
+        uint32_t regVal = 0;
+        if (!print_eval_getRegValueByDwarfReg(n->locationReg, &regVal)) {
+            return 0;
+        }
+        int64_t addr64 = (int64_t)(uint64_t)regVal + (int64_t)n->locationOffset;
+        uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
+        if (typeOnly) {
+            *out = print_eval_makeAddressValue(type, 0);
+            out->hasAddress = 0;
+        } else {
+            *out = print_eval_makeAddressValue(type, addr);
+        }
+        return 1;
+    }
+    if (n->locationKind == print_dwarf_location_addr && n->hasAddr) {
+        uint32_t addr = (uint32_t)n->addr & 0x00ffffffu;
+        if (typeOnly) {
+            *out = print_eval_makeAddressValue(type, 0);
+            out->hasAddress = 0;
+        } else {
+            *out = print_eval_makeAddressValue(type, addr);
+        }
+        return 1;
+    }
+    if (n->locationKind == print_dwarf_location_const && n->hasConstValue) {
+        if (typeOnly) {
+            *out = print_eval_makeImmediateValue(type, 0);
+            out->hasImmediate = 0;
+        } else {
+            *out = print_eval_makeImmediateValue(type, n->constValue);
+        }
+        return 1;
+    }
+    if (n->locationKind == print_dwarf_location_reg) {
+        uint32_t regVal = 0;
+        if (!print_eval_getRegValueByDwarfReg(n->locationReg, &regVal)) {
+            return 0;
+        }
+        if (typeOnly) {
+            *out = print_eval_makeImmediateValue(type, 0);
+            out->hasImmediate = 0;
+        } else {
+            *out = print_eval_makeImmediateValue(type, (uint64_t)regVal);
+        }
+        return 1;
+    }
+    if (n->locationKind == print_dwarf_location_cfa) {
+        if (typeOnly) {
+            *out = print_eval_makeAddressValue(type, 0);
+            out->hasAddress = 0;
+        } else {
+            *out = print_eval_makeAddressValue(type, cfa & 0x00ffffffu);
+        }
+        return 1;
     }
     return 0;
 }
@@ -1063,6 +1105,11 @@ print_eval_clearIndex(print_index_t *index)
     alloc_free(index->symbolLookup);
     index->symbolLookup = NULL;
     index->symbolLookupMask = 0;
+    alloc_free(index->dwarfLocalLookup);
+    index->dwarfLocalLookup = NULL;
+    index->dwarfLocalLookupMask = 0;
+    alloc_free(index->dwarfLocalNext);
+    index->dwarfLocalNext = NULL;
     for (int i = 0; i < index->varCount; ++i) {
         print_eval_freeString(index->vars[i].name);
     }
@@ -1180,6 +1227,74 @@ print_eval_buildSymbolLookup(print_index_t *index)
 
     index->symbolLookup = table;
     index->symbolLookupMask = mask;
+}
+
+static void
+print_eval_buildDwarfLocalLookup(print_index_t *index)
+{
+    if (!index) {
+        return;
+    }
+    alloc_free(index->dwarfLocalLookup);
+    index->dwarfLocalLookup = NULL;
+    index->dwarfLocalLookupMask = 0;
+    alloc_free(index->dwarfLocalNext);
+    index->dwarfLocalNext = NULL;
+
+    if (index->nodeCount <= 0) {
+        return;
+    }
+
+    int localCount = 0;
+    for (int i = 0; i < index->nodeCount; ++i) {
+        print_dwarf_node_t *node = &index->nodes[i];
+        if (node->tag != print_dwarf_tag_variable && node->tag != print_dwarf_tag_formal_parameter) {
+            continue;
+        }
+        const char *name = print_eval_dwarfNodeNameAndType(index, node, NULL);
+        if (name && *name) {
+            ++localCount;
+        }
+    }
+    if (localCount <= 0) {
+        return;
+    }
+
+    uint32_t need = (uint32_t)localCount * 2u;
+    if (need < 16u) {
+        need = 16u;
+    }
+    uint32_t cap = 1u;
+    while (cap < need && cap < (1u << 30)) {
+        cap <<= 1u;
+    }
+
+    uint32_t *table = (uint32_t *)alloc_calloc((size_t)cap, sizeof(*table));
+    uint32_t *next = (uint32_t *)alloc_calloc((size_t)index->nodeCount, sizeof(*next));
+    if (!table || !next) {
+        alloc_free(table);
+        alloc_free(next);
+        return;
+    }
+
+    uint32_t mask = cap - 1u;
+    for (int i = 0; i < index->nodeCount; ++i) {
+        print_dwarf_node_t *node = &index->nodes[i];
+        if (node->tag != print_dwarf_tag_variable && node->tag != print_dwarf_tag_formal_parameter) {
+            continue;
+        }
+        const char *name = print_eval_dwarfNodeNameAndType(index, node, NULL);
+        if (!name || !*name) {
+            continue;
+        }
+        uint32_t pos = print_eval_hashString(name) & mask;
+        next[i] = table[pos];
+        table[pos] = (uint32_t)(i + 1);
+    }
+
+    index->dwarfLocalLookup = table;
+    index->dwarfLocalLookupMask = mask;
+    index->dwarfLocalNext = next;
 }
 
 static uint32_t
@@ -1664,6 +1779,7 @@ print_eval_loadIndex(print_index_t *index)
         }
     }
     print_eval_buildSymbolLookup(index);
+    print_eval_buildDwarfLocalLookup(index);
     uint64_t tLookup = 0;
     if (print_eval_perfEnabled()) {
         tLookup = print_eval_nowNs();

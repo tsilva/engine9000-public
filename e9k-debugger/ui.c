@@ -89,6 +89,8 @@ static char ui_tipRecord[128];
 static char ui_tipSettings[128];
 static char ui_tipReset[128];
 static char ui_tipRestart[128];
+static source_pane_mode_t ui_sourcePanePrimaryAddressModes[2];
+static int ui_sourcePanePrimaryAddressModeValid[2];
 #ifdef _WIN32
 static SDL_Rect ui_windowsDefaultUsableBounds = {0, 0, 0, 0};
 static int ui_windowsApplyDefaultUsableBounds = 0;
@@ -400,6 +402,37 @@ ui_activeDebugProcessorIsPrimary(void)
 }
 
 static void
+ui_syncSourcePanesForDebugProcessor(int activeIsPrimary)
+{
+    for (size_t i = 0; i < sizeof(ui_source_panes) / sizeof(ui_source_panes[0]); ++i) {
+        e9ui_component_t *pane = ui_source_panes[i];
+        if (!pane) {
+            continue;
+        }
+        source_pane_mode_t mode = source_pane_getMode(pane);
+        if (activeIsPrimary) {
+            if (mode == source_pane_mode_z80s) {
+                source_pane_setMode(pane, source_pane_mode_c);
+            } else if (mode == source_pane_mode_z80) {
+                source_pane_mode_t dest = source_pane_mode_a;
+                if (ui_sourcePanePrimaryAddressModeValid[i]) {
+                    dest = ui_sourcePanePrimaryAddressModes[i];
+                }
+                source_pane_setMode(pane, dest);
+            }
+            continue;
+        }
+        if (mode == source_pane_mode_c) {
+            source_pane_setMode(pane, source_pane_mode_z80s);
+        } else if (mode == source_pane_mode_a || mode == source_pane_mode_h) {
+            ui_sourcePanePrimaryAddressModes[i] = mode;
+            ui_sourcePanePrimaryAddressModeValid[i] = 1;
+            source_pane_setMode(pane, source_pane_mode_z80);
+        }
+    }
+}
+
+static void
 ui_refreshDebugProcessorButton(void)
 {
     e9k_debug_processor_info_t processors[8];
@@ -463,6 +496,7 @@ ui_debugProcessorToggle(e9ui_context_t *ctx, void *user)
         selected = (selected + 1) % (int)count;
     }
     debugger.activeDebugProcessorId = processors[selected].id;
+    ui_syncSourcePanesForDebugProcessor((processors[selected].flags & E9K_DEBUG_PROCESSOR_PRIMARY) ? 1 : 0);
     ui_refreshDebugProcessorButton();
     char label[32];
     ui_debugProcessorLabel(&processors[selected], label, sizeof(label));

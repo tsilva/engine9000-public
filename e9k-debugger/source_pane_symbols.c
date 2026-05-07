@@ -42,6 +42,24 @@ source_pane_symbols_isAsmLikeMode(source_pane_mode_t mode)
             mode == source_pane_mode_z80) ? 1 : 0;
 }
 
+static int
+source_pane_symbols_isSourceLikeMode(source_pane_mode_t mode)
+{
+    return (mode == source_pane_mode_c ||
+            mode == source_pane_mode_z80s) ? 1 : 0;
+}
+
+static void
+source_pane_symbols_copyZ80SourceToolchainKey(char *out, size_t cap)
+{
+    if (!out || cap == 0) {
+        return;
+    }
+    unsigned long long revision = (unsigned long long)source_z80_getSourceMapRevision();
+    snprintf(out, cap, "z80s:%llu", revision);
+    out[cap - 1] = '\0';
+}
+
 static const char *
 source_pane_symbols_basename(const char *path)
 {
@@ -81,6 +99,9 @@ source_pane_symbols_hasCSourceExtension(const char *path)
     }
     if (strcmp(dot, ".s") == 0 || strcmp(dot, ".S") == 0 ||
         strcmp(dot, ".asm") == 0 || strcmp(dot, ".ASM") == 0) {
+        return 1;
+    }
+    if (strcmp(dot, ".inc") == 0 || strcmp(dot, ".INC") == 0) {
         return 1;
     }
     return strcmp(dot, ".c") == 0 || strcmp(dot, ".cc") == 0 ||
@@ -237,6 +258,25 @@ source_pane_symbols_clearAsmSymbols(source_pane_state_t *st)
     st->asmSymbolsTextMapRevision = 0;
     st->asmSymbolsElf[0] = '\0';
     st->asmSymbolsToolchain[0] = '\0';
+}
+
+void
+source_pane_symbols_clearAllCaches(source_pane_state_t *st)
+{
+    if (!st) {
+        return;
+    }
+
+    source_pane_symbols_cache_t *prev = st->activeSymbols;
+    st->activeSymbols = &st->primarySymbols;
+    source_pane_symbols_clearSourceFiles(st);
+    source_pane_symbols_clearSourceFunctions(st);
+    source_pane_symbols_clearAsmSymbols(st);
+    st->activeSymbols = &st->z80Symbols;
+    source_pane_symbols_clearSourceFiles(st);
+    source_pane_symbols_clearSourceFunctions(st);
+    source_pane_symbols_clearAsmSymbols(st);
+    st->activeSymbols = prev;
 }
 
 static int
@@ -669,6 +709,25 @@ source_pane_symbols_collectStabsFiles(source_pane_state_t *st, const char *elfPa
     return added;
 }
 
+static int
+source_pane_symbols_collectZ80SourceFiles(source_pane_state_t *st)
+{
+    if (!st) {
+        return 0;
+    }
+
+    int added = 0;
+    int count = source_z80_getSourceLocationCount();
+    for (int i = 0; i < count; ++i) {
+        const char *path = NULL;
+        if (!source_z80_getSourceLocation(i, NULL, &path, NULL)) {
+            continue;
+        }
+        added += source_pane_symbols_addSourceFile(st, path);
+    }
+    return added;
+}
+
 void
 source_pane_symbols_syncFileSelect(e9ui_component_t *comp, source_pane_state_t *st)
 {
@@ -679,8 +738,8 @@ source_pane_symbols_syncFileSelect(e9ui_component_t *comp, source_pane_state_t *
     if (!select) {
         return;
     }
-    e9ui_setHidden(select, st->viewMode == source_pane_mode_c ? 0 : 1);
-    if (st->viewMode != source_pane_mode_c) {
+    e9ui_setHidden(select, source_pane_symbols_isSourceLikeMode(st->viewMode) ? 0 : 1);
+    if (!source_pane_symbols_isSourceLikeMode(st->viewMode)) {
         return;
     }
     int editingSelect = (e9ui && e9ui_getFocus(&e9ui->ctx) == select) ? 1 : 0;
@@ -721,8 +780,8 @@ source_pane_symbols_syncFunctionSelect(e9ui_component_t *comp, source_pane_state
     if (!select) {
         return;
     }
-    e9ui_setHidden(select, st->viewMode == source_pane_mode_c ? 0 : 1);
-    if (st->viewMode != source_pane_mode_c) {
+    e9ui_setHidden(select, source_pane_symbols_isSourceLikeMode(st->viewMode) ? 0 : 1);
+    if (!source_pane_symbols_isSourceLikeMode(st->viewMode)) {
         return;
     }
     int editingSelect = (e9ui && e9ui_getFocus(&e9ui->ctx) == select) ? 1 : 0;
@@ -1651,6 +1710,42 @@ source_pane_symbols_collectObjdumpTextFiles(source_pane_state_t *st, const char 
     return added;
 }
 
+static int
+source_pane_symbols_collectZ80SourceFunctions(source_pane_state_t *st, const char *sourceFile)
+{
+    if (!st) {
+        return 0;
+    }
+
+    char resolvedSourceFile[PATH_MAX];
+    resolvedSourceFile[0] = '\0';
+    if (sourceFile && sourceFile[0]) {
+        source_pane_resolveSourcePath(sourceFile, resolvedSourceFile, sizeof(resolvedSourceFile));
+    }
+
+    int added = 0;
+    int count = source_z80_getSymbolCount();
+    for (int i = 0; i < count; ++i) {
+        const char *name = NULL;
+        uint16_t addr = 0;
+        if (!source_z80_getSymbol(i, &name, &addr) || !name || !name[0]) {
+            continue;
+        }
+        char path[PATH_MAX];
+        int line = 0;
+        if (!source_z80_resolveSourceLocation(addr, path, sizeof(path), &line)) {
+            continue;
+        }
+        char resolvedPath[PATH_MAX];
+        source_pane_resolveSourcePath(path, resolvedPath, sizeof(resolvedPath));
+        if (resolvedSourceFile[0] && !source_pane_fileMatches(resolvedSourceFile, resolvedPath)) {
+            continue;
+        }
+        added += source_pane_symbols_addSourceFunction(st, resolvedPath, name, line);
+    }
+    return added;
+}
+
 void
 source_pane_symbols_refreshSourceFunctions(e9ui_component_t *comp, source_pane_state_t *st,
                                            const char *source_file)
@@ -1664,12 +1759,22 @@ source_pane_symbols_refreshSourceFunctions(e9ui_component_t *comp, source_pane_s
     }
     const char *elf = debugger.libretro.exePath;
     const char *toolchain = debugger.libretro.toolchainPrefix;
+    char z80Key[PATH_MAX];
+    char z80ToolchainKey[64];
+    z80Key[0] = '\0';
+    z80ToolchainKey[0] = '\0';
+    if (st->viewMode == source_pane_mode_z80s) {
+        source_z80_copySymbolBaseDir(z80Key, sizeof(z80Key));
+        elf = z80Key;
+        source_pane_symbols_copyZ80SourceToolchainKey(z80ToolchainKey, sizeof(z80ToolchainKey));
+        toolchain = z80ToolchainKey;
+    }
     char resolvedSourceFile[PATH_MAX];
     resolvedSourceFile[0] = '\0';
     if (source_file && source_file[0]) {
         source_pane_resolveSourcePath(source_file, resolvedSourceFile, sizeof(resolvedSourceFile));
     }
-    if (!debugger.elfValid || !elf || !elf[0]) {
+    if ((st->viewMode == source_pane_mode_c && !debugger.elfValid) || !elf || !elf[0]) {
         if (select) {
             e9ui_textbox_setOptions(select, NULL, 0);
         }
@@ -1690,12 +1795,17 @@ source_pane_symbols_refreshSourceFunctions(e9ui_component_t *comp, source_pane_s
         e9ui_textbox_setOptions(select, NULL, 0);
     }
     source_pane_symbols_clearSourceFunctions(st);
-    int added = source_pane_symbols_collectFunctionSymbols(st, elf, source_file);
-    if (added == 0) {
-        added += source_pane_symbols_collectStabsFunctions(st, elf, source_file);
-    }
-    if (added == 0) {
-        added += source_pane_symbols_collectObjdumpTextFunctions(st, elf, source_file);
+    int added = 0;
+    if (st->viewMode == source_pane_mode_z80s) {
+        added += source_pane_symbols_collectZ80SourceFunctions(st, source_file);
+    } else {
+        added = source_pane_symbols_collectFunctionSymbols(st, elf, source_file);
+        if (added == 0) {
+            added += source_pane_symbols_collectStabsFunctions(st, elf, source_file);
+        }
+        if (added == 0) {
+            added += source_pane_symbols_collectObjdumpTextFunctions(st, elf, source_file);
+        }
     }
     st->sourceFunctionsLoaded = 1;
     strncpy(st->sourceFunctionsElf, elf, sizeof(st->sourceFunctionsElf) - 1);
@@ -1723,11 +1833,21 @@ source_pane_symbols_refreshSourceFiles(e9ui_component_t *comp, source_pane_state
     }
     const char *elf = debugger.libretro.exePath;
     const char *toolchain = debugger.libretro.toolchainPrefix;
+    char z80Key[PATH_MAX];
+    char z80ToolchainKey[64];
+    z80Key[0] = '\0';
+    z80ToolchainKey[0] = '\0';
+    if (st->viewMode == source_pane_mode_z80s) {
+        source_z80_copySymbolBaseDir(z80Key, sizeof(z80Key));
+        elf = z80Key;
+        source_pane_symbols_copyZ80SourceToolchainKey(z80ToolchainKey, sizeof(z80ToolchainKey));
+        toolchain = z80ToolchainKey;
+    }
     e9ui_component_t *select = NULL;
     if (st->fileSelectMeta) {
         select = e9ui_child_find(comp, st->fileSelectMeta);
     }
-    if (!debugger.elfValid || !elf || !elf[0]) {
+    if ((st->viewMode == source_pane_mode_c && !debugger.elfValid) || !elf || !elf[0]) {
         if (select) {
             e9ui_textbox_setOptions(select, NULL, 0);
         }
@@ -1738,30 +1858,7 @@ source_pane_symbols_refreshSourceFiles(e9ui_component_t *comp, source_pane_state
     if (st->sourceFilesLoaded &&
         strcmp(st->sourceFilesElf, elf) == 0 &&
         strcmp(st->sourceFilesToolchain, toolchain ? toolchain : "") == 0) {
-        if (select) {
-            e9ui_setHidden(select, st->viewMode == source_pane_mode_c ? 0 : 1);
-            if (st->viewMode == source_pane_mode_c) {
-                if (e9ui && e9ui_getFocus(&e9ui->ctx) == select) {
-                    return;
-                }
-                const char *displayPath = NULL;
-                if (st->manualSrcActive && st->manualSrcPath) {
-                    displayPath = st->manualSrcPath;
-                } else if (st->curSrcPath[0]) {
-                    displayPath = st->curSrcPath;
-                }
-                if (!displayPath || !displayPath[0]) {
-                    e9ui_textbox_setSelectedValue(select, "");
-                } else {
-                    for (int i = 0; i < st->sourceFileCount; ++i) {
-                        if (source_pane_fileMatches(st->sourceFiles[i], displayPath)) {
-                            e9ui_textbox_setSelectedValue(select, st->sourceFiles[i]);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        source_pane_symbols_syncFileSelect(comp, st);
         return;
     }
 
@@ -1769,12 +1866,16 @@ source_pane_symbols_refreshSourceFiles(e9ui_component_t *comp, source_pane_state
         e9ui_textbox_setOptions(select, NULL, 0);
     }
     source_pane_symbols_clearSourceFiles(st);
-    (void)source_pane_symbols_collectReadelfFiles(st, elf);
-    (void)source_pane_symbols_collectStabsFiles(st, elf);
-    if (st->sourceFileCount <= 0 && debugger_toolchainUsesHunkAddr2line()) {
-        (void)source_pane_symbols_collectObjdumpTextFiles(st, elf);
+    if (st->viewMode == source_pane_mode_z80s) {
+        (void)source_pane_symbols_collectZ80SourceFiles(st);
+    } else {
+        (void)source_pane_symbols_collectReadelfFiles(st, elf);
+        (void)source_pane_symbols_collectStabsFiles(st, elf);
+        if (st->sourceFileCount <= 0 && debugger_toolchainUsesHunkAddr2line()) {
+            (void)source_pane_symbols_collectObjdumpTextFiles(st, elf);
+        }
     }
-    if (st->sourceFileCount <= 0) {
+    if (st->sourceFileCount <= 0 && st->viewMode == source_pane_mode_c) {
         debug_error("source_pane: no source files collected (elf='%s', sourceDir='%s', toolchain='%s')",
                     elf,
                     debugger.libretro.sourceDir,

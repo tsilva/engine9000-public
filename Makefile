@@ -21,6 +21,7 @@ all:
 	$(MAKE) $(JOBS) -C tools/amiga/adf9000
 	$(MAKE) $(JOBS) -C tools/amiga/hdf9000
 	$(MAKE) $(JOBS) -C tools/amiga/v-hunk
+	$(MAKE) $(JOBS) -C tools/z80_srcmap
 
 w64:
 	$(MAKE) $(JOBS) -C ami9000 platform=win CC=$(MINGW_CC)
@@ -30,6 +31,7 @@ w64:
 	$(MAKE) $(JOBS) -C tools/amiga/adf9000 w64 CC=$(MINGW_CC)
 	$(MAKE) $(JOBS) -C tools/amiga/hdf9000 w64 CC=$(MINGW_CC)
 	$(MAKE) $(JOBS) -C tools/amiga/v-hunk w64 CC=$(MINGW_CC)
+	$(MAKE) $(JOBS) -C tools/z80_srcmap w64 W64_CC=$(MINGW_CC)
 
 release-w64: w64
 	$(MAKE) -C e9k-debugger release-w64-package
@@ -44,6 +46,7 @@ clean:
 	$(MAKE) $(JOBS) -C tools/amiga/adf9000 clean
 	$(MAKE) $(JOBS) -C tools/amiga/hdf9000 clean
 	$(MAKE) $(JOBS) -C tools/amiga/v-hunk clean
+	$(MAKE) $(JOBS) -C tools/z80_srcmap clean
 
 test:
 	$(MAKE) -C e9k-debugger test

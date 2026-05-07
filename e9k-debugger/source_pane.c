@@ -105,6 +105,9 @@ source_pane_getContentArea(e9ui_component_t *self, e9ui_context_t *ctx, int padP
 static int
 source_pane_isAsmLikeMode(source_pane_mode_t mode);
 
+static int
+source_pane_isSourceLikeMode(source_pane_mode_t mode);
+
 int
 source_pane_shouldFreezeAsmWhileRunning(const source_pane_state_t *st);
 
@@ -113,6 +116,9 @@ source_pane_areAsmViewStepButtonsEnabled(const source_pane_state_t *st);
 
 static int
 source_pane_isCpuAsmLikeMode(source_pane_mode_t mode);
+
+static void
+source_pane_selectSymbolsCache(source_pane_state_t *st, source_pane_mode_t mode);
 
 static int
 source_pane_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ctx, source_pane_state_t *st,
@@ -140,7 +146,7 @@ source_pane_beginGutterPress(e9ui_component_t *self, e9ui_context_t *ctx, source
     if (!self || !ctx || !st) {
         return 0;
     }
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_z80s) {
         return source_pane_source_view_beginSourceGutterPress(self, ctx, st, mx, my);
     }
     return source_pane_asm_view_beginGutterPress(self, ctx, st, mode, mx, my);
@@ -230,6 +236,13 @@ source_pane_isAsmLikeMode(source_pane_mode_t mode)
     return source_pane_asm_view_isAsmLikeMode(mode);
 }
 
+static int
+source_pane_isSourceLikeMode(source_pane_mode_t mode)
+{
+    return (mode == source_pane_mode_c ||
+            mode == source_pane_mode_z80s) ? 1 : 0;
+}
+
 int
 source_pane_shouldFreezeAsmWhileRunning(const source_pane_state_t *st)
 {
@@ -246,6 +259,20 @@ static int
 source_pane_isCpuAsmLikeMode(source_pane_mode_t mode)
 {
     return source_pane_asm_view_isCpuAsmLikeMode(mode);
+}
+
+static void
+source_pane_selectSymbolsCache(source_pane_state_t *st, source_pane_mode_t mode)
+{
+    if (!st) {
+        return;
+    }
+    if (mode == source_pane_mode_z80 ||
+        mode == source_pane_mode_z80s) {
+        st->activeSymbols = &st->z80Symbols;
+        return;
+    }
+    st->activeSymbols = &st->primarySymbols;
 }
 
 static const char *
@@ -933,7 +960,7 @@ source_pane_adjustScroll(source_pane_state_t *st, source_pane_mode_t mode, int d
     if (st->inlineEditActive) {
         source_pane_inlineEditCancel(st, NULL);
     }
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_z80s) {
         int dest = st->scrollLine + delta;
         if (dest < 1) {
             dest = 1;
@@ -1025,7 +1052,7 @@ source_pane_scrollToStart(source_pane_state_t *st, source_pane_mode_t mode)
     if (!st) {
         return;
     }
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_z80s) {
         st->scrollLine = 1;
         st->scrollLocked = 1;
         st->gutterPending = 0;
@@ -1071,11 +1098,15 @@ source_pane_scrollToEnd(source_pane_state_t *st, source_pane_mode_t mode, int ma
     if (maxLines <= 0) {
         maxLines = 1;
     }
-    if (mode == source_pane_mode_c) {
+    if (mode == source_pane_mode_c || mode == source_pane_mode_z80s) {
         source_pane_source_view_updateSourceLocation(st, 0);
         int total = 0;
-        if (st->curSrcPath[0]) {
-            total = source_getTotalLines(st->curSrcPath);
+        const char *path = st->curSrcPath;
+        if (st->manualSrcActive && st->manualSrcPath && st->manualSrcPath[0]) {
+            path = st->manualSrcPath;
+        }
+        if (path && path[0]) {
+            total = source_getTotalLines(path);
         }
         if (total <= 0) {
             st->scrollLine = 1;
@@ -1223,7 +1254,7 @@ source_pane_searchFind(source_pane_state_t *st, e9ui_component_t *self, e9ui_con
     if (!st || !self || !st->ownerPane || !st->searchBoxMeta) {
         return 0;
     }
-    if (st->viewMode != source_pane_mode_c) {
+    if (!source_pane_isSourceLikeMode(st->viewMode)) {
         return 0;
     }
     e9ui_component_t *search_box = e9ui_child_find(st->ownerPane, st->searchBoxMeta);
@@ -1458,9 +1489,15 @@ source_pane_trackPosition(source_pane_state_t *st)
     if (st->overrideActive) {
         return;
     }
-    unsigned long curAddr = 0;
-    (void)machine_findReg(&debugger.machine, "PC", &curAddr);
-    curAddr &= 0x00ffffffu;
+    uint64_t curAddr = 0;
+    if (st->viewMode == source_pane_mode_z80 ||
+        st->viewMode == source_pane_mode_z80s) {
+        curAddr = source_z80_getCurrentAddr(st);
+    } else {
+        unsigned long primaryPc = 0;
+        (void)machine_findReg(&debugger.machine, "PC", &primaryPc);
+        curAddr = (uint64_t)(primaryPc & 0x00ffffffu);
+    }
     if (curAddr != st->lastPcAddr) {
         if (!st->scrollLocked) {
             source_pane_clearFunctionScrollLock(st);
@@ -1496,6 +1533,9 @@ source_pane_modeValue(source_pane_mode_t mode)
     if (mode == source_pane_mode_z80) {
         return "z80";
     }
+    if (mode == source_pane_mode_z80s) {
+        return "z80s";
+    }
     if (mode == source_pane_mode_h) {
         return "hex";
     }
@@ -1514,8 +1554,12 @@ source_pane_modeFromValue(const char *value)
     if (strcmp(value, "cpr") == 0) {
         return source_pane_mode_cpr;
     }
-    if (strcmp(value, "z80") == 0) {
+    if (strcmp(value, "z80") == 0 ||
+        strcmp(value, "z80a") == 0) {
         return source_pane_mode_z80;
+    }
+    if (strcmp(value, "z80s") == 0) {
+        return source_pane_mode_z80s;
     }
     if (strcmp(value, "hex") == 0) {
         return source_pane_mode_h;
@@ -1534,6 +1578,9 @@ source_pane_modePersistValue(source_pane_mode_t mode)
     }
     if (mode == source_pane_mode_z80) {
         return 6;
+    }
+    if (mode == source_pane_mode_z80s) {
+        return 7;
     }
     if (mode == source_pane_mode_h) {
         return 3;
@@ -1559,7 +1606,8 @@ source_pane_refreshModeOptions(e9ui_component_t *comp, source_pane_state_t *st)
         { .value = "c",   .label = "SRC" },
         { .value = "asm", .label = "ASM" },
         { .value = "hex", .label = "HEX" },
-        { .value = "z80", .label = "Z80" },
+        { .value = "z80", .label = "Z8A" },
+        { .value = "z80s", .label = "Z8S" },
     };
 
     if (!comp || !st || !st->toggleBtnMeta) {
@@ -1616,6 +1664,8 @@ source_pane_persistLoad(e9ui_component_t *self, e9ui_context_t *ctx, const char 
           mode = source_pane_mode_cpr;
       } else if (m == 6) {
           mode = source_pane_mode_z80;
+      } else if (m == 7) {
+          mode = source_pane_mode_z80s;
       } else if (m == 3) {
           mode = source_pane_mode_h;
       }
@@ -2114,7 +2164,8 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
         if (st->viewMode == source_pane_mode_cpr && !source_cpr_isModeAvailable()) {
             source_pane_setModeInternal(self, source_pane_mode_h, 0);
         }
-        if (st->viewMode == source_pane_mode_z80 && !source_z80_isModeAvailable()) {
+        if ((st->viewMode == source_pane_mode_z80 ||
+             st->viewMode == source_pane_mode_z80s) && !source_z80_isModeAvailable()) {
             source_pane_setModeInternal(self, source_pane_mode_a, 0);
         }
         source_pane_refreshModeOptions(self, st);
@@ -2177,6 +2228,10 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
     if (st && st->viewMode == source_pane_mode_z80) {
         source_pane_symbols_refreshAsmSymbols(self, st);
         source_pane_renderAsm(self, ctx);
+        goto done;
+    }
+    if (st && st->viewMode == source_pane_mode_z80s) {
+        source_pane_source_view_render(self, ctx);
         goto done;
     }
     if (st) {
@@ -2268,8 +2323,9 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
           lockButton->render(lockButton, ctx);
       }
       if (functionSelect) {
-          e9ui_setHidden(functionSelect, mode == source_pane_mode_c ? 0 : 1);
-          if (mode == source_pane_mode_c && functionW > 0) {
+          int showSourceControls = source_pane_isSourceLikeMode(mode);
+          e9ui_setHidden(functionSelect, showSourceControls ? 0 : 1);
+          if (showSourceControls && functionW > 0) {
               e9ui_rect_t bounds = {
                   rowX + lockW + sourceW,
                   rowY,
@@ -2285,8 +2341,9 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
           }
       }
       if (fileSelect) {
-          e9ui_setHidden(fileSelect, mode == source_pane_mode_c ? 0 : 1);
-          if (mode == source_pane_mode_c && sourceW > 0) {
+          int showSourceControls = source_pane_isSourceLikeMode(mode);
+          e9ui_setHidden(fileSelect, showSourceControls ? 0 : 1);
+          if (showSourceControls && sourceW > 0) {
               e9ui_rect_t bounds = {
                   rowX + lockW,
                   rowY,
@@ -2338,7 +2395,7 @@ source_pane_render(e9ui_component_t *self, e9ui_context_t *ctx)
           }
       }
       if (searchBox) {
-          int showSearch = (mode == source_pane_mode_c && st && st->searchActive) ? 1 : 0;
+          int showSearch = (source_pane_isSourceLikeMode(mode) && st && st->searchActive) ? 1 : 0;
           e9ui_setHidden(searchBox, showSearch ? 0 : 1);
           if (showSearch) {
               e9ui_rect_t bounds = {
@@ -2397,7 +2454,8 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
     if (st && st->viewMode == source_pane_mode_cpr && !source_cpr_isModeAvailable()) {
         source_pane_setModeInternal(self, source_pane_mode_h, 0);
     }
-    if (st && st->viewMode == source_pane_mode_z80 && !source_z80_isModeAvailable()) {
+    if (st && (st->viewMode == source_pane_mode_z80 ||
+               st->viewMode == source_pane_mode_z80s) && !source_z80_isModeAvailable()) {
         source_pane_setModeInternal(self, source_pane_mode_a, 0);
     }
     source_pane_mode_t mode = st ? st->viewMode : source_pane_mode_c;
@@ -2515,7 +2573,8 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
             if (dx * dx + dy * dy >= slop * slop) {
                 return 0;
             }
-            if (st->gutterMode == source_pane_mode_c) {
+            if (st->gutterMode == source_pane_mode_c ||
+                st->gutterMode == source_pane_mode_z80s) {
                 const char *path = NULL;
                 if (st->manualSrcActive && st->manualSrcPath) {
                     path = st->manualSrcPath;
@@ -2524,6 +2583,35 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
                 }
                 int lineNo = st->gutterLine;
                 if (!path || !path[0] || lineNo <= 0) {
+                    return 0;
+                }
+                if (st->gutterMode == source_pane_mode_z80s) {
+                    uint16_t addr = 0;
+                    if (!source_z80_resolveSourceLineAddress(path, lineNo, &addr)) {
+                        return 0;
+                    }
+                    uint32_t processorId = source_z80_processorId();
+                    machine_breakpoint_t *existing =
+                        machine_findProcessorBreakpointByAddr(&debugger.machine, processorId, addr);
+                    if (existing) {
+                        if (machine_removeProcessorBreakpointByAddr(&debugger.machine, processorId, addr)) {
+                            libretro_host_debugRemoveProcessorBreakpoint(processorId, addr);
+                            breakpoints_markDirty();
+                        }
+                        return 1;
+                    }
+                    machine_breakpoint_t *bp = machine_addProcessorBreakpoint(&debugger.machine,
+                                                                              processorId,
+                                                                              addr,
+                                                                              1);
+                    if (bp) {
+                        strncpy(bp->file, path, sizeof(bp->file) - 1);
+                        bp->file[sizeof(bp->file) - 1] = '\0';
+                        bp->line = lineNo;
+                        libretro_host_debugAddProcessorBreakpoint(processorId, addr);
+                        breakpoints_markDirty();
+                        return 1;
+                    }
                     return 0;
                 }
                 const machine_breakpoint_t *bps = NULL;
@@ -2659,17 +2747,17 @@ source_pane_handleEventComp(e9ui_component_t *self, e9ui_context_t *ctx, const e
         SDL_Keycode kc = ev->key.keysym.sym;
         SDL_Keymod mods = ev->key.keysym.mod;
         int accel = ((mods & KMOD_CTRL) != 0 || (mods & KMOD_GUI) != 0) ? 1 : 0;
-        if (mode == source_pane_mode_c && accel && kc == SDLK_s) {
+        if (source_pane_isSourceLikeMode(mode) && accel && kc == SDLK_s) {
             source_pane_searchOpen(st, ctx);
             source_pane_searchFind(st, self, ctx, 1, 1);
             return 1;
         }
-        if (mode == source_pane_mode_c && accel && kc == SDLK_r) {
+        if (source_pane_isSourceLikeMode(mode) && accel && kc == SDLK_r) {
             source_pane_searchOpen(st, ctx);
             source_pane_searchFind(st, self, ctx, -1, 1);
             return 1;
         }
-        if (mode == source_pane_mode_c && kc == SDLK_ESCAPE && st->searchActive) {
+        if (source_pane_isSourceLikeMode(mode) && kc == SDLK_ESCAPE && st->searchActive) {
             source_pane_searchClose(st, ctx);
             return 1;
         }
@@ -2733,7 +2821,7 @@ source_pane_lockToggle(e9ui_context_t *ctx, void *user)
     if (!st->scrollLocked) {
         source_pane_followCurrent(st);
         if (st->ownerPane) {
-            if (st->viewMode == source_pane_mode_c) {
+            if (source_pane_isSourceLikeMode(st->viewMode)) {
                 e9ui_component_t *file_select = st->fileSelectMeta ? e9ui_child_find(st->ownerPane, st->fileSelectMeta) : NULL;
                 e9ui_component_t *function_select = st->functionSelectMeta ? e9ui_child_find(st->ownerPane, st->functionSelectMeta) : NULL;
                 if (file_select) {
@@ -2891,9 +2979,7 @@ source_pane_dtor(e9ui_component_t *self, e9ui_context_t *ctx)
     }
     source_pane_state_t *st = (source_pane_state_t*)self->state;
     source_pane_freeFrozenAsm(st);
-    source_pane_symbols_clearSourceFiles(st);
-    source_pane_symbols_clearSourceFunctions(st);
-    source_pane_symbols_clearAsmSymbols(st);
+    source_pane_symbols_clearAllCaches(st);
     if (st->cprRegisterOptions) {
         alloc_free(st->cprRegisterOptions);
         st->cprRegisterOptions = NULL;
@@ -2920,6 +3006,7 @@ source_pane_make(void)
   c->name = "source_pane";
   source_pane_state_t *st = (source_pane_state_t*)alloc_calloc(1, sizeof(source_pane_state_t));
   st->viewMode = source_pane_mode_c;
+  st->activeSymbols = &st->primarySymbols;
   st->scrollLine = 1;
   st->scrollIndex = 0;
   st->scrollLocked = 0;
@@ -3026,7 +3113,8 @@ source_pane_setModeInternal(e9ui_component_t *comp, source_pane_mode_t mode, int
         mode != source_pane_mode_sym &&
         mode != source_pane_mode_h &&
         mode != source_pane_mode_cpr &&
-        mode != source_pane_mode_z80) {
+        mode != source_pane_mode_z80 &&
+        mode != source_pane_mode_z80s) {
         mode = source_pane_mode_a;
     }
     if (mode == source_pane_mode_c &&
@@ -3040,7 +3128,8 @@ source_pane_setModeInternal(e9ui_component_t *comp, source_pane_mode_t mode, int
     if (mode == source_pane_mode_cpr && !source_cpr_isModeAvailable()) {
         mode = source_pane_mode_h;
     }
-    if (mode == source_pane_mode_z80 && !source_z80_isModeAvailable()) {
+    if ((mode == source_pane_mode_z80 || mode == source_pane_mode_z80s) &&
+        !source_z80_isModeAvailable()) {
         mode = source_pane_mode_a;
     }
     if (enforceElfValid && !debugger.elfValid && mode == source_pane_mode_c) {
@@ -3049,7 +3138,8 @@ source_pane_setModeInternal(e9ui_component_t *comp, source_pane_mode_t mode, int
 
     if (prevMode != mode &&
         (prevMode == source_pane_mode_cpr || mode == source_pane_mode_cpr ||
-         prevMode == source_pane_mode_z80 || mode == source_pane_mode_z80)) {
+         prevMode == source_pane_mode_z80 || mode == source_pane_mode_z80 ||
+         prevMode == source_pane_mode_z80s || mode == source_pane_mode_z80s)) {
         st->frozenActive = 0;
         source_pane_freeFrozenAsm(st);
         st->scrollAnchorValid = 0;
@@ -3059,15 +3149,17 @@ source_pane_setModeInternal(e9ui_component_t *comp, source_pane_mode_t mode, int
                                      source_pane_isAsmLikeMode(mode)) ? 1 : 0;
 
     st->viewMode = mode;
+    source_pane_selectSymbolsCache(st, mode);
     st->gutterPending = 0;
     st->scrollAnchorValid = 0;
     source_pane_inlineEditCancel(st, NULL);
     source_pane_source_view_clearHover(comp, st);
     source_pane_clearFunctionScrollLock(st);
-    if (mode != source_pane_mode_c) {
+    if (!source_pane_isSourceLikeMode(mode)) {
         source_pane_searchClose(st, NULL);
     }
-    if (mode != source_pane_mode_c) {
+    if (!source_pane_isSourceLikeMode(mode) ||
+        (source_pane_isSourceLikeMode(prevMode) && prevMode != mode)) {
         st->manualSrcActive = 0;
     }
 
@@ -3239,7 +3331,7 @@ source_pane_getCurrentFile(e9ui_component_t *comp, char *out, size_t cap)
         return 0;
     }
     source_pane_state_t *st = (source_pane_state_t*)comp->state;
-    if (!st || st->viewMode != source_pane_mode_c) {
+    if (!st || !source_pane_isSourceLikeMode(st->viewMode)) {
         return 0;
     }
     if (st->manualSrcActive && st->manualSrcPath && st->manualSrcPath[0]) {
