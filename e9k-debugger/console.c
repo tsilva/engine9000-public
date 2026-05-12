@@ -286,12 +286,6 @@ console_setTopIndex(int count, int visibleLines, int topIndex)
     }
 }
 
-static int
-console_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)availW; (void)ctx; return 0;
-}
-
 static void
 console_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -485,7 +479,6 @@ console_makeComponent(void)
     c->name = "e9ui_console";
     console_state_t *st = (console_state_t*)alloc_calloc(1, sizeof(console_state_t));
     c->state = st;
-    c->preferredHeight = console_preferredHeight;
     c->layout = console_layout;
     c->render = console_render;
     c->handleEvent = console_handleEvent;

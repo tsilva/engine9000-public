@@ -1,5 +1,5 @@
-NEOGEO_TESTS=test-neogeosound test-neogeosavestate test-neogeostepping test-neogeoz80 test-neogeosprite test-neogeotracker test-neogeolog test-neogeomemview
-NEOGEO_REMAKE=remake-test-neogeosound remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeoz80 remake-test-neogeosprite remake-test-neogeotracker remake-test-neogeolog remake-test-neogeomemview
+NEOGEO_TESTS=test-neogeosound test-neogeosavestate test-neogeostepping test-neogeoprint test-neogeoz80 test-neogeosprite test-neogeotracker test-neogeolog test-neogeomemview
+NEOGEO_REMAKE=remake-test-neogeosound remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeoprint remake-test-neogeoz80 remake-test-neogeosprite remake-test-neogeotracker remake-test-neogeolog remake-test-neogeomemview
 
 # makers
 
@@ -23,6 +23,9 @@ make-test-neogeomemview: all
 
 make-test-neogeostepping: tests/neogeo/stepping/build/rom.elf
 	./e9k-debugger --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --make-test tests/results/neogeo/stepping
+
+make-test-neogeoprint: tests/neogeo/stepping/build/rom.elf
+	./e9k-debugger --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --make-test tests/results/neogeo/print
 
 make-test-neogeoz80: tests/neogeo/neogeoz80/neogeoz80.neo tests/neogeo/neogeoz80/rom.elf tests/neogeo/neogeoz80/demo_driver.z80srcmap
 	./e9k-debugger --neogeo --source-dir=./tests/neogeo/neogeoz80 --elf=./tests/neogeo/neogeoz80/rom.elf --rom=./tests/neogeo/neogeoz80/neogeoz80.neo --make-test tests/results/neogeo/neogeoz80
@@ -57,6 +60,10 @@ remake-test-neogeomemview: all
 remake-test-neogeostepping: tests/neogeo/stepping/build/rom.elf
 	@printf "NEO GEO STEPPING ($@) ..."
 	./e9k-debugger --neogeo --volume=0 --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --remake-test tests/results/neogeo/stepping
+
+remake-test-neogeoprint: tests/neogeo/stepping/build/rom.elf
+	@printf "NEO GEO PRINT ($@) ..."
+	./e9k-debugger --neogeo --volume=0 --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --remake-test tests/results/neogeo/print
 
 remake-test-neogeoz80: tests/neogeo/neogeoz80/neogeoz80.neo tests/neogeo/neogeoz80/rom.elf tests/neogeo/neogeoz80/demo_driver.z80srcmap
 	@printf "NEO GEO Z80 DEBUG ($@) ..."
@@ -99,6 +106,11 @@ test-neogeomemview: all
 test-neogeostepping: tests/neogeo/stepping/build/rom.elf
 	@printf "NEO GEO STEPPING ($@) ..." 
 	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test tests/results/neogeo/stepping  >> test.log 2>&1
+	@echo "PASSED ✅"
+
+test-neogeoprint: tests/neogeo/stepping/build/rom.elf
+	@printf "NEO GEO PRINT ($@) ..."
+	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test tests/results/neogeo/print  >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeoz80: tests/neogeo/neogeoz80/neogeoz80.neo tests/neogeo/neogeoz80/rom.elf tests/neogeo/neogeoz80/demo_driver.z80srcmap

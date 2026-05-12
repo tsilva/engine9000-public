@@ -1,0 +1,327 @@
+/*
+ * COPYRIGHT © 2026 Enable Software Pty Ltd - All Rights Reserved
+ *
+ * https://github.com/alpine9000/engine9000-public
+ *
+ * See COPYING for license details
+ */
+
+#pragma once
+
+#include <SDL.h>
+#include <limits.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "debug.h"
+#include "libretro.h"
+#include "libretro_host.h"
+
+typedef void (*retro_set_environment_fn_t)(retro_environment_t);
+typedef void (*retro_set_video_refresh_fn_t)(retro_video_refresh_t);
+typedef void (*retro_set_audio_sample_fn_t)(retro_audio_sample_t);
+typedef void (*retro_set_audio_sample_batch_fn_t)(retro_audio_sample_batch_t);
+typedef void (*retro_set_input_poll_fn_t)(retro_input_poll_t);
+typedef void (*retro_set_input_state_fn_t)(retro_input_state_t);
+typedef void (*retro_init_fn_t)(void);
+typedef void (*retro_deinit_fn_t)(void);
+typedef bool (*retro_load_game_fn_t)(const struct retro_game_info *);
+typedef void (*retro_unload_game_fn_t)(void);
+typedef void (*retro_reset_fn_t)(void);
+typedef void (*retro_run_fn_t)(void);
+typedef void (*retro_get_system_av_info_fn_t)(struct retro_system_av_info *);
+typedef void *(*retro_get_memory_data_fn_t)(unsigned id);
+typedef size_t (*retro_get_memory_size_fn_t)(unsigned id);
+typedef size_t (*retro_serialize_size_fn_t)(void);
+typedef bool (*retro_serialize_fn_t)(void *data, size_t size);
+typedef bool (*retro_unserialize_fn_t)(const void *data, size_t size);
+typedef void (*retro_set_controller_port_device_fn_t)(unsigned port, unsigned device);
+typedef size_t (*e9k_debug_read_regs_fn_t)(uint32_t *out, size_t cap);
+typedef size_t (*e9k_debug_read_processors_fn_t)(e9k_debug_processor_info_t *out, size_t cap);
+typedef size_t (*e9k_debug_read_processor_regs_fn_t)(uint32_t processorId, e9k_debug_processor_reg_t *out, size_t cap);
+typedef size_t (*e9k_debug_read_processor_memory_fn_t)(uint32_t processorId, uint32_t addr, uint8_t *out, size_t cap);
+typedef int (*e9k_debug_write_processor_memory_fn_t)(uint32_t processorId, uint32_t addr, uint32_t value, size_t size);
+typedef size_t (*e9k_debug_disassemble_processor_quick_fn_t)(uint32_t processorId, uint32_t pc, char *out, size_t cap);
+typedef int (*e9k_debug_suppress_processor_breakpoint_at_pc_fn_t)(uint32_t processorId);
+typedef int (*e9k_debug_step_processor_instr_fn_t)(uint32_t processorId);
+typedef void (*e9k_debug_pause_fn_t)(void);
+typedef void (*e9k_debug_resume_fn_t)(void);
+typedef int (*e9k_debug_is_paused_fn_t)(void);
+typedef void (*e9k_debug_step_instr_fn_t)(void);
+typedef void (*e9k_debug_step_line_fn_t)(void);
+typedef void (*e9k_debug_step_next_fn_t)(void);
+typedef void (*e9k_debug_step_out_fn_t)(void);
+typedef void (*e9k_debug_add_breakpoint_fn_t)(uint32_t addr);
+typedef void (*e9k_debug_remove_breakpoint_fn_t)(uint32_t addr);
+typedef void (*e9k_debug_add_processor_breakpoint_fn_t)(uint32_t processorId, uint32_t addr);
+typedef void (*e9k_debug_remove_processor_breakpoint_fn_t)(uint32_t processorId, uint32_t addr);
+typedef void (*e9k_debug_add_temp_breakpoint_fn_t)(uint32_t addr);
+typedef void (*e9k_debug_remove_temp_breakpoint_fn_t)(uint32_t addr);
+typedef void (*e9k_debug_reset_watchpoints_fn_t)(void);
+typedef int (*e9k_debug_add_watchpoint_fn_t)(uint32_t addr, uint32_t op_mask, uint32_t diff_operand, uint32_t value_operand, uint32_t old_value_operand, uint32_t size_operand, uint32_t addr_mask_operand, uint32_t access_source_operand);
+typedef void (*e9k_debug_remove_watchpoint_fn_t)(uint32_t index);
+typedef size_t (*e9k_debug_read_watchpoints_fn_t)(e9k_debug_watchpoint_t *out, size_t cap);
+typedef uint64_t (*e9k_debug_get_watchpoint_enabled_mask_fn_t)(void);
+typedef void (*e9k_debug_set_watchpoint_enabled_mask_fn_t)(uint64_t mask);
+typedef int (*e9k_debug_consume_watchbreak_fn_t)(e9k_debug_watchbreak_t *out);
+typedef void (*e9k_debug_reset_protects_fn_t)(void);
+typedef int (*e9k_debug_add_protect_fn_t)(uint32_t addr, uint32_t size_bits, uint32_t mode, uint32_t value);
+typedef void (*e9k_debug_remove_protect_fn_t)(uint32_t index);
+typedef size_t (*e9k_debug_read_protects_fn_t)(e9k_debug_protect_t *out, size_t cap);
+typedef uint64_t (*e9k_debug_get_protect_enabled_mask_fn_t)(void);
+typedef void (*e9k_debug_set_protect_enabled_mask_fn_t)(uint64_t mask);
+typedef size_t (*e9k_debug_read_callstack_fn_t)(uint32_t *out, size_t cap);
+typedef size_t (*e9k_debug_read_memory_fn_t)(uint32_t addr, uint8_t *out, size_t cap);
+typedef int (*e9k_debug_write_memory_fn_t)(uint32_t addr, uint32_t value, size_t size);
+typedef void (*e9k_debug_profiler_start_fn_t)(int stream);
+typedef void (*e9k_debug_profiler_stop_fn_t)(void);
+typedef int (*e9k_debug_profiler_is_enabled_fn_t)(void);
+typedef size_t (*e9k_debug_profiler_stream_next_fn_t)(char *out, size_t cap);
+typedef size_t (*e9k_debug_text_read_fn_t)(char *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_sprite_state_fn_t)(e9k_debug_sprite_state_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_p1_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_c_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_fix_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_palette_state_fn_t)(e9k_debug_palette_state_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_audio_frame_fn_t)(e9k_debug_audio_frame_t *out, size_t cap);
+typedef void (*e9k_debug_neogeo_set_audio_vis_enabled_fn_t)(int enabled);
+typedef void (*e9k_debug_neogeo_set_audio_mute_mask_fn_t)(uint32_t mask);
+typedef size_t (*e9k_debug_megadrive_get_sprite_state_fn_t)(e9k_debug_mega_sprite_state_t *out, size_t cap);
+typedef size_t (*e9k_debug_disassemble_quick_fn_t)(uint32_t pc, char *out, size_t cap);
+typedef size_t (*e9k_debug_read_known_pcs_fn_t)(uint32_t startAddr, uint32_t endAddr, uint32_t *out, size_t cap);
+typedef void (*e9k_debug_reset_known_pcs_fn_t)(void);
+typedef size_t (*e9k_debug_read_checkpoints_fn_t)(e9k_debug_checkpoint_t *out, size_t cap);
+typedef void (*e9k_debug_reset_checkpoints_fn_t)(void);
+typedef void (*e9k_debug_set_checkpoint_enabled_fn_t)(int enabled);
+typedef int (*e9k_debug_get_checkpoint_enabled_fn_t)(void);
+typedef uint64_t (*e9k_debug_read_cycle_count_fn_t)(void);
+typedef void (*e9k_debug_set_vblank_callback_fn_t)(void (*cb)(void *), void *user);
+typedef void (*e9k_debug_set_amiga_custom_log_frame_callback_fn_t)(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
+typedef void (*e9k_debug_set_neogeo_register_log_frame_callback_fn_t)(e9k_debug_geo_register_log_frame_callback_t cb, void *user);
+typedef void (*e9k_debug_amiga_set_deterministic_fn_t)(int enabled);
+typedef void (*e9k_debug_amiga_set_base_callback_fn_t)(void (*cb)(uint32_t section, uint32_t base));
+typedef void (*e9k_debug_amiga_set_base_stack_callback_fn_t)(void (*cb)(uint32_t section, uint32_t base, uint32_t size));
+typedef int *(*e9k_debug_amiga_get_dma_addr_fn_t)(void);
+typedef int *(*e9k_debug_amiga_get_copper_addr_fn_t)(void);
+typedef const e9k_debug_ami_custom_reg_state_t *(*e9k_debug_amiga_get_custom_regs_fn_t)(void);
+typedef void (*e9k_debug_amiga_set_blitter_debug_fn_t)(int enabled);
+typedef int (*e9k_debug_amiga_get_blitter_debug_fn_t)(void);
+typedef size_t (*e9k_debug_amiga_blitter_vis_read_spans_fn_t)(e9k_debug_ami_blitter_vis_span_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
+typedef size_t (*e9k_debug_amiga_blitter_vis_read_stats_fn_t)(e9k_debug_ami_blitter_vis_stats_t *out, size_t cap);
+typedef size_t (*e9k_debug_amiga_blitter_vis_read_word_tags_fn_t)(uint32_t addr, uint32_t *out, size_t cap);
+typedef void (*e9k_debug_amiga_set_sprite_vis_fn_t)(int enabled);
+typedef int (*e9k_debug_amiga_get_sprite_vis_fn_t)(void);
+typedef size_t (*e9k_debug_amiga_sprite_vis_read_points_fn_t)(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
+typedef const e9k_debug_ami_dma_debug_frame_view_t *(*e9k_debug_amiga_dma_debug_get_frame_view_fn_t)(uint32_t frameSelect);
+typedef const e9k_debug_ami_copper_debug_frame_view_t *(*e9k_debug_amiga_copper_debug_get_frame_view_fn_t)(uint32_t frameSelect);
+typedef int (*e9k_debug_amiga_get_video_line_count_fn_t)(void);
+typedef int (*e9k_debug_amiga_video_line_to_core_line_fn_t)(int videoLine);
+typedef int (*e9k_debug_amiga_core_line_to_video_line_fn_t)(int coreLine);
+typedef const e9k_debug_ami_video_line_state_t *(*e9k_debug_amiga_get_video_line_states_fn_t)(void);
+typedef bool (*e9k_debug_amiga_set_floppy_path_fn_t)(int drive, const char *path);
+typedef void (*e9k_debug_set_breakpoint_callback_fn_t)(void (*cb)(uint32_t addr));
+typedef void (*e9k_debug_set_source_location_resolver_fn_t)(int (*resolver)(uint32_t pc24, uint64_t *out_location, void *user), void *user);
+typedef void (*e9k_debug_set_debug_option_fn_t)(e9k_debug_option_t option, uint32_t argument, void *user);
+
+typedef struct libretro_option {
+    const char *key;
+    const char *default_value;
+    char *value;
+} libretro_option_t;
+
+typedef struct libretro_option_override {
+    char *key;
+    char *value;
+} libretro_option_override_t;
+
+typedef struct libretro_option_display {
+    char *key;
+    int visible;
+} libretro_option_display_t;
+
+typedef struct {
+    void *lib;
+    SDL_Texture *texture;
+    enum retro_pixel_format pixelFormat;
+    int textureWidth;
+    int textureHeight;
+    uint64_t textureSeq;
+    bool running;
+    bool gameLoaded;
+    char corePath[PATH_MAX];
+    char romPath[PATH_MAX];
+    char systemDir[PATH_MAX];
+    char saveDir[PATH_MAX];
+    void *romData;
+    size_t romSize;
+    struct retro_system_av_info avInfo;
+    SDL_AudioDeviceID audioDev;
+    int audioSampleRate;
+    size_t audioMaxQueue;
+    int audioEnabled;
+    int audioVolumePercent;
+    uint8_t *frameData;
+    size_t frameCapacity;
+    size_t framePitch;
+    int frameWidth;
+    int frameHeight;
+    uint64_t frameSeq;
+    int estimateFpsEnabled;
+    uint8_t *estimateFpsReferenceFrameData;
+    size_t estimateFpsReferenceFrameCapacity;
+    size_t estimateFpsReferenceFrameSize;
+    size_t estimateFpsReferencePitch;
+    int estimateFpsReferenceWidth;
+    int estimateFpsReferenceHeight;
+    unsigned estimateFpsReferenceFrameIndex;
+    double estimateFpsValue;
+    uint32_t *estimateFpsDistinctColorKeys;
+    uint8_t *estimateFpsDistinctColorUsed;
+    size_t estimateFpsDistinctColorCapacity;
+    unsigned estimateFpsDistinctColorCount;
+    unsigned estimateFpsVisibleWidth;
+    unsigned estimateFpsVisibleHeight;
+    retro_set_environment_fn_t setEnvironment;
+    retro_set_video_refresh_fn_t setVideoRefresh;
+    retro_set_audio_sample_fn_t setAudioSample;
+    retro_set_audio_sample_batch_fn_t setAudioSampleBatch;
+    retro_set_input_poll_fn_t setInputPoll;
+    retro_set_input_state_fn_t setInputState;
+    retro_init_fn_t init;
+    retro_deinit_fn_t deinit;
+    retro_load_game_fn_t loadGame;
+    retro_unload_game_fn_t unloadGame;
+    retro_run_fn_t run;
+    retro_reset_fn_t reset;
+    retro_get_system_av_info_fn_t getSystemAvInfo;
+    retro_get_memory_data_fn_t getMemoryData;
+    retro_get_memory_size_fn_t getMemorySize;
+    retro_serialize_size_fn_t serializeSize;
+    retro_serialize_fn_t serialize;
+    retro_unserialize_fn_t unserialize;
+    retro_set_controller_port_device_fn_t setControllerPortDevice;
+    e9k_debug_read_regs_fn_t debugReadRegs;
+    e9k_debug_read_processors_fn_t debugReadProcessors;
+    e9k_debug_read_processor_regs_fn_t debugReadProcessorRegs;
+    e9k_debug_read_processor_memory_fn_t debugReadProcessorMemory;
+    e9k_debug_write_processor_memory_fn_t debugWriteProcessorMemory;
+    e9k_debug_disassemble_processor_quick_fn_t debugDisassembleProcessorQuick;
+    e9k_debug_suppress_processor_breakpoint_at_pc_fn_t debugSuppressProcessorBreakpointAtPc;
+    e9k_debug_step_processor_instr_fn_t debugStepProcessorInstr;
+    e9k_debug_pause_fn_t debugPause;
+    e9k_debug_resume_fn_t debugResume;
+    e9k_debug_is_paused_fn_t debugIsPaused;
+    e9k_debug_step_instr_fn_t debugStepInstr;
+    e9k_debug_step_line_fn_t debugStepLine;
+    e9k_debug_step_next_fn_t debugStepNext;
+    e9k_debug_step_out_fn_t debugStepOut;
+    e9k_debug_add_breakpoint_fn_t debugAddBreakpoint;
+    e9k_debug_remove_breakpoint_fn_t debugRemoveBreakpoint;
+    e9k_debug_add_processor_breakpoint_fn_t debugAddProcessorBreakpoint;
+    e9k_debug_remove_processor_breakpoint_fn_t debugRemoveProcessorBreakpoint;
+    e9k_debug_add_temp_breakpoint_fn_t debugAddTempBreakpoint;
+    e9k_debug_remove_temp_breakpoint_fn_t debugRemoveTempBreakpoint;
+    e9k_debug_reset_watchpoints_fn_t debugResetWatchpoints;
+    e9k_debug_add_watchpoint_fn_t debugAddWatchpoint;
+    e9k_debug_remove_watchpoint_fn_t debugRemoveWatchpoint;
+    e9k_debug_read_watchpoints_fn_t debugReadWatchpoints;
+    e9k_debug_get_watchpoint_enabled_mask_fn_t debugGetWatchpointEnabledMask;
+    e9k_debug_set_watchpoint_enabled_mask_fn_t debugSetWatchpointEnabledMask;
+    e9k_debug_consume_watchbreak_fn_t debugConsumeWatchbreak;
+    e9k_debug_reset_protects_fn_t debugResetProtects;
+    e9k_debug_add_protect_fn_t debugAddProtect;
+    e9k_debug_remove_protect_fn_t debugRemoveProtect;
+    e9k_debug_read_protects_fn_t debugReadProtects;
+    e9k_debug_get_protect_enabled_mask_fn_t debugGetProtectEnabledMask;
+    e9k_debug_set_protect_enabled_mask_fn_t debugSetProtectEnabledMask;
+    e9k_debug_read_callstack_fn_t debugReadCallstack;
+    e9k_debug_read_memory_fn_t debugReadMemory;
+    e9k_debug_write_memory_fn_t debugWriteMemory;
+    e9k_debug_profiler_start_fn_t debugProfilerStart;
+    e9k_debug_profiler_stop_fn_t debugProfilerStop;
+    e9k_debug_profiler_is_enabled_fn_t debugProfilerIsEnabled;
+    e9k_debug_profiler_stream_next_fn_t debugProfilerStreamNext;
+    e9k_debug_text_read_fn_t debugTextRead;
+    e9k_debug_set_source_location_resolver_fn_t debugSetSourceLocationResolver;
+    e9k_debug_set_debug_option_fn_t debugSetDebugOption;
+    e9k_debug_neogeo_get_sprite_state_fn_t debugNeogeoGetSpriteState;
+    e9k_debug_neogeo_get_p1_rom_fn_t debugNeogeoGetP1Rom;
+    e9k_debug_neogeo_get_c_rom_fn_t debugNeogeoGetCRom;
+    e9k_debug_neogeo_get_fix_rom_fn_t debugNeogeoGetFixRom;
+    e9k_debug_neogeo_get_palette_state_fn_t debugNeogeoGetPaletteState;
+    e9k_debug_neogeo_get_audio_frame_fn_t debugNeogeoGetAudioFrame;
+    e9k_debug_neogeo_set_audio_vis_enabled_fn_t debugNeogeoSetAudioVisEnabled;
+    e9k_debug_neogeo_set_audio_mute_mask_fn_t debugNeogeoSetAudioMuteMask;
+    e9k_debug_megadrive_get_sprite_state_fn_t debugMegadriveGetSpriteState;
+    e9k_debug_disassemble_quick_fn_t debugDisassembleQuick;
+    e9k_debug_read_known_pcs_fn_t debugReadKnownPcs;
+    e9k_debug_reset_known_pcs_fn_t debugResetKnownPcs;
+    e9k_debug_read_checkpoints_fn_t debugReadCheckpoints;
+    e9k_debug_reset_checkpoints_fn_t debugResetCheckpoints;
+    e9k_debug_set_checkpoint_enabled_fn_t debugSetCheckpointEnabled;
+    e9k_debug_get_checkpoint_enabled_fn_t debugGetCheckpointEnabled;
+    e9k_debug_read_cycle_count_fn_t debugReadCycleCount;
+    e9k_debug_set_vblank_callback_fn_t setVblankCallback;
+    e9k_debug_set_amiga_custom_log_frame_callback_fn_t setAmigaCustomLogFrameCallback;
+    e9k_debug_set_neogeo_register_log_frame_callback_fn_t setNeogeoRegisterLogFrameCallback;
+    e9k_debug_amiga_set_deterministic_fn_t setAmigaDeterministic;
+    e9k_debug_amiga_set_base_callback_fn_t setAmigaDebugBaseCallback;
+    e9k_debug_amiga_set_base_stack_callback_fn_t setAmigaDebugBaseStackCallback;
+    e9k_debug_set_breakpoint_callback_fn_t setAmigaDebugBreakpointCallback;
+    e9k_debug_amiga_get_dma_addr_fn_t debugAmigaGetDmaAddr;
+    e9k_debug_amiga_get_copper_addr_fn_t debugAmigaGetCopperAddr;
+    e9k_debug_amiga_get_custom_regs_fn_t debugAmigaGetCustomRegs;
+    e9k_debug_amiga_set_blitter_debug_fn_t debugAmigaSetBlitterDebug;
+    e9k_debug_amiga_get_blitter_debug_fn_t debugAmigaGetBlitterDebug;
+    e9k_debug_amiga_blitter_vis_read_spans_fn_t debugAmigaBlitterVisReadSpans;
+    e9k_debug_amiga_blitter_vis_read_stats_fn_t debugAmigaBlitterVisReadStats;
+    e9k_debug_amiga_blitter_vis_read_word_tags_fn_t debugAmigaBlitterVisReadWordTags;
+    e9k_debug_amiga_set_sprite_vis_fn_t debugAmigaSetSpriteVis;
+    e9k_debug_amiga_get_sprite_vis_fn_t debugAmigaGetSpriteVis;
+    e9k_debug_amiga_sprite_vis_read_points_fn_t debugAmigaSpriteVisReadPoints;
+    e9k_debug_amiga_dma_debug_get_frame_view_fn_t debugAmigaDmaDebugGetFrameView;
+    e9k_debug_amiga_copper_debug_get_frame_view_fn_t debugAmigaCopperDebugGetFrameView;
+    e9k_debug_amiga_get_video_line_count_fn_t debugAmigaGetVideoLineCount;
+    e9k_debug_amiga_video_line_to_core_line_fn_t debugAmigaVideoLineToCoreLine;
+    e9k_debug_amiga_core_line_to_video_line_fn_t debugAmigaCoreLineToVideoLine;
+    e9k_debug_amiga_get_video_line_states_fn_t debugAmigaGetVideoLineStates;
+    e9k_debug_amiga_set_floppy_path_fn_t debugAmigaSetFloppyPath;
+    uint8_t *stateData;
+    size_t stateSize;
+    uint32_t inputMask[LIBRETRO_HOST_MAX_PORTS];
+    uint32_t autoInputMask[LIBRETRO_HOST_MAX_PORTS];
+    unsigned controllerPortDevice[LIBRETRO_HOST_MAX_PORTS];
+    int mousePendingX[LIBRETRO_HOST_MAX_PORTS];
+    int mousePendingY[LIBRETRO_HOST_MAX_PORTS];
+    int mouseFrameX[LIBRETRO_HOST_MAX_PORTS];
+    int mouseFrameY[LIBRETRO_HOST_MAX_PORTS];
+    uint32_t mouseButtonMask[LIBRETRO_HOST_MAX_PORTS];
+    int autoPressDelayFrames;
+    int autoPressHoldFrames;
+    uint8_t keyboardState[RETROK_LAST];
+    retro_keyboard_event_t keyboardCb;
+    libretro_option_t *options;
+    size_t optionCount;
+    const struct retro_core_option_v2_category *optionCatsV2;
+    const struct retro_core_option_v2_definition *optionDefsV2;
+    size_t optionCatCountV2;
+    size_t optionDefCountV2;
+    int coreOptionsV2HasCategories;
+    int coreOptionsDirty;
+    libretro_option_display_t *optionDisplay;
+    size_t optionDisplayCount;
+    size_t optionDisplayCap;
+    retro_core_options_update_display_callback_t updateDisplayCb;
+    unsigned videoFrameCount;
+    struct retro_memory_descriptor *memoryDescriptors;
+    size_t memoryDescriptorCount;
+} libretro_host_t;
+
+extern libretro_host_t libretro_host;
+
+void *
+libretro_host_loadSymbol(const char *name);
+
+void
+libretro_host_clearEstimateFpsState(void);

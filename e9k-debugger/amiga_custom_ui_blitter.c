@@ -8,8 +8,8 @@
 
 #include <stdio.h>
 
+#include "amiga_blittervis.h"
 #include "amiga_custom_ui_internal.h"
-#include "emu_ami.h"
 #include "e9ui_labeled_textbox.h"
 #include "e9ui_seek_bar.h"
 #include "e9ui_textbox.h"
@@ -420,8 +420,8 @@ amiga_custom_ui_blitter_updateStatsChart(amiga_custom_ui_state_t *ui)
 
     e9k_debug_ami_blitter_vis_stats_t stats;
     int hasStats = 0;
-    if (emu_ami_getBlitterVisLatestStats(&stats) ||
-        libretro_host_debugAmiReadBlitterVisStats(&stats)) {
+    if (amiga_blittervis_getLatestStats(&stats) ||
+        libretro_host_amiga_readBlitterVisStats(&stats)) {
         hasStats = 1;
     }
 
@@ -463,7 +463,7 @@ void
 amiga_custom_ui_blitter_applyDebugOption(void)
 {
     amiga_custom_ui_state_t *ui = &amiga_custom_ui_state;
-    (void)libretro_host_debugAmiSetBlitterDebug(ui->blitterDebugEnabled ? 1 : 0);
+    (void)libretro_host_amiga_setBlitterDebug(ui->blitterDebugEnabled ? 1 : 0);
 }
 
 
@@ -489,7 +489,7 @@ amiga_custom_ui_blitter_syncDebugCheckbox(amiga_custom_ui_state_t *ui)
         return;
     }
     int enabled = 0;
-    if (!libretro_host_debugAmiGetBlitterDebug(&enabled)) {
+    if (!libretro_host_amiga_getBlitterDebug(&enabled)) {
         return;
     }
     ui->blitterDebugEnabled = enabled ? 1 : 0;

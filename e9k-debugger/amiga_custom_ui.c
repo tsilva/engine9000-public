@@ -137,7 +137,7 @@ amiga_custom_ui_estimateFpsChanged(e9ui_component_t *self, e9ui_context_t *ctx, 
         return;
     }
     ui->estimateFpsEnabled = selected ? 1 : 0;
-    libretro_host_setEstimateFpsEnabled(ui->estimateFpsEnabled);
+    libretro_host_amiga_setEstimateFpsEnabled(ui->estimateFpsEnabled);
     amiga_custom_ui_syncEstimateFpsDisplay(ui);
 }
 static e9ui_component_t *
@@ -645,7 +645,7 @@ amiga_custom_ui_syncEstimateFpsDisplay(amiga_custom_ui_state_t *ui)
         }
         return;
     }
-    double estimatedFps = libretro_host_getEstimatedVideoFps();
+    double estimatedFps = libretro_host_amiga_getEstimatedVideoFps();
     if (estimatedFps > 0.0) {
         char text[32];
         snprintf(text, sizeof(text), "FPS: %.1f", estimatedFps);
@@ -654,7 +654,7 @@ amiga_custom_ui_syncEstimateFpsDisplay(amiga_custom_ui_state_t *ui)
         e9ui_text_setText(ui->estimateFpsText, "FPS: ...");
     }
     if (ui->estimateFpsColorsText) {
-        unsigned distinctColors = libretro_host_getEstimatedVideoDistinctColors();
+        unsigned distinctColors = libretro_host_amiga_getEstimatedVideoDistinctColors();
         if (distinctColors > 0u) {
             char text[32];
             snprintf(text, sizeof(text), "COLORS: %u", distinctColors);
@@ -666,7 +666,7 @@ amiga_custom_ui_syncEstimateFpsDisplay(amiga_custom_ui_state_t *ui)
     if (ui->estimateFpsVisibleAreaText) {
         unsigned visibleWidth = 0u;
         unsigned visibleHeight = 0u;
-        if (libretro_host_getEstimatedVideoVisibleArea(&visibleWidth, &visibleHeight)) {
+        if (libretro_host_amiga_getEstimatedVideoVisibleArea(&visibleWidth, &visibleHeight)) {
             char text[48];
             snprintf(text, sizeof(text), "VISIBLE AREA: %ux%u", visibleWidth, visibleHeight);
             e9ui_text_setText(ui->estimateFpsVisibleAreaText, text);
@@ -870,7 +870,7 @@ amiga_custom_ui_init(void)
     amiga_custom_ui_audio_syncMasterCheckbox(ui);
     amiga_custom_ui_blitter_syncDebugCheckbox(ui);
     amiga_custom_ui_sprite_syncVisCheckbox(ui);
-    libretro_host_setEstimateFpsEnabled(ui->estimateFpsEnabled);
+    libretro_host_amiga_setEstimateFpsEnabled(ui->estimateFpsEnabled);
 
     ui->root = amiga_custom_ui_buildRoot(ui);
     if (!ui->root) {

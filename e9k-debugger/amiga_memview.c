@@ -6,6 +6,7 @@
  * See COPYING for license details
  */
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,12 +16,12 @@
 #include <SDL_ttf.h>
 
 #include "alloc.h"
-#include "amiga_custom_regs.h"
+#include "amiga_blittervis.h"
 #include "amiga_memview.h"
+#include "amiga_memsave.h"
 #include "aux_window.h"
 #include "config.h"
 #include "debugger.h"
-#include "emu_ami.h"
 #include "e9ui.h"
 #include "e9ui_box.h"
 #include "e9ui_button.h"
@@ -34,9 +35,6 @@
 #include "e9ui_text.h"
 #include "e9ui_textbox.h"
 #include "libretro_host.h"
-#include "platform.h"
-#include "settings.h"
-#include "strutil.h"
 
 #define AMIGA_MEMVIEW_TITLE "ENGINE9000 DEBUGGER - RAM"
 #define AMIGA_MEMVIEW_DEFAULT_ROW_BYTES 40u
@@ -65,8 +63,6 @@
 #define AMIGA_MEMVIEW_REG_BPL1PTH 0x0e0u
 #define AMIGA_MEMVIEW_BPLPTR_COUNT 8
 #define AMIGA_MEMVIEW_AUTO_CANDIDATE_MAX 64
-#define AMIGA_MEMVIEW_EXPORT_MAX_RANGES 64
-#define AMIGA_MEMVIEW_EXPORT_CHUNK 65536u
 
 typedef struct amiga_memview_state amiga_memview_state_t;
 
@@ -111,19 +107,6 @@ enum
     amiga_memview_ram_type_other,
     amiga_memview_ram_type_count
 };
-
-typedef struct amiga_memview_save_plan {
-    amiga_memview_state_t *ui;
-    target_memory_range_t ranges[AMIGA_MEMVIEW_EXPORT_MAX_RANGES];
-    size_t rangeCount;
-    char exportPaths[amiga_memview_ram_type_count][PATH_MAX];
-    char customRegsPath[PATH_MAX];
-    char collisionMessage[PATH_MAX];
-    char sequenceButtonLabel[PATH_MAX];
-    int exportTypes[amiga_memview_ram_type_count];
-    int exportTypeCount;
-    e9ui_component_t *modal;
-} amiga_memview_save_plan_t;
 
 struct amiga_memview_state {
     e9ui_window_state_t windowState;
@@ -235,7 +218,7 @@ amiga_memview_videoLineState(const e9k_debug_ami_video_line_state_t *videoLineSt
     if (!videoLineStates) {
         return NULL;
     }
-    if (!libretro_host_debugAmiVideoLineToCoreLine(videoLine, &coreLine)) {
+    if (!libretro_host_amiga_videoLineToCoreLine(videoLine, &coreLine)) {
         return NULL;
     }
     if (coreLine < 0) {
@@ -311,7 +294,7 @@ amiga_memview_parseU64SmartHex(const char *text, unsigned long long *outValue, c
     }
 
     const char *cursor = text;
-    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n') {
+    while (isspace((unsigned char)*cursor)) {
         cursor++;
     }
 
@@ -322,10 +305,10 @@ amiga_memview_parseU64SmartHex(const char *text, unsigned long long *outValue, c
         base = 16;
     } else if (!(parseStart[0] == '0' && (parseStart[1] == 'x' || parseStart[1] == 'X'))) {
         for (const char *scan = parseStart; *scan; ++scan) {
-            if (*scan == ' ' || *scan == '\t' || *scan == '\r' || *scan == '\n') {
+            if (isspace((unsigned char)*scan)) {
                 break;
             }
-            if ((*scan >= 'a' && *scan <= 'f') || (*scan >= 'A' && *scan <= 'F')) {
+            if (isxdigit((unsigned char)*scan) && !isdigit((unsigned char)*scan)) {
                 base = 16;
                 break;
             }
@@ -408,9 +391,6 @@ amiga_memview_clampZoomLevel(int zoomLevel)
 static void
 amiga_memview_saveWindowState(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     if (ui->windowState.open && ui->windowState.windowHost) {
         (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
     }
@@ -422,7 +402,7 @@ amiga_memview_syncAutoButtonLabel(amiga_memview_state_t *ui)
 {
     char label[32];
 
-    if (!ui || !ui->autoButton) {
+    if (!ui->autoButton) {
         return;
     }
     if (ui->autoCandidateCount > 0 && ui->autoCandidateIndex >= 0 && ui->autoCandidateIndex < ui->autoCandidateCount) {
@@ -443,9 +423,6 @@ amiga_memview_widthSeekPercent(uint32_t rowBytes)
     uint32_t clamped = amiga_memview_clampRowBytes(rowBytes);
     uint32_t stepCount = AMIGA_MEMVIEW_MAX_ROW_BYTES / 2u;
 
-    if (stepCount <= 1u) {
-        return 0.0f;
-    }
     return (float)((clamped / 2u) - 1u) / (float)(stepCount - 1u);
 }
 
@@ -488,10 +465,6 @@ amiga_memview_handleWidthKey(amiga_memview_state_t *ui, SDL_Keycode key, SDL_Key
 {
     uint32_t nextRowBytes = 0u;
 
-    if (!ui) {
-        return 0;
-    }
-
     (void)mod;
     nextRowBytes = ui->rowBytes;
     switch (key) {
@@ -526,9 +499,6 @@ amiga_memview_zoomSeekPercent(int zoomLevel)
 {
     int clamped = amiga_memview_clampZoomLevel(zoomLevel);
 
-    if (AMIGA_MEMVIEW_ZOOM_MAX <= AMIGA_MEMVIEW_ZOOM_MIN) {
-        return 0.0f;
-    }
     return (float)(clamped - AMIGA_MEMVIEW_ZOOM_MIN) /
            (float)(AMIGA_MEMVIEW_ZOOM_MAX - AMIGA_MEMVIEW_ZOOM_MIN);
 }
@@ -554,6 +524,7 @@ static void
 amiga_memview_zoomSeekTooltip(float percent, char *out, size_t cap, void *user)
 {
     amiga_memview_state_t *ui = (amiga_memview_state_t*)user;
+    static const char *fracSuffixes[] = { "", ".125", ".25", ".375", ".5", ".625", ".75", ".875" };
     int zoomLevel = amiga_memview_zoomSeekLevel(percent);
     int whole = zoomLevel / 8;
     int frac = zoomLevel & 7;
@@ -562,33 +533,13 @@ amiga_memview_zoomSeekTooltip(float percent, char *out, size_t cap, void *user)
     if (!out || cap == 0u) {
         return;
     }
-    if (frac == 0) {
-        snprintf(out, cap, "Zoom %dx", whole);
-    } else if (frac == 1) {
-        snprintf(out, cap, "Zoom %d.125x", whole);
-    } else if (frac == 2) {
-        snprintf(out, cap, "Zoom %d.25x", whole);
-    } else if (frac == 3) {
-        snprintf(out, cap, "Zoom %d.375x", whole);
-    } else if (frac == 4) {
-        snprintf(out, cap, "Zoom %d.5x", whole);
-    } else if (frac == 5) {
-        snprintf(out, cap, "Zoom %d.625x", whole);
-    } else if (frac == 6) {
-        snprintf(out, cap, "Zoom %d.75x", whole);
-    } else {
-        snprintf(out, cap, "Zoom %d.875x", whole);
-    }
+    snprintf(out, cap, "Zoom %d%sx", whole, fracSuffixes[frac]);
 }
 
 static void
 amiga_memview_syncTextboxesFromState(amiga_memview_state_t *ui)
 {
     char buffer[32];
-
-    if (!ui) {
-        return;
-    }
 
     if (ui->addressBox) {
         snprintf(buffer, sizeof(buffer), "0x%06X", (unsigned)(ui->baseAddr & 0x00ffffffu));
@@ -609,9 +560,6 @@ amiga_memview_syncTextboxesFromState(amiga_memview_state_t *ui)
 static void
 amiga_memview_scrollReset(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     ui->scrollX = 0;
 }
 
@@ -643,9 +591,6 @@ amiga_memview_onZoomSeekChanged(float percent, void *user)
     amiga_memview_state_t *ui = (amiga_memview_state_t*)user;
     int zoomLevel = 0;
 
-    if (!ui) {
-        return;
-    }
     zoomLevel = amiga_memview_zoomSeekLevel(percent);
     if (zoomLevel == ui->zoomLevel) {
         return;
@@ -726,29 +671,38 @@ amiga_memview_zoomSeekHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, c
 }
 
 static int
-amiga_memview_ensureReadBuffer(amiga_memview_state_t *ui, size_t need)
+amiga_memview_ensureAlloc(void **buffer, size_t *cap, size_t needCount, size_t elemSize)
 {
-    uint8_t *resized = NULL;
+    void *resized = NULL;
 
-    if (!ui) {
+    if (!buffer || !cap || elemSize == 0u) {
         return 0;
     }
-    if (need <= ui->readBufferCap) {
+    if (needCount <= *cap) {
         return 1;
     }
-    resized = (uint8_t*)alloc_realloc(ui->readBuffer, need);
+    if (needCount > SIZE_MAX / elemSize) {
+        return 0;
+    }
+    resized = alloc_realloc(*buffer, needCount * elemSize);
     if (!resized) {
         return 0;
     }
-    ui->readBuffer = resized;
-    ui->readBufferCap = need;
+    *buffer = resized;
+    *cap = needCount;
     return 1;
+}
+
+static int
+amiga_memview_ensureReadBuffer(amiga_memview_state_t *ui, size_t need)
+{
+    return amiga_memview_ensureAlloc((void**)&ui->readBuffer, &ui->readBufferCap, need, sizeof(*ui->readBuffer));
 }
 
 static void
 amiga_memview_zeroBlitTagBuffer(amiga_memview_state_t *ui, size_t wordCount)
 {
-    if (!ui || !ui->blitTagBuffer || wordCount == 0u) {
+    if (!ui->blitTagBuffer || wordCount == 0u) {
         return;
     }
     memset(ui->blitTagBuffer, 0, wordCount * sizeof(*ui->blitTagBuffer));
@@ -757,29 +711,15 @@ amiga_memview_zeroBlitTagBuffer(amiga_memview_state_t *ui, size_t wordCount)
 static int
 amiga_memview_ensureBlitTagBuffer(amiga_memview_state_t *ui, size_t needWords)
 {
-    uint32_t *resized = NULL;
-
-    if (!ui) {
-        return 0;
-    }
-    if (needWords <= ui->blitTagBufferCap) {
-        return 1;
-    }
-    resized = (uint32_t*)alloc_realloc(ui->blitTagBuffer, needWords * sizeof(*resized));
-    if (!resized) {
-        return 0;
-    }
-    ui->blitTagBuffer = resized;
-    ui->blitTagBufferCap = needWords;
-    return 1;
+    return amiga_memview_ensureAlloc((void**)&ui->blitTagBuffer,
+                                     &ui->blitTagBufferCap,
+                                     needWords,
+                                     sizeof(*ui->blitTagBuffer));
 }
 
 static void
 amiga_memview_discardBitTexture(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     if (ui->bitTexture) {
         SDL_DestroyTexture(ui->bitTexture);
         ui->bitTexture = NULL;
@@ -793,29 +733,15 @@ amiga_memview_discardBitTexture(amiga_memview_state_t *ui)
 static int
 amiga_memview_ensureOverviewPixels(amiga_memview_state_t *ui, size_t needPixels)
 {
-    uint32_t *resized = NULL;
-
-    if (!ui) {
-        return 0;
-    }
-    if (needPixels <= ui->overviewPixelsCap) {
-        return 1;
-    }
-    resized = (uint32_t*)alloc_realloc(ui->overviewPixels, needPixels * sizeof(*resized));
-    if (!resized) {
-        return 0;
-    }
-    ui->overviewPixels = resized;
-    ui->overviewPixelsCap = needPixels;
-    return 1;
+    return amiga_memview_ensureAlloc((void**)&ui->overviewPixels,
+                                     &ui->overviewPixelsCap,
+                                     needPixels,
+                                     sizeof(*ui->overviewPixels));
 }
 
 static void
 amiga_memview_discardOverviewTexture(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     if (ui->overviewTexture) {
         SDL_DestroyTexture(ui->overviewTexture);
         ui->overviewTexture = NULL;
@@ -829,7 +755,7 @@ amiga_memview_discardOverviewTexture(amiga_memview_state_t *ui)
 static int
 amiga_memview_ensureOverviewTexture(amiga_memview_state_t *ui, SDL_Renderer *renderer, int width, int height)
 {
-    if (!ui || !renderer || width <= 0 || height <= 0) {
+    if (!renderer || width <= 0 || height <= 0) {
         return 0;
     }
 
@@ -860,27 +786,13 @@ amiga_memview_ensureOverviewTexture(amiga_memview_state_t *ui, SDL_Renderer *ren
 static int
 amiga_memview_ensureBitPixels(amiga_memview_state_t *ui, size_t needPixels)
 {
-    uint32_t *resized = NULL;
-
-    if (!ui) {
-        return 0;
-    }
-    if (needPixels <= ui->bitPixelsCap) {
-        return 1;
-    }
-    resized = (uint32_t*)alloc_realloc(ui->bitPixels, needPixels * sizeof(*resized));
-    if (!resized) {
-        return 0;
-    }
-    ui->bitPixels = resized;
-    ui->bitPixelsCap = needPixels;
-    return 1;
+    return amiga_memview_ensureAlloc((void**)&ui->bitPixels, &ui->bitPixelsCap, needPixels, sizeof(*ui->bitPixels));
 }
 
 static int
 amiga_memview_ensureBitTexture(amiga_memview_state_t *ui, SDL_Renderer *renderer, int width, int height)
 {
-    if (!ui || !renderer || width <= 0 || height <= 0) {
+    if (!renderer || width <= 0 || height <= 0) {
         return 0;
     }
 
@@ -909,7 +821,7 @@ amiga_memview_ensureBitTexture(amiga_memview_state_t *ui, SDL_Renderer *renderer
 }
 
 static int
-amiga_memview_readRange(amiga_memview_state_t *ui, uint32_t baseAddr, uint8_t *data, size_t size)
+amiga_memview_readRange(uint32_t baseAddr, uint8_t *data, size_t size)
 {
     uint32_t minAddr = 0u;
     uint32_t maxAddr = 0x00ffffffu;
@@ -917,7 +829,7 @@ amiga_memview_readRange(amiga_memview_state_t *ui, uint32_t baseAddr, uint8_t *d
     uint64_t readEnd = 0u;
     int hasLimits = 0;
 
-    if (!ui || !data || size == 0u) {
+    if (!data || size == 0u) {
         return 0;
     }
 
@@ -965,9 +877,7 @@ amiga_memview_fetchBytesAuto(uint16_t ddfstrt, uint16_t ddfstop, uint16_t bplcon
         start = stop;
         stop = tmp;
     }
-    if (stop >= start) {
-        fetchWords = ((stop - start) >> 3) + 1u;
-    }
+    fetchWords = ((stop - start) >> 3) + 1u;
     if ((bplcon0 & (1u << 6)) != 0u) {
         resolutionScale = 4u;
     } else if ((bplcon0 & (1u << 15)) != 0u) {
@@ -998,7 +908,7 @@ amiga_memview_appendAutoIfUnique(amiga_memview_auto_t *outAutos, int autoCount, 
 static int
 amiga_memview_collectRegisterAuto(amiga_memview_auto_t *outAutos, int maxAutos, const amiga_memview_auto_t *fallback)
 {
-    const e9k_debug_ami_custom_reg_state_t *regs = libretro_host_debugAmiGetCustomRegs();
+    const e9k_debug_ami_custom_reg_state_t *regs = libretro_host_amiga_getCustomRegs();
     int autoCount = 0;
 
     if (!outAutos || maxAutos <= 0 || !fallback) {
@@ -1051,10 +961,10 @@ amiga_memview_collectLineAuto(amiga_memview_auto_t *outAutos, int maxAutos, cons
     if (!outAutos || maxAutos <= 0 || !fallback) {
         return 0;
     }
-    if (!libretro_host_debugAmiGetVideoLineCount(&lineCount) || lineCount < 3) {
+    if (!libretro_host_amiga_getVideoLineCount(&lineCount) || lineCount < 3) {
         return 0;
     }
-    videoLineStates = libretro_host_debugAmiGetVideoLineStates();
+    videoLineStates = libretro_host_amiga_getVideoLineStates();
     if (!videoLineStates) {
         return 0;
     }
@@ -1167,9 +1077,6 @@ amiga_memview_collectAuto(amiga_memview_auto_t *outAutos, int maxAutos)
 static void
 amiga_memview_setView(amiga_memview_state_t *ui, uint32_t baseAddr, uint32_t rowBytes, int resetScroll)
 {
-    if (!ui) {
-        return;
-    }
     ui->baseAddr = amiga_memview_clampBaseAddr(baseAddr);
     ui->rowBytes = amiga_memview_clampRowBytes(rowBytes);
     ui->baseAddrHasSaved = 1;
@@ -1191,9 +1098,6 @@ amiga_memview_applyAuto(amiga_memview_state_t *ui, int resetScroll)
     int autoIndex = 0;
     int refreshList = 0;
 
-    if (!ui) {
-        return;
-    }
     if (ui->autoCandidateCount <= 0) {
         refreshList = 1;
     } else {
@@ -1231,7 +1135,7 @@ amiga_memview_parseAddressTextbox(amiga_memview_state_t *ui, uint32_t *outBaseAd
     if (outBaseAddr) {
         *outBaseAddr = 0u;
     }
-    if (!ui || !ui->addressBox || !outBaseAddr) {
+    if (!ui->addressBox || !outBaseAddr) {
         return 0;
     }
 
@@ -1263,7 +1167,7 @@ amiga_memview_parseWidthTextbox(amiga_memview_state_t *ui, uint32_t *outRowBytes
     if (outRowBytes) {
         *outRowBytes = 0u;
     }
-    if (!ui || !ui->widthBox || !outRowBytes) {
+    if (!ui->widthBox || !outRowBytes) {
         return 0;
     }
 
@@ -1282,14 +1186,13 @@ amiga_memview_parseWidthTextbox(amiga_memview_state_t *ui, uint32_t *outRowBytes
 }
 
 static void
-amiga_memview_submitFromTextboxes(amiga_memview_state_t *ui)
+amiga_memview_onTextboxSubmit(e9ui_context_t *ctx, void *user)
 {
+    amiga_memview_state_t *ui = (amiga_memview_state_t*)user;
     uint32_t baseAddr = 0u;
     uint32_t rowBytes = 0u;
 
-    if (!ui) {
-        return;
-    }
+    (void)ctx;
     if (!amiga_memview_parseAddressTextbox(ui, &baseAddr)) {
         return;
     }
@@ -1300,28 +1203,11 @@ amiga_memview_submitFromTextboxes(amiga_memview_state_t *ui)
 }
 
 static void
-amiga_memview_onAddressSubmit(e9ui_context_t *ctx, void *user)
-{
-    (void)ctx;
-    amiga_memview_submitFromTextboxes((amiga_memview_state_t*)user);
-}
-
-static void
-amiga_memview_onWidthSubmit(e9ui_context_t *ctx, void *user)
-{
-    (void)ctx;
-    amiga_memview_submitFromTextboxes((amiga_memview_state_t*)user);
-}
-
-static void
 amiga_memview_onWidthSeekChanged(float percent, void *user)
 {
     amiga_memview_state_t *ui = (amiga_memview_state_t*)user;
     uint32_t rowBytes = 0u;
 
-    if (!ui) {
-        return;
-    }
     rowBytes = amiga_memview_widthSeekRowBytes(percent);
     if (rowBytes == ui->rowBytes) {
         return;
@@ -1336,763 +1222,6 @@ amiga_memview_onAuto(e9ui_context_t *ctx, void *user)
     amiga_memview_applyAuto((amiga_memview_state_t*)user, 1);
 }
 
-static int
-amiga_memview_copyConfigName(char *out, size_t cap, const char *configPath)
-{
-    const char *base = NULL;
-    const char *slash = NULL;
-    const char *back = NULL;
-    const char *dot = NULL;
-
-    if (!out || cap == 0u || !configPath || !configPath[0]) {
-        return 0;
-    }
-
-    slash = strrchr(configPath, '/');
-    back = strrchr(configPath, '\\');
-    base = slash > back ? slash : back;
-    base = base ? base + 1 : configPath;
-    if (!base || !base[0]) {
-        return 0;
-    }
-
-    strutil_strlcpy(out, cap, base);
-    if (out[0] == '\0') {
-        return 0;
-    }
-    dot = strrchr(out, '.');
-    if (dot && dot > out) {
-        * (char*)dot = '\0';
-    }
-    if (out[0] == '\0') {
-        return 0;
-    }
-    return 1;
-}
-
-static const char *
-amiga_memview_ramTypeFileTag(int ramType)
-{
-    switch (ramType) {
-    case amiga_memview_ram_type_chip:
-        return "chip";
-    case amiga_memview_ram_type_slow:
-        return "slow";
-    case amiga_memview_ram_type_fast:
-        return "fast";
-    default:
-        return "other";
-    }
-}
-
-static int
-amiga_memview_buildExportFileName(char *out, size_t cap, const char *configName, int ramType)
-{
-    char stem[PATH_MAX];
-    const char *tag = amiga_memview_ramTypeFileTag(ramType);
-    size_t stemLen = 0u;
-
-    if (!out || cap == 0u || !configName || !configName[0] || !tag || !tag[0]) {
-        return 0;
-    }
-    strutil_join3Trunc(stem, sizeof(stem), configName, "-", tag);
-    stemLen = strlen(configName) + 1u + strlen(tag);
-    if (strlen(stem) != stemLen) {
-        return 0;
-    }
-    strutil_join2Trunc(out, cap, stem, ".bin");
-    if (strlen(out) != stemLen + 4u) {
-        return 0;
-    }
-    return 1;
-}
-
-static int
-amiga_memview_buildCustomRegsFileName(char *out, size_t cap, const char *configName)
-{
-    char stem[PATH_MAX];
-    size_t stemLen = 0u;
-
-    if (!out || cap == 0u || !configName || !configName[0]) {
-        return 0;
-    }
-    strutil_join2Trunc(stem, sizeof(stem), configName, "-custom-regs");
-    stemLen = strlen(configName) + strlen("-custom-regs");
-    if (strlen(stem) != stemLen) {
-        return 0;
-    }
-    strutil_join2Trunc(out, cap, stem, ".txt");
-    if (strlen(out) != stemLen + 4u) {
-        return 0;
-    }
-    return 1;
-}
-
-static int
-amiga_memview_collectExportRanges(target_memory_range_t *outRanges, size_t cap, size_t *outCount)
-{
-    size_t count = 0u;
-    size_t write = 0u;
-
-    *outCount = 0u;
-    if (!target || !target->memoryTrackGetRanges) {
-        return 0;
-    }
-    if (!target->memoryTrackGetRanges(outRanges, cap, &count) || count == 0u) {
-        return 0;
-    }
-    for (size_t i = 0; i < count; ++i) {
-        if (outRanges[i].size == 0u) {
-            continue;
-        }
-        outRanges[write++] = outRanges[i];
-    }
-    *outCount = write;
-    return write > 0u ? 1 : 0;
-}
-
-static int
-amiga_memview_buildIncrementedPath(char *out, size_t cap, const char *path, unsigned index)
-{
-    const char *slash = NULL;
-    const char *backslash = NULL;
-    const char *lastSep = NULL;
-    const char *dot = NULL;
-    const char *ext = NULL;
-    char suffix[32];
-    size_t stemLen = 0u;
-    size_t suffixLen = 0u;
-    size_t extLen = 0u;
-    size_t pathLen = 0u;
-
-    if (!out || cap == 0u || !path || !path[0]) {
-        return 0;
-    }
-    slash = strrchr(path, '/');
-    backslash = strrchr(path, '\\');
-    if (slash && backslash) {
-        lastSep = slash > backslash ? slash : backslash;
-    } else if (slash) {
-        lastSep = slash;
-    } else {
-        lastSep = backslash;
-    }
-
-    dot = strrchr(path, '.');
-    pathLen = strlen(path);
-    if (dot && (!lastSep || dot > lastSep)) {
-        ext = dot;
-        stemLen = (size_t)(dot - path);
-        extLen = pathLen - stemLen;
-    } else {
-        ext = path + pathLen;
-        stemLen = pathLen;
-        extLen = 0u;
-    }
-
-    if (snprintf(suffix, sizeof(suffix), "-%u", index) < 0) {
-        return 0;
-    }
-    suffix[sizeof(suffix) - 1u] = '\0';
-    suffixLen = strlen(suffix);
-    if (stemLen + suffixLen + extLen >= cap) {
-        return 0;
-    }
-
-    memcpy(out, path, stemLen);
-    memcpy(out + stemLen, suffix, suffixLen);
-    if (extLen > 0u) {
-        memcpy(out + stemLen + suffixLen, ext, extLen);
-    }
-    out[stemLen + suffixLen + extLen] = '\0';
-    return 1;
-}
-
-static int
-amiga_memview_resolveIncrementedPath(char *path, size_t cap)
-{
-    char candidate[PATH_MAX];
-
-    if (!path || cap == 0u || !path[0]) {
-        return 0;
-    }
-    if (!settings_pathExistsFile(path)) {
-        return 1;
-    }
-
-    for (unsigned index = 1u; index < 1000000u; ++index) {
-        if (!amiga_memview_buildIncrementedPath(candidate, sizeof(candidate), path, index)) {
-            return 0;
-        }
-        if (!settings_pathExistsFile(candidate)) {
-            strutil_strlcpy(path, cap, candidate);
-            return strcmp(path, candidate) == 0 ? 1 : 0;
-        }
-    }
-    return 0;
-}
-
-static int
-amiga_memview_copyBasenameNoExt(char *out, size_t cap, const char *path)
-{
-    const char *slash = NULL;
-    const char *backslash = NULL;
-    const char *base = NULL;
-    const char *dot = NULL;
-    size_t len = 0u;
-
-    if (!out || cap == 0u || !path || !path[0]) {
-        return 0;
-    }
-    slash = strrchr(path, '/');
-    backslash = strrchr(path, '\\');
-    if (slash && backslash) {
-        base = (slash > backslash ? slash : backslash) + 1;
-    } else if (slash) {
-        base = slash + 1;
-    } else if (backslash) {
-        base = backslash + 1;
-    } else {
-        base = path;
-    }
-    if (!base[0]) {
-        return 0;
-    }
-    dot = strrchr(base, '.');
-    if (dot) {
-        len = (size_t)(dot - base);
-    } else {
-        len = strlen(base);
-    }
-    if (len == 0u || len >= cap) {
-        return 0;
-    }
-    memcpy(out, base, len);
-    out[len] = '\0';
-    return 1;
-}
-
-static int
-amiga_memview_buildCollisionMessage(char *out, size_t cap, const char *path)
-{
-    char basename[PATH_MAX];
-
-    if (!out || cap == 0u || !path || !path[0]) {
-        return 0;
-    }
-    if (!amiga_memview_copyBasenameNoExt(basename, sizeof(basename), path)) {
-        return 0;
-    }
-    strutil_join2Trunc(out, cap, basename, " already exists");
-    return strlen(out) == strlen(basename) + strlen(" already exists") ? 1 : 0;
-}
-
-static int
-amiga_memview_buildSequenceButtonLabel(char *out, size_t cap, const char *path)
-{
-    char candidate[PATH_MAX];
-    char basename[PATH_MAX];
-
-    if (!out || cap == 0u || !path || !path[0]) {
-        return 0;
-    }
-    out[0] = '\0';
-    for (unsigned index = 1u; index < 1000000u; ++index) {
-        if (!amiga_memview_buildIncrementedPath(candidate, sizeof(candidate), path, index)) {
-            return 0;
-        }
-        if (!settings_pathExistsFile(candidate)) {
-            if (!amiga_memview_copyBasenameNoExt(basename, sizeof(basename), candidate)) {
-                return 0;
-            }
-            strutil_join2Trunc(out, cap, "Save as ", basename);
-            return strlen(out) == strlen("Save as ") + strlen(basename) ? 1 : 0;
-        }
-    }
-    return 0;
-}
-
-static int
-amiga_memview_writeCustomRegsExport(FILE *out)
-{
-    const e9k_debug_ami_custom_reg_state_t *regs = libretro_host_debugAmiGetCustomRegs();
-
-    if (!out) {
-        return 0;
-    }
-
-    if (fputs("=== CUSTOM CHIPSET REGISTERS ===\n", out) < 0) {
-        return 0;
-    }
-    if (!regs) {
-        if (fputs("UNAVAILABLE\n", out) < 0) {
-            return 0;
-        }
-        return 1;
-    }
-
-    for (uint16_t regOffset = 0u; regOffset <= 0x01feu; regOffset += 2u) {
-        const char *regName = amiga_custom_regs_nameForOffset(regOffset);
-        uint16_t regValue = amiga_memview_regValue(regs, regOffset);
-
-        if (!regName || !regName[0]) {
-            regName = "UNKNOWN";
-        }
-        if (fprintf(out, "$DFF%03X %-10s $%04X\n", (unsigned)regOffset, regName, (unsigned)regValue) < 0) {
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-static int
-amiga_memview_writeCustomRegsExportPath(const char *finalPath)
-{
-    char tempPath[PATH_MAX];
-    FILE *out = NULL;
-
-    if (!finalPath || !finalPath[0]) {
-        return 0;
-    }
-    strutil_join2Trunc(tempPath, sizeof(tempPath), finalPath, ".tmp");
-    if (strlen(tempPath) != strlen(finalPath) + 4u) {
-        return 0;
-    }
-    out = fopen(tempPath, "wb");
-    if (!out) {
-        return 0;
-    }
-    if (!amiga_memview_writeCustomRegsExport(out)) {
-        fclose(out);
-        remove(tempPath);
-        return 0;
-    }
-    if (fclose(out) != 0) {
-        remove(tempPath);
-        return 0;
-    }
-    if (!debugger_platform_replaceFile(tempPath, finalPath)) {
-        remove(tempPath);
-        return 0;
-    }
-    return 1;
-}
-
-static int
-amiga_memview_writeExportType(amiga_memview_state_t *ui,
-                              const target_memory_range_t *ranges,
-                              size_t rangeCount,
-                              int ramType,
-                              const char *finalPath)
-{
-    uint8_t buffer[AMIGA_MEMVIEW_EXPORT_CHUNK];
-    char tempPath[PATH_MAX];
-    FILE *out = NULL;
-    int wroteAny = 0;
-
-    if (!ui || !ranges || rangeCount == 0u || !finalPath || !finalPath[0]) {
-        return 0;
-    }
-    strutil_join2Trunc(tempPath, sizeof(tempPath), finalPath, ".tmp");
-    if (strlen(tempPath) != strlen(finalPath) + 4u) {
-        return 0;
-    }
-
-    out = fopen(tempPath, "wb");
-    if (!out) {
-        return 0;
-    }
-
-    for (size_t i = 0; i < rangeCount; ++i) {
-        uint32_t addr = 0u;
-        uint32_t remaining = 0u;
-
-        if (ranges[i].size == 0u || amiga_memview_ramTypeFromBaseAddr(ranges[i].baseAddr) != ramType) {
-            continue;
-        }
-
-        addr = ranges[i].baseAddr;
-        remaining = ranges[i].size;
-        wroteAny = 1;
-        while (remaining > 0u) {
-            size_t chunkSize = remaining < (uint32_t)sizeof(buffer) ? (size_t)remaining : sizeof(buffer);
-
-            if (!amiga_memview_readRange(ui, addr, buffer, chunkSize)) {
-                fclose(out);
-                remove(tempPath);
-                return 0;
-            }
-            if (fwrite(buffer, 1u, chunkSize, out) != chunkSize) {
-                fclose(out);
-                remove(tempPath);
-                return 0;
-            }
-            addr += (uint32_t)chunkSize;
-            remaining -= (uint32_t)chunkSize;
-        }
-    }
-    if (fclose(out) != 0) {
-        remove(tempPath);
-        return 0;
-    }
-    if (!wroteAny) {
-        remove(tempPath);
-        return 1;
-    }
-    if (!debugger_platform_replaceFile(tempPath, finalPath)) {
-        remove(tempPath);
-        return 0;
-    }
-    return 1;
-}
-
-static int
-amiga_memview_finishSavePlan(amiga_memview_save_plan_t *plan, int saveAsSequence)
-{
-    if (!plan || !plan->ui || plan->rangeCount == 0u || plan->exportTypeCount == 0) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return 0;
-    }
-
-    for (int i = 0; i < plan->exportTypeCount; ++i) {
-        int ramType = plan->exportTypes[i];
-
-        if (saveAsSequence &&
-            !amiga_memview_resolveIncrementedPath(plan->exportPaths[ramType], sizeof(plan->exportPaths[ramType]))) {
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return 0;
-        }
-        if (!amiga_memview_writeExportType(plan->ui,
-                                           plan->ranges,
-                                           plan->rangeCount,
-                                           ramType,
-                                           plan->exportPaths[ramType])) {
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return 0;
-        }
-    }
-    if (saveAsSequence &&
-        !amiga_memview_resolveIncrementedPath(plan->customRegsPath, sizeof(plan->customRegsPath))) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return 0;
-    }
-    if (!amiga_memview_writeCustomRegsExportPath(plan->customRegsPath)) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return 0;
-    }
-
-    e9ui_showTransientMessage("RAM SAVED");
-    return 1;
-}
-
-static void
-amiga_memview_requestCloseSaveModal(amiga_memview_save_plan_t *plan)
-{
-    e9ui_component_t *modal = NULL;
-
-    if (!plan || !plan->modal) {
-        if (plan) {
-            alloc_free(plan);
-        }
-        return;
-    }
-    modal = plan->modal;
-    plan->modal = NULL;
-    e9ui_modal_setCloseCallback(modal, NULL, NULL);
-    e9ui_setHidden(modal, 1);
-    if (e9ui && !e9ui->pendingRemove) {
-        e9ui->pendingRemove = modal;
-    }
-    alloc_free(plan);
-}
-
-static void
-amiga_memview_saveModalClosed(e9ui_component_t *modal, void *user)
-{
-    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
-
-    (void)modal;
-    if (plan) {
-        plan->modal = NULL;
-        e9ui_modal_setCloseCallback(modal, NULL, NULL);
-        alloc_free(plan);
-    }
-}
-
-static void
-amiga_memview_saveOverwriteClicked(e9ui_context_t *ctx, void *user)
-{
-    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
-
-    (void)ctx;
-    if (!plan) {
-        return;
-    }
-    amiga_memview_finishSavePlan(plan, 0);
-    amiga_memview_requestCloseSaveModal(plan);
-}
-
-static void
-amiga_memview_saveSequenceClicked(e9ui_context_t *ctx, void *user)
-{
-    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
-
-    (void)ctx;
-    if (!plan) {
-        return;
-    }
-    amiga_memview_finishSavePlan(plan, 1);
-    amiga_memview_requestCloseSaveModal(plan);
-}
-
-static void
-amiga_memview_saveCancelClicked(e9ui_context_t *ctx, void *user)
-{
-    amiga_memview_save_plan_t *plan = (amiga_memview_save_plan_t*)user;
-
-    (void)ctx;
-    if (!plan) {
-        return;
-    }
-    amiga_memview_requestCloseSaveModal(plan);
-}
-
-static e9ui_component_t *
-amiga_memview_makeSaveCollisionModalBody(amiga_memview_save_plan_t *plan)
-{
-    e9ui_component_t *message = e9ui_stack_makeVertical();
-    e9ui_component_t *contentBox = NULL;
-    e9ui_component_t *center = NULL;
-    e9ui_component_t *overwriteButton = NULL;
-    e9ui_component_t *sequenceButton = NULL;
-    e9ui_component_t *cancelButton = NULL;
-    e9ui_component_t *footer = NULL;
-
-    if (!message) {
-        return NULL;
-    }
-    e9ui_stack_addFixed(message,
-                        e9ui_text_make(plan->collisionMessage[0] ?
-                                       plan->collisionMessage :
-                                       "RAM dump files already exist"));
-
-    contentBox = e9ui_box_make(message);
-    e9ui_box_setPadding(contentBox, 16);
-    center = e9ui_center_make(contentBox);
-    e9ui_center_setSize(center, 520, 80);
-
-    overwriteButton = e9ui_button_make("Overwrite", amiga_memview_saveOverwriteClicked, plan);
-    sequenceButton = e9ui_button_make(plan->sequenceButtonLabel[0] ? plan->sequenceButtonLabel : "Save as sequence",
-                                      amiga_memview_saveSequenceClicked,
-                                      plan);
-    cancelButton = e9ui_button_make("Cancel", amiga_memview_saveCancelClicked, plan);
-    footer = e9ui_flow_make();
-    e9ui_flow_setPadding(footer, 0);
-    e9ui_flow_setSpacing(footer, 8);
-    e9ui_flow_setWrap(footer, 0);
-    e9ui_button_setTheme(overwriteButton, e9ui_theme_button_preset_red());
-    e9ui_button_setGlowPulse(overwriteButton, 1);
-    e9ui_flow_add(footer, overwriteButton);
-    e9ui_button_setTheme(sequenceButton, e9ui_theme_button_preset_green());
-    e9ui_button_setGlowPulse(sequenceButton, 1);
-    e9ui_flow_add(footer, sequenceButton);
-    e9ui_flow_add(footer, cancelButton);
-
-    e9ui_component_t *overlay = e9ui_overlay_make(center, footer);
-    e9ui_overlay_setAnchor(overlay, e9ui_anchor_bottom_right);
-    e9ui_overlay_setMargin(overlay, 12);
-    return overlay;
-}
-
-static int
-amiga_memview_showSaveCollisionModal(e9ui_context_t *ctx, amiga_memview_save_plan_t *plan)
-{
-    int modalW = 0;
-    int modalH = 0;
-    int x = 0;
-    int y = 0;
-    e9ui_rect_t rect;
-    e9ui_component_t *body = NULL;
-
-    if (!ctx || !plan) {
-        return 0;
-    }
-    modalW = e9ui_scale_px(ctx, 600);
-    modalH = e9ui_scale_px(ctx, 180);
-    if (modalW < 1) {
-        modalW = 1;
-    }
-    if (modalH < 1) {
-        modalH = 1;
-    }
-    x = (ctx->winW - modalW) / 2;
-    y = (ctx->winH - modalH) / 2;
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 0) {
-        y = 0;
-    }
-    rect = (e9ui_rect_t){ x, y, modalW, modalH };
-    plan->modal = e9ui_modal_show(ctx, "RAM dump files exist", rect, amiga_memview_saveModalClosed, plan);
-    if (!plan->modal) {
-        return 0;
-    }
-    body = amiga_memview_makeSaveCollisionModalBody(plan);
-    if (!body) {
-        amiga_memview_requestCloseSaveModal(plan);
-        return 1;
-    }
-    e9ui_modal_setBodyChild(plan->modal, body, ctx);
-    return 1;
-}
-
-static void
-amiga_memview_onSave(e9ui_context_t *ctx, void *user)
-{
-    amiga_memview_state_t *ui = (amiga_memview_state_t*)user;
-    target_memory_range_t ranges[AMIGA_MEMVIEW_EXPORT_MAX_RANGES];
-    char defaultDir[PATH_MAX];
-    char fileName[PATH_MAX];
-    char regsFileName[PATH_MAX];
-    char configName[PATH_MAX];
-    amiga_memview_save_plan_t *plan = NULL;
-    const char *folder = NULL;
-    const char *configPath = NULL;
-    const char *defaultPath = NULL;
-    size_t rangeCount = 0u;
-    int overwriteCount = 0;
-
-    if (!ctx || !ui) {
-        return;
-    }
-
-    configPath = libretro_host_getRomPath();
-    if (!configPath || !amiga_memview_copyConfigName(configName, sizeof(configName), configPath)) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-    if (!amiga_memview_collectExportRanges(ranges, countof(ranges), &rangeCount) || rangeCount == 0u) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-
-    if (debugger.libretro.saveDir[0] && settings_pathExistsDir(debugger.libretro.saveDir)) {
-        defaultPath = debugger.libretro.saveDir;
-    } else if (configPath && configPath[0]) {
-        defaultPath = configPath;
-    } else if (platform_getCurrentDir(defaultDir, sizeof(defaultDir))) {
-        defaultPath = defaultDir;
-    } else {
-        defaultPath = ".";
-    }
-    folder = platform_selectFolderDialog("Select RAM dump folder", defaultPath);
-    if (!folder || !folder[0]) {
-        return;
-    }
-    if (!settings_pathExistsDir(folder)) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-
-    plan = (amiga_memview_save_plan_t*)alloc_calloc(1, sizeof(*plan));
-    if (!plan) {
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-    plan->ui = ui;
-    plan->rangeCount = rangeCount;
-    memcpy(plan->ranges, ranges, sizeof(ranges[0]) * rangeCount);
-
-    for (int ramType = 0; ramType < amiga_memview_ram_type_count; ++ramType) {
-        int present = 0;
-
-        for (size_t i = 0; i < rangeCount; ++i) {
-            if (ranges[i].size != 0u && amiga_memview_ramTypeFromBaseAddr(ranges[i].baseAddr) == ramType) {
-                present = 1;
-                break;
-            }
-        }
-        if (!present) {
-            continue;
-        }
-        if (!amiga_memview_buildExportFileName(fileName, sizeof(fileName), configName, ramType) ||
-            !debugger_platform_pathJoin(plan->exportPaths[ramType],
-                                        sizeof(plan->exportPaths[ramType]),
-                                        folder,
-                                        fileName)) {
-            alloc_free(plan);
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return;
-        }
-        plan->exportTypes[plan->exportTypeCount++] = ramType;
-        if (settings_pathExistsFile(plan->exportPaths[ramType])) {
-            if (!plan->collisionMessage[0] &&
-                !amiga_memview_buildCollisionMessage(plan->collisionMessage,
-                                                     sizeof(plan->collisionMessage),
-                                                     plan->exportPaths[ramType])) {
-                alloc_free(plan);
-                e9ui_showTransientMessage("RAM SAVE FAILED");
-                return;
-            }
-            if (!plan->sequenceButtonLabel[0] &&
-                !amiga_memview_buildSequenceButtonLabel(plan->sequenceButtonLabel,
-                                                        sizeof(plan->sequenceButtonLabel),
-                                                        plan->exportPaths[ramType])) {
-                alloc_free(plan);
-                e9ui_showTransientMessage("RAM SAVE FAILED");
-                return;
-            }
-            overwriteCount++;
-        }
-    }
-
-    if (plan->exportTypeCount == 0) {
-        alloc_free(plan);
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-
-    if (!amiga_memview_buildCustomRegsFileName(regsFileName, sizeof(regsFileName), configName) ||
-        !debugger_platform_pathJoin(plan->customRegsPath, sizeof(plan->customRegsPath), folder, regsFileName)) {
-        alloc_free(plan);
-        e9ui_showTransientMessage("RAM SAVE FAILED");
-        return;
-    }
-    if (settings_pathExistsFile(plan->customRegsPath)) {
-        if (!plan->collisionMessage[0] &&
-            !amiga_memview_buildCollisionMessage(plan->collisionMessage,
-                                                 sizeof(plan->collisionMessage),
-                                                 plan->customRegsPath)) {
-            alloc_free(plan);
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return;
-        }
-        if (!plan->sequenceButtonLabel[0] &&
-            !amiga_memview_buildSequenceButtonLabel(plan->sequenceButtonLabel,
-                                                    sizeof(plan->sequenceButtonLabel),
-                                                    plan->customRegsPath)) {
-            alloc_free(plan);
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return;
-        }
-        overwriteCount++;
-    }
-
-    if (overwriteCount > 0) {
-        if (!amiga_memview_showSaveCollisionModal(ctx, plan)) {
-            alloc_free(plan);
-            e9ui_showTransientMessage("RAM SAVE FAILED");
-            return;
-        }
-        return;
-    }
-
-    amiga_memview_finishSavePlan(plan, 0);
-    alloc_free(plan);
-}
-
 static void
 amiga_memview_onShowAddressColumnChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user)
 {
@@ -2100,9 +1229,6 @@ amiga_memview_onShowAddressColumnChanged(e9ui_component_t *self, e9ui_context_t 
 
     (void)self;
     (void)ctx;
-    if (!ui) {
-        return;
-    }
     ui->showAddressColumn = selected ? 1 : 0;
     ui->showAddressColumnHasSaved = 1;
     amiga_memview_saveWindowState(ui);
@@ -2115,18 +1241,9 @@ amiga_memview_onShowOverviewColumnChanged(e9ui_component_t *self, e9ui_context_t
 
     (void)self;
     (void)ctx;
-    if (!ui) {
-        return;
-    }
     ui->showOverviewColumn = selected ? 1 : 0;
     ui->showOverviewColumnHasSaved = 1;
     amiga_memview_saveWindowState(ui);
-}
-
-static e9ui_window_backend_t
-amiga_memview_windowBackend(void)
-{
-    return e9ui_window_backend_overlay;
 }
 
 static e9ui_rect_t
@@ -2139,15 +1256,6 @@ amiga_memview_windowDefaultRect(const e9ui_context_t *ctx)
         e9ui_scale_px(ctx, 720)
     };
     return rect;
-}
-
-static int
-amiga_memview_canvasPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
 }
 
 static int
@@ -2430,7 +1538,7 @@ amiga_memview_canvasVisibleRows(const amiga_memview_state_t *ui, const e9ui_rect
     int rowPx = 1;
     int visibleRows = 1;
 
-    if (!ui || !bounds) {
+    if (!bounds) {
         return 1;
     }
 
@@ -2492,7 +1600,7 @@ amiga_memview_hscrollBounds(const amiga_memview_state_t *ui, e9ui_component_t *s
     int leftGutter = 0;
     TTF_Font *font = NULL;
 
-    if (!ui || !self) {
+    if (!self) {
         return bounds;
     }
     rightGutter = amiga_memview_stepButtonsGutterWidth(&ui->ctx, self);
@@ -2523,7 +1631,7 @@ amiga_memview_clampBaseForView(const amiga_memview_state_t *ui, const e9ui_rect_
     uint64_t span = 0u;
     uint32_t maxBase = 0u;
 
-    if (!ui || !bounds) {
+    if (!bounds) {
         return baseAddr & 0x00ffffffu;
     }
     if (!amiga_memview_getAddressLimits(&minAddr, &maxAddr)) {
@@ -2558,9 +1666,6 @@ amiga_memview_findOverviewRangeForAddr(const amiga_memview_state_t *ui, uint32_t
     uint32_t start = 0u;
     uint32_t end = 0u;
 
-    if (!ui) {
-        return -1;
-    }
     addr &= 0x00ffffffu;
     for (int i = 0; i < AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES; ++i) {
         if (ui->overviewRanges[i].sizeBytes == 0u) {
@@ -2587,7 +1692,7 @@ amiga_memview_clampBaseForRangeView(const amiga_memview_state_t *ui,
     uint64_t span = 0u;
     uint32_t maxBase = 0u;
 
-    if (!ui || !bounds || !range || range->sizeBytes == 0u) {
+    if (!bounds || !range || range->sizeBytes == 0u) {
         return baseAddr & 0x00ffffffu;
     }
 
@@ -2619,7 +1724,7 @@ amiga_memview_scrollRows(amiga_memview_state_t *ui, const e9ui_rect_t *bounds, i
     uint32_t clamped = 0u;
     int currentRange = -1;
 
-    if (!ui || !bounds || rows == 0) {
+    if (!bounds || rows == 0) {
         return;
     }
     delta = (int64_t)rows * (int64_t)amiga_memview_clampRowBytes(ui->rowBytes);
@@ -2716,7 +1821,7 @@ amiga_memview_stepButtonsOnAction(void *user, e9ui_step_buttons_action_t action)
 }
 
 static void
-amiga_memview_canvasLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
+amiga_memview_boundsLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
     (void)ctx;
     if (!self) {
@@ -2774,9 +1879,6 @@ amiga_memview_presentRamTypeMask(const amiga_memview_state_t *ui)
 {
     uint32_t mask = 0u;
 
-    if (!ui) {
-        return 0u;
-    }
     for (int i = 0; i < AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES; ++i) {
         const amiga_memview_overview_range_t *range = &ui->overviewRanges[i];
         int ramType = 0;
@@ -2817,7 +1919,7 @@ amiga_memview_legendMeasureWidth(const amiga_memview_state_t *ui, e9ui_context_t
     int gap = 0;
     int itemGap = 0;
 
-    if (!ui || !ctx) {
+    if (!ctx) {
         return 0;
     }
     font = e9ui->theme.text.source ? e9ui->theme.text.source : ctx->font;
@@ -2877,16 +1979,6 @@ amiga_memview_legendPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx,
 }
 
 static void
-amiga_memview_legendLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
-{
-    (void)ctx;
-    if (!self) {
-        return;
-    }
-    self->bounds = bounds;
-}
-
-static void
 amiga_memview_legendRender(e9ui_component_t *self, e9ui_context_t *ctx)
 {
     amiga_memview_legend_state_t *state = NULL;
@@ -2905,9 +1997,6 @@ amiga_memview_legendRender(e9ui_component_t *self, e9ui_context_t *ctx)
     }
     state = (amiga_memview_legend_state_t*)self->state;
     ui = state ? state->ui : NULL;
-    if (!ui) {
-        return;
-    }
     font = e9ui->theme.text.source ? e9ui->theme.text.source : ctx->font;
     presentMask = amiga_memview_presentRamTypeMask(ui);
     if (presentMask == 0u) {
@@ -2978,7 +2067,7 @@ amiga_memview_makeLegend(amiga_memview_state_t *ui)
     e9ui_component_t *comp = NULL;
     amiga_memview_legend_state_t *state = NULL;
 
-    if (!ui || amiga_memview_presentRamTypeMask(ui) == 0u) {
+    if (amiga_memview_presentRamTypeMask(ui) == 0u) {
         return NULL;
     }
     comp = (e9ui_component_t*)alloc_calloc(1, sizeof(*comp));
@@ -2992,7 +2081,7 @@ amiga_memview_makeLegend(amiga_memview_state_t *ui)
     comp->name = "amiga_memview_legend";
     comp->state = state;
     comp->preferredHeight = amiga_memview_legendPreferredHeight;
-    comp->layout = amiga_memview_legendLayout;
+    comp->layout = amiga_memview_boundsLayout;
     comp->render = amiga_memview_legendRender;
     comp->dtor = amiga_memview_legendDtor;
     return comp;
@@ -3003,22 +2092,20 @@ amiga_memview_addressLabelColor(const amiga_memview_state_t *ui, uint32_t addr)
 {
     uint32_t maskedAddr = addr & 0x00ffffffu;
 
-    if (ui) {
-        for (int i = 0; i < AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES; ++i) {
-            const amiga_memview_overview_range_t *range = &ui->overviewRanges[i];
-            uint32_t start = 0u;
-            uint32_t end = 0u;
+    for (int i = 0; i < AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES; ++i) {
+        const amiga_memview_overview_range_t *range = &ui->overviewRanges[i];
+        uint32_t start = 0u;
+        uint32_t end = 0u;
 
-            if (range->sizeBytes == 0u) {
-                continue;
-            }
-            start = range->baseAddr & 0x00ffffffu;
-            end = start + range->sizeBytes;
-            if (maskedAddr < start || maskedAddr >= end) {
-                continue;
-            }
-            return amiga_memview_rangeColor(start);
+        if (range->sizeBytes == 0u) {
+            continue;
         }
+        start = range->baseAddr & 0x00ffffffu;
+        end = start + range->sizeBytes;
+        if (maskedAddr < start || maskedAddr >= end) {
+            continue;
+        }
+        return amiga_memview_rangeColor(start);
     }
 
     return (SDL_Color){ 166, 176, 192, 255 };
@@ -3137,10 +2224,6 @@ amiga_memview_initDefaultOverviewRanges(amiga_memview_state_t *ui)
     size_t targetCount = 0u;
     int write = 0;
 
-    if (!ui) {
-        return;
-    }
-
     memset(ui->overviewRanges, 0, sizeof(ui->overviewRanges));
     memset(targetRanges, 0, sizeof(targetRanges));
 
@@ -3175,9 +2258,6 @@ amiga_memview_overviewRangeCount(const amiga_memview_state_t *ui)
 {
     int count = 0;
 
-    if (!ui) {
-        return 0;
-    }
     for (int i = 0; i < AMIGA_MEMVIEW_OVERVIEW_MAX_RANGES; ++i) {
         if (ui->overviewRanges[i].sizeBytes != 0u) {
             count++;
@@ -3192,9 +2272,6 @@ amiga_memview_leftGutterPx(const amiga_memview_state_t *ui, const e9ui_context_t
     int left = 0;
     int haveSection = 0;
 
-    if (!ui) {
-        return 0;
-    }
     if (ui->showAddressColumn) {
         left += amiga_memview_measureAddressGutterPx(ctx, font);
         haveSection = 1;
@@ -3214,7 +2291,7 @@ amiga_memview_overviewBounds(const amiga_memview_state_t *ui, e9ui_component_t *
     e9ui_rect_t bounds = {0, 0, 0, 0};
     int x = 0;
 
-    if (!ui || !self || !ctx || !ui->showOverviewColumn || amiga_memview_overviewRangeCount(ui) <= 0) {
+    if (!self || !ctx || !ui->showOverviewColumn || amiga_memview_overviewRangeCount(ui) <= 0) {
         return bounds;
     }
 
@@ -3293,7 +2370,7 @@ amiga_memview_overviewBytesPerCell(const amiga_memview_overview_range_t *range)
     uint32_t cellCount = AMIGA_MEMVIEW_OVERVIEW_TEXTURE_W * AMIGA_MEMVIEW_OVERVIEW_RANGE_TEXTURE_H;
     uint32_t bytesPerCell = 2u;
 
-    if (!range || range->sizeBytes == 0u || cellCount == 0u) {
+    if (!range || range->sizeBytes == 0u) {
         return 2u;
     }
     bytesPerCell = (range->sizeBytes + cellCount - 1u) / cellCount;
@@ -3313,7 +2390,7 @@ amiga_memview_rebuildOverviewTexture(amiga_memview_state_t *ui, e9ui_context_t *
     size_t pixelCount = 0u;
     int activeRange = 0;
 
-    if (!ui || !ctx || !ctx->renderer) {
+    if (!ctx || !ctx->renderer) {
         return 0;
     }
 
@@ -3351,7 +2428,7 @@ amiga_memview_rebuildOverviewTexture(amiga_memview_state_t *ui, e9ui_context_t *
             return 0;
         }
         memset(ui->readBuffer, 0, rangeSize);
-        (void)amiga_memview_readRange(ui, range->baseAddr, ui->readBuffer, rangeSize);
+        (void)amiga_memview_readRange(range->baseAddr, ui->readBuffer, rangeSize);
 
         for (int y = 0; y < AMIGA_MEMVIEW_OVERVIEW_RANGE_TEXTURE_H; ++y) {
             for (int x = 0; x < AMIGA_MEMVIEW_OVERVIEW_TEXTURE_W; ++x) {
@@ -3387,7 +2464,7 @@ amiga_memview_renderOverviewSelection(amiga_memview_state_t *ui, e9ui_context_t 
     uint64_t viewEnd = 0u;
     int activeRange = 0;
 
-    if (!ui || !ctx || !ctx->renderer || !overviewBounds || overviewBounds->w <= 0 || overviewBounds->h <= 0) {
+    if (!ctx || !ctx->renderer || !overviewBounds || overviewBounds->w <= 0 || overviewBounds->h <= 0) {
         return;
     }
     contentBounds = amiga_memview_overviewContentBounds(ctx, overviewBounds);
@@ -3493,7 +2570,7 @@ amiga_memview_overviewNavigate(amiga_memview_state_t *ui, e9ui_component_t *self
     int texY = 0;
     int activeRange = 0;
 
-    if (!ui || !self || !ctx) {
+    if (!self || !ctx) {
         return 0;
     }
 
@@ -3605,10 +2682,7 @@ amiga_memview_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
         return;
     }
     ui = (amiga_memview_state_t*)self->state;
-    if (!ui) {
-        return;
-    }
-    (void)libretro_host_debugAmiGetBlitterDebug(&blitterVisEnabled);
+    (void)libretro_host_amiga_getBlitterDebug(&blitterVisEnabled);
 
     hadClip = SDL_RenderIsClipEnabled(ctx->renderer) ? 1 : 0;
     if (hadClip) {
@@ -3841,8 +2915,7 @@ amiga_memview_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
     }
 
     firstVisibleAddr = (uint64_t)ui->baseAddr;
-    (void)amiga_memview_readRange(ui,
-                                  (uint32_t)(firstVisibleAddr & 0x00ffffffu),
+    (void)amiga_memview_readRange((uint32_t)(firstVisibleAddr & 0x00ffffffu),
                                   ui->readBuffer,
                                   readBytes);
 
@@ -3878,70 +2951,32 @@ amiga_memview_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
                 goto cleanup;
             }
             amiga_memview_zeroBlitTagBuffer(ui, tagWordCount);
-            libretro_host_debugAmiReadBlitterVisWordTags(tagBaseAddr, ui->blitTagBuffer, tagWordCount);
+            libretro_host_amiga_readBlitterVisWordTags(tagBaseAddr, ui->blitTagBuffer, tagWordCount);
         }
 
         for (size_t visibleRow = 0u; visibleRow < visibleRowCount; ++visibleRow) {
             uint8_t *rowData = ui->readBuffer + visibleRow * (size_t)rowBytes;
             int dstRow0 = (int)visibleRow * rowPx;
 
-            if (!blitterVisEnabled) {
-                for (int byteIndex = firstByte; byteIndex <= lastByte; ++byteIndex) {
-                    uint8_t value = rowData[byteIndex];
-                    int byteBitStart = byteIndex * 8;
-                    int localBitStart = byteBitStart - firstBit;
-
-                    if (value == 0u || localBitStart >= visibleBitCount || (localBitStart + 8) <= 0) {
-                        continue;
-                    }
-
-                    for (int bitIndex = 0; bitIndex < 8; ++bitIndex) {
-                        int localBit = localBitStart + bitIndex;
-                        int dstX = 0;
-                        size_t pixelIndex0 = 0u;
-
-                        if (localBit < 0 || localBit >= visibleBitCount) {
-                            continue;
-                        }
-                        if ((value & (uint8_t)(0x80u >> bitIndex)) == 0u) {
-                            continue;
-                        }
-
-                        dstX = localBit * bitPx;
-                        for (int fillY = 0; fillY < rowPx; ++fillY) {
-                            int dstRow = dstRow0 + fillY;
-                            if (dstRow >= texH) {
-                                break;
-                            }
-                            pixelIndex0 = (size_t)dstRow * (size_t)texW + (size_t)dstX;
-                            for (int fillX = 0; fillX < bitPx; ++fillX) {
-                                ui->bitPixels[pixelIndex0 + (size_t)fillX] = litColor;
-                            }
-                        }
-                    }
-                }
-                continue;
-            }
-
             for (int byteIndex = firstByte; byteIndex <= lastByte; ++byteIndex) {
                 uint8_t value = rowData[byteIndex];
                 int byteBitStart = byteIndex * 8;
                 int localBitStart = byteBitStart - firstBit;
-                size_t absoluteByteIndex = visibleRow * (size_t)rowBytes + (size_t)byteIndex;
                 uint32_t tagBlitId = 0u;
                 uint32_t bitColor = litColor;
 
                 if (value == 0u || localBitStart >= visibleBitCount || (localBitStart + 8) <= 0) {
                     continue;
                 }
-                if (tagWordCount > 0u) {
+                if (blitterVisEnabled && tagWordCount > 0u) {
+                    size_t absoluteByteIndex = visibleRow * (size_t)rowBytes + (size_t)byteIndex;
                     size_t tagIndex = (tagWordBaseOffset + absoluteByteIndex) / 2u;
                     if (tagIndex < tagWordCount) {
                         tagBlitId = ui->blitTagBuffer[tagIndex];
                     }
                 }
                 if (tagBlitId != 0u) {
-                    bitColor = 0xff000000u | (emu_ami_getBlitterVisColor(tagBlitId) & 0x00ffffffu);
+                    bitColor = 0xff000000u | (amiga_blittervis_getColor(tagBlitId) & 0x00ffffffu);
                 }
 
                 for (int bitIndex = 0; bitIndex < 8; ++bitIndex) {
@@ -4046,9 +3081,6 @@ amiga_memview_canvasHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, con
         return 0;
     }
     ui = (amiga_memview_state_t*)self->state;
-    if (!ui) {
-        return 0;
-    }
 
     actionCtx.ui = ui;
     actionCtx.canvas = self;
@@ -4133,43 +3165,42 @@ amiga_memview_canvasHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, con
     }
 
     if (ev->type == SDL_KEYDOWN && ctx && e9ui_getFocus(ctx) == self) {
-        if (ev->key.keysym.sym == SDLK_PAGEUP) {
+        int scrollDelta = 0;
+
+        switch (ev->key.keysym.sym) {
+        case SDLK_PAGEUP:
             amiga_memview_scrollRows(ui, &self->bounds, -amiga_memview_canvasVisibleRows(ui, &self->bounds));
             return 1;
-        }
-        if (ev->key.keysym.sym == SDLK_PAGEDOWN) {
+        case SDLK_PAGEDOWN:
             amiga_memview_scrollRows(ui, &self->bounds, amiga_memview_canvasVisibleRows(ui, &self->bounds));
             return 1;
-        }
-        if (ev->key.keysym.sym == SDLK_UP) {
+        case SDLK_UP:
             amiga_memview_scrollRows(ui, &self->bounds, -1);
             return 1;
-        }
-        if (ev->key.keysym.sym == SDLK_DOWN) {
+        case SDLK_DOWN:
             amiga_memview_scrollRows(ui, &self->bounds, 1);
             return 1;
-        }
-        if (ev->key.keysym.sym == SDLK_LEFT) {
+        case SDLK_LEFT:
             if ((ev->key.keysym.mod & KMOD_SHIFT) != 0) {
                 return amiga_memview_handleWidthKey(ui, ev->key.keysym.sym, ev->key.keysym.mod);
             }
+            scrollDelta = -e9ui_scale_px(ctx, 24);
+            break;
+        case SDLK_RIGHT:
+            if ((ev->key.keysym.mod & KMOD_SHIFT) != 0) {
+                return amiga_memview_handleWidthKey(ui, ev->key.keysym.sym, ev->key.keysym.mod);
+            }
+            scrollDelta = e9ui_scale_px(ctx, 24);
+            break;
+        default:
+            break;
+        }
+        if (scrollDelta != 0) {
             hscrollBounds = amiga_memview_hscrollBounds(ui, self);
             if (hscrollBounds.w < 1) {
                 hscrollBounds.w = 1;
             }
-            ui->scrollX -= e9ui_scale_px(ctx, 24);
-            e9ui_scrollbar_clamp(hscrollBounds.w, 1, ui->contentPixelWidth, 1, &ui->scrollX, &scrollY);
-            return 1;
-        }
-        if (ev->key.keysym.sym == SDLK_RIGHT) {
-            if ((ev->key.keysym.mod & KMOD_SHIFT) != 0) {
-                return amiga_memview_handleWidthKey(ui, ev->key.keysym.sym, ev->key.keysym.mod);
-            }
-            hscrollBounds = amiga_memview_hscrollBounds(ui, self);
-            if (hscrollBounds.w < 1) {
-                hscrollBounds.w = 1;
-            }
-            ui->scrollX += e9ui_scale_px(ctx, 24);
+            ui->scrollX += scrollDelta;
             e9ui_scrollbar_clamp(hscrollBounds.w, 1, ui->contentPixelWidth, 1, &ui->scrollX, &scrollY);
             return 1;
         }
@@ -4183,17 +3214,13 @@ amiga_memview_makeCanvas(amiga_memview_state_t *ui)
 {
     e9ui_component_t *canvas = NULL;
 
-    if (!ui) {
-        return NULL;
-    }
     canvas = (e9ui_component_t*)alloc_calloc(1, sizeof(*canvas));
     if (!canvas) {
         return NULL;
     }
     canvas->name = "amiga_memview_canvas";
     canvas->state = ui;
-    canvas->preferredHeight = amiga_memview_canvasPreferredHeight;
-    canvas->layout = amiga_memview_canvasLayout;
+    canvas->layout = amiga_memview_boundsLayout;
     canvas->render = amiga_memview_canvasRender;
     canvas->handleEvent = amiga_memview_canvasHandleEvent;
     canvas->dtor = amiga_memview_canvasDtor;
@@ -4204,9 +3231,6 @@ amiga_memview_makeCanvas(amiga_memview_state_t *ui)
 static void
 amiga_memview_clearUiRefs(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     ui->canvas = NULL;
     ui->autoButton = NULL;
     ui->addressBox = NULL;
@@ -4294,14 +3318,10 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     int groupWidthW = 0;
     int groupZoomW = 0;
 
-    if (!ui) {
-        return NULL;
-    }
-
     root = e9ui_stack_makeVertical();
     toolbar = amiga_memview_makeToolbarWrap();
-    ui->addressBox = e9ui_textbox_make(32, amiga_memview_onAddressSubmit, NULL, ui);
-    ui->widthBox = e9ui_textbox_make(16, amiga_memview_onWidthSubmit, NULL, ui);
+    ui->addressBox = e9ui_textbox_make(32, amiga_memview_onTextboxSubmit, NULL, ui);
+    ui->widthBox = e9ui_textbox_make(16, amiga_memview_onTextboxSubmit, NULL, ui);
     ui->widthSeek = e9ui_seek_bar_make();
     ui->zoomSeek = e9ui_seek_bar_make();
     ui->canvas = amiga_memview_makeCanvas(ui);
@@ -4311,7 +3331,7 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     zoomLabel = e9ui_text_make("Zoom");
     legend = amiga_memview_makeLegend(ui);
     autoButton = e9ui_button_make("Auto", amiga_memview_onAuto, ui);
-    saveButton = e9ui_button_make("Save", amiga_memview_onSave, ui);
+    saveButton = e9ui_button_make("Save", amiga_memsave_onSave, ui);
     ui->autoButton = autoButton;
     showAddress = e9ui_checkbox_make("Addr", ui->showAddressColumn, amiga_memview_onShowAddressColumnChanged, ui);
     showOverview = e9ui_checkbox_make("Overview", ui->showOverviewColumn, amiga_memview_onShowOverviewColumnChanged, ui);
@@ -4415,15 +3435,6 @@ amiga_memview_buildRoot(amiga_memview_state_t *ui)
     return root;
 }
 
-static int
-amiga_memview_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 amiga_memview_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -4437,13 +3448,8 @@ amiga_memview_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9u
     self->bounds = bounds;
     state = (amiga_memview_overlay_body_state_t*)self->state;
     ui = state ? state->ui : NULL;
-    if (!ui) {
-        return;
-    }
 
     ui->ctx = *ctx;
-    ui->ctx.window = ctx->window;
-    ui->ctx.renderer = ctx->renderer;
     ui->ctx.font = e9ui->ctx.font;
     ui->ctx.winW = bounds.w;
     ui->ctx.winH = bounds.h;
@@ -4467,20 +3473,14 @@ amiga_memview_overlayBodyRender(e9ui_component_t *self, e9ui_context_t *ctx)
 
     state = (amiga_memview_overlay_body_state_t*)self->state;
     ui = state ? state->ui : NULL;
-    if (!ui || !ui->windowState.open) {
+    if (!ui->windowState.open) {
         return;
     }
 
     ui->ctx = *ctx;
-    ui->ctx.window = ctx->window;
-    ui->ctx.renderer = ctx->renderer;
     ui->ctx.font = e9ui->ctx.font;
     ui->ctx.winW = self->bounds.w;
     ui->ctx.winH = self->bounds.h;
-    ui->ctx.mouseX = ctx->mouseX;
-    ui->ctx.mouseY = ctx->mouseY;
-    ui->ctx.mousePrevX = ctx->mousePrevX;
-    ui->ctx.mousePrevY = ctx->mousePrevY;
     ui->ctx.focusRoot = ui->root;
     ui->ctx.focusFullscreen = NULL;
 
@@ -4506,7 +3506,7 @@ amiga_memview_makeOverlayBodyHost(amiga_memview_state_t *ui)
     e9ui_component_t *host = NULL;
     amiga_memview_overlay_body_state_t *state = NULL;
 
-    if (!ui || !ui->root) {
+    if (!ui->root) {
         return NULL;
     }
 
@@ -4521,7 +3521,6 @@ amiga_memview_makeOverlayBodyHost(amiga_memview_state_t *ui)
     state->ui = ui;
     host->name = "amiga_memview_overlay_body";
     host->state = state;
-    host->preferredHeight = amiga_memview_overlayBodyPreferredHeight;
     host->layout = amiga_memview_overlayBodyLayout;
     host->render = amiga_memview_overlayBodyRender;
     host->dtor = amiga_memview_overlayBodyDtor;
@@ -4540,9 +3539,6 @@ amiga_memview_overlayWindowCloseRequested(e9ui_window_t *window, void *user)
 static void
 amiga_memview_resetRuntimeState(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
     ui->readBuffer = NULL;
     ui->readBufferCap = 0u;
     ui->blitTagBuffer = NULL;
@@ -4591,10 +3587,6 @@ amiga_memview_resetRuntimeState(amiga_memview_state_t *ui)
 static void
 amiga_memview_releaseRuntimeState(amiga_memview_state_t *ui)
 {
-    if (!ui) {
-        return;
-    }
-
     alloc_free(ui->readBuffer);
     ui->readBuffer = NULL;
     ui->readBufferCap = 0u;
@@ -4629,7 +3621,7 @@ amiga_memview_init(void)
     ui->ctx = e9ui->ctx;
     amiga_memview_initDefaultOverviewRanges(ui);
 
-    ui->windowState.windowHost = e9ui_windowCreate(amiga_memview_windowBackend());
+    ui->windowState.windowHost = e9ui_windowCreate(e9ui_window_backend_overlay);
     if (!ui->windowState.windowHost) {
         return 0;
     }

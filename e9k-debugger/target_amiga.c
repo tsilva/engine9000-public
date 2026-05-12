@@ -1085,7 +1085,7 @@ static void
 target_amiga_onCoreStarted(void)
 {
     if (ui_test_isEnabled()) {
-        (void)libretro_host_setDeterministic(1);
+        (void)libretro_host_amiga_setDeterministic(1);
     }
 }
 
@@ -1127,23 +1127,23 @@ target_amiga_applyCoreOptions(void)
 static void
 target_amiga_validateAPI(void)
 {
-  libretro_host_unbindMegaDebugApis();
-  libretro_host_unbindNeogeoDebugApis();
-  if (!libretro_host_setDebugBaseCallback(debugger_onSetDebugBaseFromCore)) {
+  libretro_host_megadrive_unbindApis();
+  libretro_host_neogeo_unbindApis();
+  if (!libretro_host_amiga_setDebugBaseCallback(debugger_onSetDebugBaseFromCore)) {
     debug_error("debug_base: core does not expose e9k_debug_set_debug_base_callback");
   }
-  if (!libretro_host_setDebugBaseStackCallback(debugger_onPushDebugBaseFromCore)) {
+  if (!libretro_host_amiga_setDebugBaseStackCallback(debugger_onPushDebugBaseFromCore)) {
     debug_error("debug_base_stack: core does not expose e9k_debug_set_debug_base_stack_callback");
   }
-  if (!libretro_host_setDebugBreakpointCallback(debugger_onAddBreakpointFromCore)) {
+  if (!libretro_host_amiga_setDebugBreakpointCallback(debugger_onAddBreakpointFromCore)) {
     debug_error("breakpoint: core does not expose e9k_debug_set_debug_breakpoint_callback");
   }
   int *debugDma = NULL;
-  if (libretro_host_debugGetAmigaDebugDmaAddr(&debugDma)) {
+  if (libretro_host_amiga_getDmaAddr(&debugDma)) {
     debugger.amigaDebug.debugDma = debugDma;
   }
   int *debugCopper = NULL;
-  if (libretro_host_debugGetAmigaDebugCopperAddr(&debugCopper)) {
+  if (libretro_host_amiga_getCopperAddr(&debugCopper)) {
     debugger.amigaDebug.debugCopper = debugCopper;
   }
 }
@@ -1252,7 +1252,7 @@ target_amiga_settingsFloppyChanged(e9ui_context_t *ctx, e9ui_component_t *comp, 
     const char *path = text ? text : "";
     amiga_uaeSetFloppyPath(drive, path);
     if (target == target_amiga() && libretro_host_isRunning()) {
-        if (libretro_host_debugAmiSetFloppyPath(drive, path)) {
+        if (libretro_host_amiga_setFloppyPath(drive, path)) {
             amiga_uaeClearFloppyDirty(drive);
         }
     }

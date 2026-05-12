@@ -1462,7 +1462,7 @@ amiga_custom_ui_dma_enableDebugForCopperStats(amiga_custom_ui_state_t *ui)
         return;
     }
     int *debugDma = NULL;
-    if (!libretro_host_debugGetAmigaDebugDmaAddr(&debugDma) || !debugDma) {
+    if (!libretro_host_amiga_getDmaAddr(&debugDma) || !debugDma) {
         return;
     }
     if (*debugDma == 0) {
@@ -1480,7 +1480,7 @@ amiga_custom_ui_dma_restoreDebugForCopperStats(amiga_custom_ui_state_t *ui)
         return;
     }
     int *debugDma = NULL;
-    if (libretro_host_debugGetAmigaDebugDmaAddr(&debugDma) && debugDma) {
+    if (libretro_host_amiga_getDmaAddr(&debugDma) && debugDma) {
         if (*debugDma == (int)E9K_DEBUG_AMI_DMA_DEBUG_MODE_COLLECT_ONLY) {
             *debugDma = ui->dmaDebugAutoPrevValue;
         }
@@ -1499,7 +1499,7 @@ amiga_custom_ui_dma_updateCopperStatsChart(amiga_custom_ui_state_t *ui)
     const e9k_debug_ami_dma_debug_frame_view_t *probedFrame = NULL;
     int haveProbe = 0;
     if (ui->dmaStatsEnabled) {
-        probedFrame = libretro_host_debugAmiGetDmaDebugFrameView(
+        probedFrame = libretro_host_amiga_getDmaDebugFrameView(
             E9K_DEBUG_AMI_DMA_DEBUG_FRAME_LATEST_COMPLETE);
         if (probedFrame &&
             probedFrame->records &&
@@ -1547,11 +1547,11 @@ amiga_custom_ui_dma_updateCopperStatsChart(amiga_custom_ui_state_t *ui)
     uint32_t dmaSlotsAvailableFrame = 0u;
     if (ui->dmaStatsEnabled) {
         int *debugDma = NULL;
-        libretro_host_debugGetAmigaDebugDmaAddr(&debugDma);
+        libretro_host_amiga_getDmaAddr(&debugDma);
         uint32_t dmaFrameSelect = E9K_DEBUG_AMI_DMA_DEBUG_FRAME_LATEST_COMPLETE;
         const e9k_debug_ami_dma_debug_frame_view_t *dmaFrame = probedFrame;
         if (!haveProbe) {
-            dmaFrame = libretro_host_debugAmiGetDmaDebugFrameView(dmaFrameSelect);
+            dmaFrame = libretro_host_amiga_getDmaDebugFrameView(dmaFrameSelect);
         }
         if (dmaFrame && dmaFrame->records && dmaFrame->info.recordCount > 0u) {
             size_t readTotal = dmaFrame->info.recordCount;
@@ -1565,7 +1565,7 @@ amiga_custom_ui_dma_updateCopperStatsChart(amiga_custom_ui_state_t *ui)
             int xLimit = stride;
             int yLimit = (int)rowCount - 1;
             int videoLineCount = 0;
-            if (libretro_host_debugAmiGetVideoLineCount(&videoLineCount) && videoLineCount > 0) {
+            if (libretro_host_amiga_getVideoLineCount(&videoLineCount) && videoLineCount > 0) {
                 int debugDmaMode = (debugDma && *debugDma > 0) ? *debugDma : 0;
                 int visibleMax = videoLineCount - 1;
                 if (debugDmaMode == (int)E9K_DEBUG_AMI_DMA_DEBUG_MODE_COLLECT_ONLY ||
@@ -1683,7 +1683,7 @@ amiga_custom_ui_dma_updateCopperStatsChart(amiga_custom_ui_state_t *ui)
             }
             if (!hasCopperStats &&
                 readInfo.hposCount > 0 &&
-                libretro_host_debugAmiGetVideoLineCount(&videoLineCount) &&
+                libretro_host_amiga_getVideoLineCount(&videoLineCount) &&
                 videoLineCount > 0) {
                         uint64_t max64 = (uint64_t)(uint32_t)videoLineCount *
                                          (uint64_t)((uint32_t)readInfo.hposCount / 2u);

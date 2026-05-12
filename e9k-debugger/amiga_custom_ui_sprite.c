@@ -31,7 +31,7 @@ void
 amiga_custom_ui_sprite_applyVisOption(void)
 {
     amiga_custom_ui_state_t *ui = &amiga_custom_ui_state;
-    (void)libretro_host_debugAmiSetSpriteVis(ui->spriteVisEnabled ? 1 : 0);
+    (void)libretro_host_amiga_setSpriteVis(ui->spriteVisEnabled ? 1 : 0);
 }
 
 
@@ -57,7 +57,7 @@ amiga_custom_ui_sprite_syncVisCheckbox(amiga_custom_ui_state_t *ui)
         return;
     }
     int enabled = 0;
-    if (!libretro_host_debugAmiGetSpriteVis(&enabled)) {
+    if (!libretro_host_amiga_getSpriteVis(&enabled)) {
         return;
     }
     ui->spriteVisEnabled = enabled ? 1 : 0;

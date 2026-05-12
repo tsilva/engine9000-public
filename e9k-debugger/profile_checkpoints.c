@@ -654,7 +654,7 @@ profile_checkpoints_renderScanlineOverlay(e9ui_context_t *ctx, const SDL_Rect *d
     int cropT = 8;
     int cropB = 8;
     e9k_debug_sprite_state_t spriteState;
-    if (libretro_host_debugGetSpriteState(&spriteState)) {
+    if (libretro_host_neogeo_getSpriteState(&spriteState)) {
         cropT = spriteState.crop_t;
         cropB = spriteState.crop_b;
     }

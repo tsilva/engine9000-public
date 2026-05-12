@@ -140,15 +140,6 @@ e9ui_modal_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bound
     }
 }
 
-static int
-e9ui_modal_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 e9ui_modal_drawTitlebar(e9ui_component_t *self, e9ui_modal_state_t *st, e9ui_context_t *ctx, SDL_Rect rect)
 {
@@ -282,7 +273,6 @@ e9ui_modal_make(const char *title, e9ui_rect_t rect, e9ui_modal_close_cb_t onClo
     st->body = e9ui_box_make(NULL);
     c->name = "e9ui_modal";
     c->state = st;
-    c->preferredHeight = e9ui_modal_preferredHeight;
     c->layout = e9ui_modal_layout;
     c->render = e9ui_modal_render;
     c->handleEvent = e9ui_modal_handleEvent;

@@ -1019,7 +1019,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     if (st->vram_words <= (NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET + NG_MAX_SPRITES)) {
         return;
     }
-    if (libretro_host_debugGetFixRom(&fixrom)) {
+    if (libretro_host_neogeo_getFixRom(&fixrom)) {
         fixromData = fixrom.data;
         fixromSize = fixrom.size;
     }

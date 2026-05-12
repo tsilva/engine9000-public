@@ -56,6 +56,12 @@ print_eval_makeProcessorAddressValue(print_type_t *type, uint32_t processorId, u
 static print_value_t
 print_eval_makeImmediateValue(print_type_t *type, uint64_t immediate);
 
+static void
+print_eval_setAddressValue(print_value_t *out, print_type_t *type, uint32_t addr, int typeOnly);
+
+static void
+print_eval_setImmediateValue(print_value_t *out, print_type_t *type, uint64_t immediate, int typeOnly);
+
 static print_type_t *
 print_eval_getType(print_index_t *index, uint32_t offset);
 
@@ -457,12 +463,7 @@ print_eval_resolveLocalDwarf(const char *name, print_index_t *index, print_value
     if (n->locationKind == print_dwarf_location_fbreg) {
         int64_t addr64 = (int64_t)(uint64_t)frameBase + (int64_t)n->locationOffset;
         uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
-        if (typeOnly) {
-            *out = print_eval_makeAddressValue(type, 0);
-            out->hasAddress = 0;
-        } else {
-            *out = print_eval_makeAddressValue(type, addr);
-        }
+        print_eval_setAddressValue(out, type, addr, typeOnly);
         return 1;
     }
     if (n->locationKind == print_dwarf_location_breg) {
@@ -472,31 +473,16 @@ print_eval_resolveLocalDwarf(const char *name, print_index_t *index, print_value
         }
         int64_t addr64 = (int64_t)(uint64_t)regVal + (int64_t)n->locationOffset;
         uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
-        if (typeOnly) {
-            *out = print_eval_makeAddressValue(type, 0);
-            out->hasAddress = 0;
-        } else {
-            *out = print_eval_makeAddressValue(type, addr);
-        }
+        print_eval_setAddressValue(out, type, addr, typeOnly);
         return 1;
     }
     if (n->locationKind == print_dwarf_location_addr && n->hasAddr) {
         uint32_t addr = (uint32_t)n->addr & 0x00ffffffu;
-        if (typeOnly) {
-            *out = print_eval_makeAddressValue(type, 0);
-            out->hasAddress = 0;
-        } else {
-            *out = print_eval_makeAddressValue(type, addr);
-        }
+        print_eval_setAddressValue(out, type, addr, typeOnly);
         return 1;
     }
     if (n->locationKind == print_dwarf_location_const && n->hasConstValue) {
-        if (typeOnly) {
-            *out = print_eval_makeImmediateValue(type, 0);
-            out->hasImmediate = 0;
-        } else {
-            *out = print_eval_makeImmediateValue(type, n->constValue);
-        }
+        print_eval_setImmediateValue(out, type, n->constValue, typeOnly);
         return 1;
     }
     if (n->locationKind == print_dwarf_location_reg) {
@@ -504,21 +490,11 @@ print_eval_resolveLocalDwarf(const char *name, print_index_t *index, print_value
         if (!print_eval_getRegValueByDwarfReg(n->locationReg, &regVal)) {
             return 0;
         }
-        if (typeOnly) {
-            *out = print_eval_makeImmediateValue(type, 0);
-            out->hasImmediate = 0;
-        } else {
-            *out = print_eval_makeImmediateValue(type, (uint64_t)regVal);
-        }
+        print_eval_setImmediateValue(out, type, (uint64_t)regVal, typeOnly);
         return 1;
     }
     if (n->locationKind == print_dwarf_location_cfa) {
-        if (typeOnly) {
-            *out = print_eval_makeAddressValue(type, 0);
-            out->hasAddress = 0;
-        } else {
-            *out = print_eval_makeAddressValue(type, cfa & 0x00ffffffu);
-        }
+        print_eval_setAddressValue(out, type, cfa & 0x00ffffffu, typeOnly);
         return 1;
     }
     return 0;
@@ -988,12 +964,7 @@ print_eval_resolveLocalStabs(const char *name, print_index_t *index, print_value
             if (var->kind == print_stabs_var_stack) {
                 int64_t addr64 = (int64_t)(uint64_t)stackBase + (int64_t)var->stackOffset;
                 uint32_t addr = (uint32_t)addr64 & 0x00ffffffu;
-                if (typeOnly) {
-                    *out = print_eval_makeAddressValue(type, 0);
-                    out->hasAddress = 0;
-                } else {
-                    *out = print_eval_makeAddressValue(type, addr);
-                }
+                print_eval_setAddressValue(out, type, addr, typeOnly);
                 return 1;
             }
             if (var->kind == print_stabs_var_reg) {
@@ -1001,21 +972,11 @@ print_eval_resolveLocalStabs(const char *name, print_index_t *index, print_value
                 if (!print_eval_getRegValueByDwarfReg(var->reg, &regVal)) {
                     return 0;
                 }
-                if (typeOnly) {
-                    *out = print_eval_makeImmediateValue(type, 0);
-                    out->hasImmediate = 0;
-                } else {
-                    *out = print_eval_makeImmediateValue(type, (uint64_t)regVal);
-                }
+                print_eval_setImmediateValue(out, type, (uint64_t)regVal, typeOnly);
                 return 1;
             }
             if (var->kind == print_stabs_var_const && var->hasConstValue) {
-                if (typeOnly) {
-                    *out = print_eval_makeImmediateValue(type, 0);
-                    out->hasImmediate = 0;
-                } else {
-                    *out = print_eval_makeImmediateValue(type, var->constValue);
-                }
+                print_eval_setImmediateValue(out, type, var->constValue, typeOnly);
                 return 1;
             }
             return 0;
@@ -1568,23 +1529,23 @@ print_eval_resolveType(print_type_t *type)
 }
 
 static print_type_t *
-print_eval_defaultU8(print_index_t *index)
+print_eval_defaultUnsigned(print_index_t *index, print_type_t **slot, size_t byteSize, const char *name)
 {
-    if (!index) {
+    if (!index || !slot) {
         return NULL;
     }
-    if (index->defaultU8) {
-        return index->defaultU8;
+    if (*slot) {
+        return *slot;
     }
     print_type_t *type = (print_type_t *)alloc_calloc(1, sizeof(*type));
     if (!type) {
         return NULL;
     }
     type->kind = print_type_base;
-    type->byteSize = 1;
+    type->byteSize = byteSize;
     type->encoding = print_base_encoding_unsigned;
-    type->name = print_eval_strdup("uint8_t");
-    index->defaultU8 = type;
+    type->name = print_eval_strdup(name);
+    *slot = type;
     if (index->typeCount >= index->typeCap) {
         int next = index->typeCap ? index->typeCap * 2 : 128;
         print_type_t **nextTypes = (print_type_t **)alloc_realloc(index->types, sizeof(*nextTypes) * (size_t)next);
@@ -1596,99 +1557,30 @@ print_eval_defaultU8(print_index_t *index)
     }
     index->types[index->typeCount++] = type;
     return type;
+}
+
+static print_type_t *
+print_eval_defaultU8(print_index_t *index)
+{
+    return print_eval_defaultUnsigned(index, &index->defaultU8, 1, "uint8_t");
 }
 
 static print_type_t *
 print_eval_defaultU16(print_index_t *index)
 {
-    if (!index) {
-        return NULL;
-    }
-    if (index->defaultU16) {
-        return index->defaultU16;
-    }
-    print_type_t *type = (print_type_t *)alloc_calloc(1, sizeof(*type));
-    if (!type) {
-        return NULL;
-    }
-    type->kind = print_type_base;
-    type->byteSize = 2;
-    type->encoding = print_base_encoding_unsigned;
-    type->name = print_eval_strdup("uint16_t");
-    index->defaultU16 = type;
-    if (index->typeCount >= index->typeCap) {
-        int next = index->typeCap ? index->typeCap * 2 : 128;
-        print_type_t **nextTypes = (print_type_t **)alloc_realloc(index->types, sizeof(*nextTypes) * (size_t)next);
-        if (!nextTypes) {
-            return type;
-        }
-        index->types = nextTypes;
-        index->typeCap = next;
-    }
-    index->types[index->typeCount++] = type;
-    return type;
+    return print_eval_defaultUnsigned(index, &index->defaultU16, 2, "uint16_t");
 }
 
 static print_type_t *
 print_eval_defaultU32(print_index_t *index)
 {
-    if (!index) {
-        return NULL;
-    }
-    if (index->defaultU32) {
-        return index->defaultU32;
-    }
-    print_type_t *type = (print_type_t *)alloc_calloc(1, sizeof(*type));
-    if (!type) {
-        return NULL;
-    }
-    type->kind = print_type_base;
-    type->byteSize = 4;
-    type->encoding = print_base_encoding_unsigned;
-    type->name = print_eval_strdup("uint32_t");
-    index->defaultU32 = type;
-    if (index->typeCount >= index->typeCap) {
-        int next = index->typeCap ? index->typeCap * 2 : 128;
-        print_type_t **nextTypes = (print_type_t **)alloc_realloc(index->types, sizeof(*nextTypes) * (size_t)next);
-        if (!nextTypes) {
-            return type;
-        }
-        index->types = nextTypes;
-        index->typeCap = next;
-    }
-    index->types[index->typeCount++] = type;
-    return type;
+    return print_eval_defaultUnsigned(index, &index->defaultU32, 4, "uint32_t");
 }
 
 static print_type_t *
 print_eval_defaultU64(print_index_t *index)
 {
-    if (!index) {
-        return NULL;
-    }
-    if (index->defaultU64) {
-        return index->defaultU64;
-    }
-    print_type_t *type = (print_type_t *)alloc_calloc(1, sizeof(*type));
-    if (!type) {
-        return NULL;
-    }
-    type->kind = print_type_base;
-    type->byteSize = 8;
-    type->encoding = print_base_encoding_unsigned;
-    type->name = print_eval_strdup("uint64_t");
-    index->defaultU64 = type;
-    if (index->typeCount >= index->typeCap) {
-        int next = index->typeCap ? index->typeCap * 2 : 128;
-        print_type_t **nextTypes = (print_type_t **)alloc_realloc(index->types, sizeof(*nextTypes) * (size_t)next);
-        if (!nextTypes) {
-            return type;
-        }
-        index->types = nextTypes;
-        index->typeCap = next;
-    }
-    index->types[index->typeCount++] = type;
-    return type;
+    return print_eval_defaultUnsigned(index, &index->defaultU64, 8, "uint64_t");
 }
 
 static int
@@ -2216,6 +2108,24 @@ print_eval_makeImmediateValue(print_type_t *type, uint64_t immediate)
     val.immediate = immediate;
     val.hasImmediate = 1;
     return val;
+}
+
+static void
+print_eval_setAddressValue(print_value_t *out, print_type_t *type, uint32_t addr, int typeOnly)
+{
+    *out = print_eval_makeAddressValue(type, typeOnly ? 0 : addr);
+    if (typeOnly) {
+        out->hasAddress = 0;
+    }
+}
+
+static void
+print_eval_setImmediateValue(print_value_t *out, print_type_t *type, uint64_t immediate, int typeOnly)
+{
+    *out = print_eval_makeImmediateValue(type, typeOnly ? 0 : immediate);
+    if (typeOnly) {
+        out->hasImmediate = 0;
+    }
 }
 
 static print_type_t *
@@ -3142,6 +3052,23 @@ print_eval_resolveNamedKind(const char *name, int *outIsVariable)
     return 0;
 }
 
+static void
+print_eval_printImmediateValue(const char *expr, const print_value_t *value)
+{
+    print_type_t *resolved = print_eval_resolveType(value->type);
+    if (!resolved || resolved->kind == print_type_base || resolved->kind == print_type_enum) {
+        print_eval_printLine(0, "%s: %llu (0x%llX)", expr,
+                            (unsigned long long)value->immediate,
+                            (unsigned long long)value->immediate);
+        return;
+    }
+    if (resolved->kind == print_type_pointer) {
+        print_eval_printLine(0, "%s: 0x%08llX", expr, (unsigned long long)value->immediate);
+        return;
+    }
+    print_eval_printLine(0, "%s: 0x%llX", expr, (unsigned long long)value->immediate);
+}
+
 int
 print_eval_print(const char *expr)
 {
@@ -3170,20 +3097,7 @@ print_eval_print(const char *expr)
     if (value.hasAddress) {
         print_eval_dumpValueAt(value.type, value.address, value.processorId, value.hasProcessorMemory, 0, expr);
     } else if (value.hasImmediate) {
-        print_type_t *resolved = print_eval_resolveType(value.type);
-        if (!resolved) {
-            print_eval_printLine(0, "%s: %llu (0x%llX)", expr,
-                                (unsigned long long)value.immediate,
-                                (unsigned long long)value.immediate);
-        } else if (resolved->kind == print_type_pointer) {
-            print_eval_printLine(0, "%s: 0x%08llX", expr, (unsigned long long)value.immediate);
-        } else if (resolved->kind == print_type_base || resolved->kind == print_type_enum) {
-            print_eval_printLine(0, "%s: %llu (0x%llX)", expr,
-                                (unsigned long long)value.immediate,
-                                (unsigned long long)value.immediate);
-        } else {
-            print_eval_printLine(0, "%s: 0x%llX", expr, (unsigned long long)value.immediate);
-        }
+        print_eval_printImmediateValue(expr, &value);
     } else {
         debug_error("print: no value");
     }
@@ -3223,20 +3137,7 @@ print_eval_eval(const char *expr, char *out, size_t cap)
     if (value.hasAddress) {
         print_eval_dumpValueAt(value.type, value.address, value.processorId, value.hasProcessorMemory, 0, expr);
     } else if (value.hasImmediate) {
-        print_type_t *resolved = print_eval_resolveType(value.type);
-        if (!resolved) {
-            print_eval_printLine(0, "%s: %llu (0x%llX)", expr,
-                                 (unsigned long long)value.immediate,
-                                 (unsigned long long)value.immediate);
-        } else if (resolved->kind == print_type_pointer) {
-            print_eval_printLine(0, "%s: 0x%08llX", expr, (unsigned long long)value.immediate);
-        } else if (resolved->kind == print_type_base || resolved->kind == print_type_enum) {
-            print_eval_printLine(0, "%s: %llu (0x%llX)", expr,
-                                 (unsigned long long)value.immediate,
-                                 (unsigned long long)value.immediate);
-        } else {
-            print_eval_printLine(0, "%s: 0x%llX", expr, (unsigned long long)value.immediate);
-        }
+        print_eval_printImmediateValue(expr, &value);
     } else {
         print_eval_captureEnabled = 0;
         print_eval_captureBuffer = NULL;

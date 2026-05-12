@@ -374,7 +374,7 @@ neogeo_audio_vis_rowMuteMask(int rowIndex)
 static void
 neogeo_audio_vis_applyMuteMask(void)
 {
-    libretro_host_debugSetGeoAudioMuteMask(neogeo_audio_vis_state.muteMask);
+    libretro_host_neogeo_setAudioMuteMask(neogeo_audio_vis_state.muteMask);
 }
 
 static void
@@ -796,13 +796,13 @@ neogeo_audio_vis_toggle(void)
         neogeo_audio_vis_state.hasLastFrame = 0;
         neogeo_audio_vis_resetSegmentBrightness();
         aux_window_register(&neogeo_audio_vis_auxWindowOps, &neogeo_audio_vis_state);
-        libretro_host_debugSetGeoAudioVisEnabled(1);
+        libretro_host_neogeo_setAudioVisEnabled(1);
         neogeo_audio_vis_applyMuteMask();
     } else {
         neogeo_audio_vis_saveWindowRectIfChanged();
         neogeo_audio_vis_state.muteMask = 0;
         neogeo_audio_vis_applyMuteMask();
-        libretro_host_debugSetGeoAudioVisEnabled(0);
+        libretro_host_neogeo_setAudioVisEnabled(0);
         aux_window_unregister(&neogeo_audio_vis_auxWindowOps, &neogeo_audio_vis_state);
         if (neogeo_audio_vis_state.windowState.windowHost) {
             e9ui_windowDestroy(neogeo_audio_vis_state.windowState.windowHost);

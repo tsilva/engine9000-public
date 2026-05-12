@@ -680,7 +680,7 @@ amiga_custom_syncRows(amiga_custom_state_t *ui)
         return;
     }
 
-    const e9k_debug_ami_custom_reg_state_t *regs = libretro_host_debugAmiGetCustomRegs();
+    const e9k_debug_ami_custom_reg_state_t *regs = libretro_host_amiga_getCustomRegs();
     e9ui_component_t *focused = e9ui ? e9ui_getFocus(&e9ui->ctx) : e9ui_getFocus(&ui->ctx);
 
     e9k_debug_protect_t protects[E9K_PROTECT_COUNT];

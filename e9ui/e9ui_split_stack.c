@@ -112,13 +112,6 @@ e9ui_split_stack_pickGripIndex(e9ui_split_stack_state *st, int gapCount, int mx,
 }
 
 static int
-e9ui_split_stack_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0;
-}
-
-static int
 e9ui_split_stack_collectPanels(e9ui_component_t *self, e9ui_split_stack_state *st)
 {
     int count = 0;
@@ -509,7 +502,6 @@ e9ui_split_stack_make(void)
     st->draggingIndex = -1;
     comp->name = "e9ui_split_stack";
     comp->state = st;
-    comp->preferredHeight = e9ui_split_stack_preferredHeight;
     comp->layout = e9ui_split_stack_layout;
     comp->render = e9ui_split_stack_render;
     comp->handleEvent = e9ui_split_stack_handleEvent;

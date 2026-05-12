@@ -12,12 +12,6 @@ typedef struct e9ui_spacer_state {
     int width;
 } e9ui_spacer_state_t;
 
-static int
-e9ui_spacer_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW; return 0;
-}
-
 static void
 e9ui_spacer_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -39,7 +33,6 @@ e9ui_spacer_make(int width_px)
     st->width = width_px >= 0 ? width_px : 0;
     c->name = "e9ui_spacer";
     c->state = st;
-    c->preferredHeight = e9ui_spacer_preferredHeight;
     c->layout = e9ui_spacer_layout;
     c->render = e9ui_spacer_render;
     return c;

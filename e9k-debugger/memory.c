@@ -1450,13 +1450,6 @@ memory_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event
     return 0;
 }
 
-static int
-memory_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0;
-}
-
 static void
 memory_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -2230,7 +2223,6 @@ memory_makeComponent(void)
     }
     c->name = "memory_view";
     c->state = st;
-    c->preferredHeight = memory_preferredHeight;
     c->layout = memory_layout;
     c->render = memory_render;
     c->handleEvent = memory_handleEvent;

@@ -12,13 +12,6 @@ typedef struct e9ui_separator_state {
     int width;
 } e9ui_separator_state_t;
 
-static int
-e9ui_separator_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0;
-}
-
 static void
 e9ui_separator_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -64,7 +57,6 @@ e9ui_separator_make(int width_px)
     st->width = (width_px > 0) ? width_px : 9;
     c->name = "e9ui_separator";
     c->state = st;
-    c->preferredHeight = e9ui_separator_preferredHeight;
     c->layout = e9ui_separator_layout;
     c->render = e9ui_separator_render;
     return c;

@@ -489,7 +489,7 @@ neogeo_palette_debug_renderFrameInternal(const e9ui_rect_t *bounds)
 
     neogeo_palette_debug_baseSize(&baseW, &baseH);
     memset(&paletteState, 0, sizeof(paletteState));
-    if (!libretro_host_debugGetGeoPaletteState(&paletteState)) {
+    if (!libretro_host_neogeo_getPaletteState(&paletteState)) {
         return;
     }
 

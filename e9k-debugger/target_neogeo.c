@@ -729,14 +729,14 @@ static void
 target_neogeo_onVblank(void)
 {
   e9k_debug_sprite_state_t spriteState;
-  if (libretro_host_debugGetSpriteState(&spriteState) && spriteState.vram && spriteState.vram_words) {
+  if (libretro_host_neogeo_getSpriteState(&spriteState) && spriteState.vram && spriteState.vram_words) {
     emu_geo_setSpriteState(&spriteState, 1);
   } else {
     emu_geo_setSpriteState(NULL, 0);
   }
   if (neogeo_audio_vis_isOpen()) {
     e9k_debug_audio_frame_t audioFrame;
-    if (libretro_host_debugGetGeoAudioFrame(&audioFrame)) {
+    if (libretro_host_neogeo_getAudioFrame(&audioFrame)) {
       emu_geo_setAudioFrame(&audioFrame, 1);
     } else {
       emu_geo_setAudioFrame(NULL, 0);
@@ -795,8 +795,8 @@ target_neogeo_validateAPI(void)
 {
   emu_geo_setSpriteState(NULL, 0);
   emu_geo_setAudioFrame(NULL, 0);
-  libretro_host_unbindMegaDebugApis();
-  libretro_host_bindNeogeoDebugApis();
+  libretro_host_megadrive_unbindApis();
+  libretro_host_neogeo_bindApis();
 }
 
 

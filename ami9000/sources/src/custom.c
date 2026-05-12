@@ -14822,7 +14822,7 @@ static void hsync_handler_post(bool onvsync)
 
 	if (onvsync) {
 #if E9K_DEBUGGER_CUSTOM_LOGGER
-		e9k_debug_ami_customLogFrameCommit();
+		e9k_debug_amiga_customLogFrameCommit();
 #endif
 		// vpos_count >= MAXVPOS just to not crash if VPOSW writes prevent vsync completely
 		vpos = 0;
@@ -16025,7 +16025,7 @@ static int REGPARAM2 custom_wput_1 (int hpos, uaecptr addr, uae_u32 value, int n
 	custom_storage[addr >> 1].pc = copper_access ? cop_state.ip | 1 : M68K_GETPC;
 #if E9K_DEBUGGER_CUSTOM_LOGGER
 	if (custom_customLoggerEnabled) {
-		e9k_debug_ami_customLogWrite(vpos,
+		e9k_debug_amiga_customLogWrite(vpos,
 			hpos,
 			(uae_u32)(addr & 0x1FE),
 			(uae_u16)(value & 0xffffu),

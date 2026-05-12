@@ -1187,7 +1187,7 @@ neogeo_register_log_init(void)
 
     ui->windowState.open = 1;
     aux_window_register(&neogeo_register_log_auxWindowOps, ui);
-    ui->callbackBound = libretro_host_setNeogeoRegisterLogFrameCallback(neogeo_register_log_onFrame, NULL) ? 1 : 0;
+    ui->callbackBound = libretro_host_neogeo_setRegisterLogFrameCallback(neogeo_register_log_onFrame, NULL) ? 1 : 0;
     if (!ui->callbackBound) {
         debug_error("register log: core does not expose Neo Geo register log callback");
     }
@@ -1206,7 +1206,7 @@ neogeo_register_log_shutdown(void)
     (void)e9ui_windowCaptureStateRectSnapshot(&ui->windowState, &e9ui->ctx);
     config_saveConfig();
     if (ui->callbackBound) {
-        (void)libretro_host_setNeogeoRegisterLogFrameCallback(NULL, NULL);
+        (void)libretro_host_neogeo_setRegisterLogFrameCallback(NULL, NULL);
         ui->callbackBound = 0;
     }
     ui->root = NULL;
@@ -1413,7 +1413,7 @@ neogeo_register_log_render(void)
         return;
     }
     if (!ui->callbackBound) {
-        ui->callbackBound = libretro_host_setNeogeoRegisterLogFrameCallback(neogeo_register_log_onFrame, NULL) ? 1 : 0;
+        ui->callbackBound = libretro_host_neogeo_setRegisterLogFrameCallback(neogeo_register_log_onFrame, NULL) ? 1 : 0;
     }
     if (e9ui_windowCaptureStateRectChanged(&ui->windowState, &e9ui->ctx)) {
         config_saveConfig();

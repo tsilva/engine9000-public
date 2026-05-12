@@ -14,13 +14,6 @@ typedef struct e9ui_image_state {
     int          texH;
 } e9ui_image_state_t;
 
-static int
-e9ui_image_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0; // flexible by default
-}
-
 static void
 e9ui_image_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -47,7 +40,6 @@ e9ui_image_makeFromTexture(SDL_Texture *tex, int tex_w, int tex_h)
     st->tex = tex; st->texW = tex_w; st->texH = tex_h;
     c->name = "e9ui_image";
     c->state = st;
-    c->preferredHeight = e9ui_image_preferredHeight;
     c->layout = e9ui_image_layout;
     c->render = e9ui_image_render;
     return c;

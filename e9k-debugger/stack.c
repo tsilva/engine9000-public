@@ -19,12 +19,6 @@
 #include "ui.h"
 #include "machine.h"
 
-static int
-stack_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW; return 0; // flexible
-}
-
 static void
 stack_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -137,7 +131,6 @@ stack_makeComponent(void)
     e9ui_component_t *c = (e9ui_component_t*)alloc_calloc(1, sizeof(*c));
     c->name = "stack";
     
-    c->preferredHeight = stack_preferredHeight;
     c->layout = stack_layout;
     c->render = stack_render;
     c->handleEvent = stack_handleEvent;

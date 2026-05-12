@@ -110,71 +110,74 @@ e9k_debug_getDeterministic(void);
 
 #if E9K_DEBUGGER_CUSTOM_LOGGER
 void
-e9k_debug_set_custom_log_frame_callback(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
+e9k_debug_set_amiga_custom_log_frame_callback(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
 
 void
-e9k_debug_ami_customLogWrite(int vpos, int hpos, uae_u32 reg, uae_u16 value, uae_u32 sourcePc);
+e9k_debug_amiga_customLogWrite(int vpos, int hpos, uae_u32 reg, uae_u16 value, uae_u32 sourcePc);
 
 void
-e9k_debug_ami_customLogFrameCommit(void);
+e9k_debug_amiga_customLogFrameCommit(void);
 #endif
 
 void
 e9k_vblank_notify(void);
 
 void
-e9k_debug_ami_on_video_presented(void);
+e9k_debug_amiga_on_video_presented(void);
 
 size_t
-e9k_debug_ami_blitter_vis_read_spans(e9k_debug_ami_blitter_vis_span_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
+e9k_debug_amiga_blitter_vis_read_spans(e9k_debug_ami_blitter_vis_span_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
 
 size_t
-e9k_debug_ami_blitter_vis_read_points(e9k_debug_ami_blitter_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
+e9k_debug_amiga_blitter_vis_read_points(e9k_debug_ami_blitter_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
 
 size_t
-e9k_debug_ami_blitter_vis_read_stats(e9k_debug_ami_blitter_vis_stats_t *out, size_t cap);
+e9k_debug_amiga_blitter_vis_read_stats(e9k_debug_ami_blitter_vis_stats_t *out, size_t cap);
 
 #if E9K_HACK_AMI_SPRITE_VIS
 void
-e9k_debug_ami_set_sprite_vis(int enabled);
+e9k_debug_amiga_set_sprite_vis(int enabled);
 
 int
-e9k_debug_ami_get_sprite_vis(void);
+e9k_debug_amiga_get_sprite_vis(void);
 
 size_t
-e9k_debug_ami_sprite_vis_read_points(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
+e9k_debug_amiga_sprite_vis_read_points(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);
 #endif
 
 const e9k_debug_ami_dma_debug_frame_view_t *
-e9k_debug_ami_dma_debug_get_frame_view(uint32_t frameSelect);
+e9k_debug_amiga_dma_debug_get_frame_view(uint32_t frameSelect);
 
 #if E9K_HACK_COPPER_DEBUG_EXPORT
 const e9k_debug_ami_copper_debug_frame_view_t *
-e9k_debug_ami_copper_debug_get_frame_view(uint32_t frameSelect);
+e9k_debug_amiga_copper_debug_get_frame_view(uint32_t frameSelect);
 #endif
 
 int
-e9k_debug_ami_get_video_line_count(void);
+e9k_debug_amiga_get_video_line_count(void);
 
 int
-e9k_debug_ami_video_line_to_core_line(int videoLine);
+e9k_debug_amiga_video_line_to_core_line(int videoLine);
 
 int
-e9k_debug_ami_core_line_to_video_line(int coreLine);
+e9k_debug_amiga_core_line_to_video_line(int coreLine);
 
 const e9k_debug_ami_video_line_state_t *
-e9k_debug_ami_get_video_line_states(void);
+e9k_debug_amiga_get_video_line_states(void);
 
 bool
-e9k_debug_ami_set_floppy_path(int drive, const char *path);
+e9k_debug_amiga_set_floppy_path(int drive, const char *path);
+
+int *
+e9k_debug_amiga_get_dma_addr(void);
 
 #if E9K_HACK_COPPER_DEBUG_EXPORT
 int *
-e9k_debug_amiga_get_debug_copper_addr(void);
+e9k_debug_amiga_get_copper_addr(void);
 #endif
 
 const e9k_debug_ami_custom_reg_state_t *
-e9k_debug_ami_get_custom_regs(void);
+e9k_debug_amiga_get_custom_regs(void);
 
 void
 e9k_debug_reapply_memhooks(void);

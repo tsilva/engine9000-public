@@ -1507,13 +1507,6 @@ source_pane_trackPosition(source_pane_state_t *st)
     st->lastPcAddr = curAddr;
 }
 
-static int
-source_pane_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0;
-}
-
 static void
 source_pane_layoutComp(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -3017,7 +3010,6 @@ source_pane_make(void)
   st->ownerPane = c;
   c->state = st;
   c->focusable = 1;
-  c->preferredHeight = source_pane_preferredHeight;
   c->layout = source_pane_layoutComp;
   c->render = source_pane_render;
   c->handleEvent = source_pane_handleEventComp;

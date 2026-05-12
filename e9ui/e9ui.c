@@ -342,15 +342,6 @@ e9ui_defer(e9ui_context_t *ctx, e9ui_defer_fn_t fn, void *user)
     return 1;
 }
 
-static int
-e9ui_overlayHost_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 e9ui_overlayHost_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -400,7 +391,6 @@ e9ui_makeOverlayHost(const char *name)
         return NULL;
     }
     host->name = name;
-    host->preferredHeight = e9ui_overlayHost_preferredHeight;
     host->layout = e9ui_overlayHost_layout;
     host->render = e9ui_overlayHost_render;
     return host;

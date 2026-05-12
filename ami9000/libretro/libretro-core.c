@@ -5013,7 +5013,7 @@ e9k_debug_ami_sync_floppy_dc_slot(int drive, const char *path)
 }
 
 RETRO_API bool
-e9k_debug_ami_set_floppy_path(int drive, const char *path)
+e9k_debug_amiga_set_floppy_path(int drive, const char *path)
 {
    if (!libretro_runloop_active)
    {
@@ -9009,7 +9009,7 @@ void retro_run(void)
 #if E9K_HACK_DEBUGGER_HOST
    e9k_vblank_notify();
    video_cb((old_frame || e9k_debug_is_paused()) ? NULL : retro_bmp + retro_bmp_offset, retrow_crop, retroh_crop, retrow << (pix_bytes >> 1));
-   e9k_debug_ami_on_video_presented();
+   e9k_debug_amiga_on_video_presented();
    if (e9k_debug_is_paused())
    {
       output_audio_buffer.size = 0;

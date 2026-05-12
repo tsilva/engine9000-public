@@ -6,6 +6,7 @@ AMIGA_TESTS=test-amigacustomui \
             test-amigasavestate \
             test-amigaconfig \
             test-amigalocals \
+	    test-amigamemview \
 	    test-amigasmoke 
 
 AMIGA_REMAKE=remake-test-amigacustomui \
@@ -15,6 +16,7 @@ AMIGA_REMAKE=remake-test-amigacustomui \
 	     remake-test-amigacoreoptions \
              remake-test-amigasavestate \
              remake-test-amigaconfig \
+	     remake-test-amigamemview \
 	     remake-test-amigalocals 
 
 # makers

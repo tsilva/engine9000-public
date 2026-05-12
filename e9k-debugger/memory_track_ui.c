@@ -1393,33 +1393,28 @@ memory_track_ui_addressLinkClicked(e9ui_context_t *ctx, void *user)
 }
 
 static void
+memory_track_ui_updateButtonTheme(e9ui_component_t *button, int active, const e9k_theme_button_t *activeTheme)
+{
+    if (!button) {
+        return;
+    }
+    if (active) {
+        e9ui_button_setTheme(button, activeTheme);
+    } else {
+        e9ui_button_clearTheme(button);
+    }
+}
+
+static void
 memory_track_ui_updateModeButtons(memory_track_ui_t *ui)
 {
     if (!ui) {
         return;
     }
     const e9k_theme_button_t *activeTheme = e9ui_theme_button_preset_profile_active();
-    if (ui->modeBtn8) {
-        if (ui->accessSize == 1) {
-            e9ui_button_setTheme(ui->modeBtn8, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->modeBtn8);
-        }
-    }
-    if (ui->modeBtn16) {
-        if (ui->accessSize == 2) {
-            e9ui_button_setTheme(ui->modeBtn16, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->modeBtn16);
-        }
-    }
-    if (ui->modeBtn32) {
-        if (ui->accessSize == 4) {
-            e9ui_button_setTheme(ui->modeBtn32, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->modeBtn32);
-        }
-    }
+    memory_track_ui_updateButtonTheme(ui->modeBtn8, ui->accessSize == 1, activeTheme);
+    memory_track_ui_updateButtonTheme(ui->modeBtn16, ui->accessSize == 2, activeTheme);
+    memory_track_ui_updateButtonTheme(ui->modeBtn32, ui->accessSize == 4, activeTheme);
 }
 
 static void
@@ -1429,11 +1424,7 @@ memory_track_ui_updateFilterButton(memory_track_ui_t *ui)
         return;
     }
     const e9k_theme_button_t *activeTheme = e9ui_theme_button_preset_profile_active();
-    if (ui->requireAllColumns) {
-        e9ui_button_setTheme(ui->filterBtn, activeTheme);
-    } else {
-        e9ui_button_clearTheme(ui->filterBtn);
-    }
+    memory_track_ui_updateButtonTheme(ui->filterBtn, ui->requireAllColumns, activeTheme);
 }
 
 static void
@@ -1443,27 +1434,9 @@ memory_track_ui_updateTrendButtons(memory_track_ui_t *ui)
         return;
     }
     const e9k_theme_button_t *activeTheme = e9ui_theme_button_preset_profile_active();
-    if (ui->trendBtnAll) {
-        if (ui->trendFilterMode == MEMORY_TRACK_UI_TREND_ALL) {
-            e9ui_button_setTheme(ui->trendBtnAll, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->trendBtnAll);
-        }
-    }
-    if (ui->trendBtnInc) {
-        if (ui->trendFilterMode == MEMORY_TRACK_UI_TREND_INC) {
-            e9ui_button_setTheme(ui->trendBtnInc, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->trendBtnInc);
-        }
-    }
-    if (ui->trendBtnDec) {
-        if (ui->trendFilterMode == MEMORY_TRACK_UI_TREND_DEC) {
-            e9ui_button_setTheme(ui->trendBtnDec, activeTheme);
-        } else {
-            e9ui_button_clearTheme(ui->trendBtnDec);
-        }
-    }
+    memory_track_ui_updateButtonTheme(ui->trendBtnAll, ui->trendFilterMode == MEMORY_TRACK_UI_TREND_ALL, activeTheme);
+    memory_track_ui_updateButtonTheme(ui->trendBtnInc, ui->trendFilterMode == MEMORY_TRACK_UI_TREND_INC, activeTheme);
+    memory_track_ui_updateButtonTheme(ui->trendBtnDec, ui->trendFilterMode == MEMORY_TRACK_UI_TREND_DEC, activeTheme);
 }
 
 static void
@@ -2484,11 +2457,10 @@ memory_track_ui_tableRender(e9ui_component_t *self, e9ui_context_t *ctx)
     startY += firstVisibleRow * ui->rowHeight;
     for (size_t rowIndex = (size_t)firstVisibleRow; rowIndex < (size_t)lastVisibleRowExclusive; ++rowIndex) {
         uint32_t address = ui->addresses[rowIndex];
+        SDL_Color rowAddrColor = addrColor;
         if (ui->addressLinks && rowIndex < ui->addressLinksCount &&
             rowIndex < ui->addressLinksCap) {
-            char addrText[16];
-            snprintf(addrText, sizeof(addrText), "0x%06X", address & 0x00FFFFFFu);
-            SDL_Color rowAddrColor = addrColorNormal;
+            rowAddrColor = addrColorNormal;
             if (ui->addressLinkProtectState &&
                 rowIndex < ui->addressLinkProtectStateCap) {
                 uint8_t state = ui->addressLinkProtectState[rowIndex];
@@ -2498,25 +2470,16 @@ memory_track_ui_tableRender(e9ui_component_t *self, e9ui_context_t *ctx)
                     rowAddrColor = addrColorProtectedDisabled;
                 }
             }
-            int addrW = 0;
-            int addrH = 0;
-            SDL_Texture *addrTex = e9ui_text_cache_getText(ctx->renderer, font, addrText, rowAddrColor,
-                                                           &addrW, &addrH);
-            if (addrTex) {
-                SDL_Rect tr = { startX, startY, addrW, addrH };
-                SDL_RenderCopy(ctx->renderer, addrTex, NULL, &tr);
-            }
-        } else {
-            char addrText[16];
-            snprintf(addrText, sizeof(addrText), "0x%06X", address & 0x00FFFFFFu);
-            int addrW = 0;
-            int addrH = 0;
-            SDL_Texture *addrTex = e9ui_text_cache_getText(ctx->renderer, font, addrText, addrColor,
-                                                           &addrW, &addrH);
-            if (addrTex) {
-                SDL_Rect tr = { startX, startY, addrW, addrH };
-                SDL_RenderCopy(ctx->renderer, addrTex, NULL, &tr);
-            }
+        }
+        char addrText[16];
+        snprintf(addrText, sizeof(addrText), "0x%06X", address & 0x00FFFFFFu);
+        int addrW = 0;
+        int addrH = 0;
+        SDL_Texture *addrTex = e9ui_text_cache_getText(ctx->renderer, font, addrText, rowAddrColor,
+                                                       &addrW, &addrH);
+        if (addrTex) {
+            SDL_Rect tr = { startX, startY, addrW, addrH };
+            SDL_RenderCopy(ctx->renderer, addrTex, NULL, &tr);
         }
 
         int trendSampleCount = 0;
@@ -3224,21 +3187,9 @@ memory_track_ui_getMarkerCount(void)
     if (ui->frameInputs && ui->frameInputsCount) {
         for (size_t i = 0; i < ui->frameInputsCount; ++i) {
             const char *text = e9ui_textbox_getText(ui->frameInputs[i]);
-            if (!text || !*text) {
-                continue;
-            }
-            char *end = NULL;
-            unsigned long long val = strtoull(text, &end, 0);
-            if (!end || end == text) {
-                continue;
-            }
-            while (*end && isspace((unsigned char)*end)) {
-                ++end;
-            }
-            if (*end) {
-                continue;
-            }
-            if (val > 0) {
+            uint64_t frameNo = 0;
+            int empty = 0;
+            if (memory_track_ui_parseFrameValue(text, &frameNo, &empty) && !empty && frameNo > 0) {
                 count++;
             }
         }
@@ -3246,21 +3197,9 @@ memory_track_ui_getMarkerCount(void)
     }
     for (size_t i = 0; i < ui->frameTextsCount; ++i) {
         const char *text = ui->frameTexts[i];
-        if (!text || !*text) {
-            continue;
-        }
-        char *end = NULL;
-        unsigned long long val = strtoull(text, &end, 0);
-        if (!end || end == text) {
-            continue;
-        }
-        while (*end && isspace((unsigned char)*end)) {
-            ++end;
-        }
-        if (*end) {
-            continue;
-        }
-        if (val > 0) {
+        uint64_t frameNo = 0;
+        int empty = 0;
+        if (memory_track_ui_parseFrameValue(text, &frameNo, &empty) && !empty && frameNo > 0) {
             count++;
         }
     }

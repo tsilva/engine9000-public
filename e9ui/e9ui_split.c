@@ -130,14 +130,6 @@ e9ui_split_updateGrabArea(e9ui_split_state_t *s, e9ui_rect_t bounds, int margin)
   }
 }
 
-static int
-e9ui_split_preferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-  (void)self; (void)ctx; (void)availW;
-  // Flexible; let container size this by remaining space
-  return 0;
-}
-
 static void
 e9ui_split_layout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -413,7 +405,6 @@ e9ui_split_makeComponent(e9ui_component_t *a,
     st->savedRatio = ratio;
     comp->name = "e9ui_split";
     comp->state = st;
-    comp->preferredHeight = e9ui_split_preferredHeight;
     comp->layout = e9ui_split_layout;
     comp->render = e9ui_split_render;
     comp->handleEvent = e9ui_split_handleEvent;
