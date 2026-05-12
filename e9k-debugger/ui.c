@@ -1049,24 +1049,20 @@ ui_saveState(e9ui_context_t *ctx, void *user)
         fprintf(stderr, "ui: saveState ok size=%zu diff=%zu maxBytes=%zu count=%zu\n",
                 size, diff, state_buffer_getMaxBytes(), state_buffer_getCount());
         fflush(stderr);
-        if (state_buffer_getMaxBytes() > 0 && state_buffer_getCount() > 0) {
-            (void)state_buffer_snapshot();
+        const uint8_t *stateData = NULL;
+        size_t stateSize = 0;
+        uint64_t frameNo = state_buffer_getCurrentFrameNo();
+        if (libretro_host_getStateData(&stateData, &stateSize)) {
+            int ok = state_buffer_setSaveKeyframe(stateData, stateSize, frameNo);
+            debug_printf("ui: saveState seeded snapshot ok=%d frameNo=%llu stateSize=%zu",
+                         ok, (unsigned long long)frameNo, stateSize);
+            fprintf(stderr, "ui: saveState seeded snapshot ok=%d frameNo=%llu stateSize=%zu\n",
+                    ok, (unsigned long long)frameNo, stateSize);
+            fflush(stderr);
         } else {
-            const uint8_t *stateData = NULL;
-            size_t stateSize = 0;
-            uint64_t frameNo = state_buffer_getCurrentFrameNo();
-            if (libretro_host_getStateData(&stateData, &stateSize)) {
-                int ok = state_buffer_setSaveKeyframe(stateData, stateSize, frameNo);
-                debug_printf("ui: saveState seeded snapshot ok=%d frameNo=%llu stateSize=%zu",
-                             ok, (unsigned long long)frameNo, stateSize);
-                fprintf(stderr, "ui: saveState seeded snapshot ok=%d frameNo=%llu stateSize=%zu\n",
-                        ok, (unsigned long long)frameNo, stateSize);
-                fflush(stderr);
-            } else {
-                debug_printf("ui: saveState missing host stateData");
-                fprintf(stderr, "ui: saveState missing host stateData\n");
-                fflush(stderr);
-            }
+            debug_printf("ui: saveState missing host stateData");
+            fprintf(stderr, "ui: saveState missing host stateData\n");
+            fflush(stderr);
         }
         // Persist immediately, not just on exit (matches user expectation for the Save button).
         rom_config_saveOnExit();
