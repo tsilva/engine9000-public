@@ -127,20 +127,63 @@ static inline void geo_z80_bankswap(uint8_t bank, uint16_t port) {
        significant bits of the port address are used to determine the ROM bank
        to swap in.
     */
+    uint32_t bankValue = (uint32_t)((port >> 8) & 0xffu);
+    if (romdata && romdata->msz > 0x80000u) {
+        uint32_t addressMask = (romdata->msz - 0x10000u - 1u) & 0x3ffffu;
+        switch (bank) {
+            case 0:
+                zbank[0] = 0x10000u + ((bankValue << 14) & addressMask);
+                break;
+            case 1:
+                zbank[1] = 0x10000u + ((bankValue << 13) & addressMask);
+                break;
+            case 2:
+                zbank[2] = 0x10000u + ((bankValue << 12) & addressMask);
+                break;
+            case 3:
+                zbank[3] = 0x10000u + ((bankValue << 11) & addressMask);
+                break;
+        }
+        return;
+    }
+
     switch (bank) {
         case 0:
-            zbank[0] = ((port >> 8) & 0x0f) * SIZE_16K;
+            zbank[0] = (bankValue & 0x0fu) * SIZE_16K;
             break;
         case 1:
-            zbank[1] = ((port >> 8) & 0x1f) * SIZE_8K;
+            zbank[1] = (bankValue & 0x1fu) * SIZE_8K;
             break;
         case 2:
-            zbank[2] = ((port >> 8) & 0x3f) * SIZE_4K;
+            zbank[2] = (bankValue & 0x3fu) * SIZE_4K;
             break;
         case 3:
-            zbank[3] = ((port >> 8) & 0x7f) * SIZE_2K;
+            zbank[3] = (bankValue & 0x7fu) * SIZE_2K;
             break;
     }
+}
+
+static uint32_t
+geo_z80_initialBankAddress(uint8_t bank, uint8_t bankValue)
+{
+    if (!romdata || romdata->msz <= 0x80000u) {
+        switch (bank) {
+            case 0:
+                return 0x8000u;
+            case 1:
+                return 0xc000u;
+            case 2:
+                return 0xe000u;
+            case 3:
+                return 0xf000u;
+            default:
+                return 0;
+        }
+    }
+
+    uint32_t addressMask = (romdata->msz - 0x10000u - 1u) & 0x3ffffu;
+    uint32_t shift = 14u - (uint32_t)bank;
+    return 0x10000u + (((uint32_t)bankValue << shift) & addressMask);
 }
 
 static int
@@ -275,6 +318,11 @@ void geo_z80_reset(void) {
 
     // Set the M ROM based on system type - AES does not have SM1 ROM
     geo_z80_set_mrom(geo_get_system() == SYSTEM_AES);
+
+    zbank[0] = geo_z80_initialBankAddress(0, 0x02);
+    zbank[1] = geo_z80_initialBankAddress(1, 0x06);
+    zbank[2] = geo_z80_initialBankAddress(2, 0x0e);
+    zbank[3] = geo_z80_initialBankAddress(3, 0x1e);
 }
 
 // Initialize the Z80
@@ -284,12 +332,6 @@ void geo_z80_init(void) {
        Some games did not do any bankswitching at all, so initial values are
        set to handle such cases.
     */
-    //zbank[0] = zbank[1] = zbank[2] = zbank[3] = 0x0000;
-    zbank[0] = 0x8000;
-    zbank[1] = 0xc000;
-    zbank[2] = 0xe000;
-    zbank[3] = 0xf000;
-
     z80_init(&z80ctx);
     z80ctx.read_byte = &geo_z80_mem_rd;
     z80ctx.write_byte = &geo_z80_mem_wr;
@@ -298,6 +340,11 @@ void geo_z80_init(void) {
 
     // Get ROM data pointer
     romdata = geo_romdata_ptr();
+
+    zbank[0] = geo_z80_initialBankAddress(0, 0x02);
+    zbank[1] = geo_z80_initialBankAddress(1, 0x06);
+    zbank[2] = geo_z80_initialBankAddress(2, 0x0e);
+    zbank[3] = geo_z80_initialBankAddress(3, 0x1e);
 }
 
 // Run at least N Z80 cycles

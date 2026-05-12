@@ -19,7 +19,7 @@ make-test-neogeotracker: all
 	./e9k-debugger --neogeo --rom=./tests/neogeo/basic/basic.neo --make-test tests/results/neogeo/tracker
 
 make-test-neogeomemview: all 
-	./e9k-debugger --neogeo --rom=./tests/neogeo/sound/st.neo --make-test tests/results/neogeo/memview
+	./e9k-debugger --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --make-test tests/results/neogeo/memview
 
 make-test-neogeostepping: tests/neogeo/stepping/build/rom.elf
 	./e9k-debugger --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --make-test tests/results/neogeo/stepping
@@ -100,7 +100,7 @@ test-neogeotracker: all
 
 test-neogeomemview: all
 	@printf "NEO GEO MEMORY VIEW ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/memview >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/memview >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeostepping: tests/neogeo/stepping/build/rom.elf

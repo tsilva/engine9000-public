@@ -155,7 +155,6 @@ struct neogeo_memview_state {
     uint64_t mainRomsCacheToken;
     e9k_debug_rom_entry_t mainRomsEntries[NEOGEO_MEMVIEW_ROM_ENTRY_MAX];
     size_t mainRomsEntryCount;
-    size_t mainRomsTotalSize;
     uint64_t mainRomsContentToken;
     int mainRomsEntriesValid;
     uint16_t *followPrevSpriteVram;

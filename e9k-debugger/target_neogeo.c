@@ -31,8 +31,46 @@ typedef struct target_neogeo_systemtype_state {
     int updating;
 } target_neogeo_systemtype_state_t;
 
+typedef struct target_neogeo_romfolder_cache {
+    char folder[PATH_MAX];
+    char saveDir[PATH_MAX];
+    char systemDir[PATH_MAX];
+    char neoPath[PATH_MAX];
+    int valid;
+} target_neogeo_romfolder_cache_t;
+
+static target_neogeo_romfolder_cache_t target_neogeo_romFolderCache;
+
 static const char *
 target_neogeo_defaultCorePath(void);
+
+static int
+target_neogeo_romFolderCacheMatches(const char *folder, const char *saveDir, const char *systemDir)
+{
+    return target_neogeo_romFolderCache.valid &&
+           strcmp(target_neogeo_romFolderCache.folder, folder ? folder : "") == 0 &&
+           strcmp(target_neogeo_romFolderCache.saveDir, saveDir ? saveDir : "") == 0 &&
+           strcmp(target_neogeo_romFolderCache.systemDir, systemDir ? systemDir : "") == 0 &&
+           target_neogeo_romFolderCache.neoPath[0] != '\0';
+}
+
+static void
+target_neogeo_romFolderCacheStore(const char *folder, const char *saveDir, const char *systemDir, const char *neoPath)
+{
+    strutil_strlcpy(target_neogeo_romFolderCache.folder,
+                    sizeof(target_neogeo_romFolderCache.folder),
+                    folder ? folder : "");
+    strutil_strlcpy(target_neogeo_romFolderCache.saveDir,
+                    sizeof(target_neogeo_romFolderCache.saveDir),
+                    saveDir ? saveDir : "");
+    strutil_strlcpy(target_neogeo_romFolderCache.systemDir,
+                    sizeof(target_neogeo_romFolderCache.systemDir),
+                    systemDir ? systemDir : "");
+    strutil_strlcpy(target_neogeo_romFolderCache.neoPath,
+                    sizeof(target_neogeo_romFolderCache.neoPath),
+                    neoPath ? neoPath : "");
+    target_neogeo_romFolderCache.valid = target_neogeo_romFolderCache.neoPath[0] != '\0';
+}
 
 static void
 target_neogeo_setConfigDefaults(e9k_system_config_t *config)
@@ -760,11 +798,28 @@ target_neogeo_libretroSelectConfig(void)
     debugger_copyPath(debugger.libretro.systemDir, sizeof(debugger.libretro.systemDir), debugger.config.neogeo.libretro.systemDir);
     debugger_copyPath(debugger.libretro.saveDir, sizeof(debugger.libretro.saveDir), debugger.config.neogeo.libretro.saveDir);
     if (debugger.config.neogeo.romFolder[0]) {
-        char neo_path[PATH_MAX];
-        if (romset_buildNeoFromFolder(debugger.config.neogeo.romFolder, neo_path, sizeof(neo_path))) {
-            debugger_copyPath(debugger.libretro.romPath, sizeof(debugger.libretro.romPath), neo_path);
+        if (target_neogeo_romFolderCacheMatches(debugger.config.neogeo.romFolder,
+                                                debugger.config.neogeo.libretro.saveDir,
+                                                debugger.config.neogeo.libretro.systemDir)) {
+            debugger_copyPath(debugger.libretro.romPath,
+                              sizeof(debugger.libretro.romPath),
+                              target_neogeo_romFolderCache.neoPath);
         } else {
-            debugger.libretro.romPath[0] = '\0';
+            char neoPath[PATH_MAX];
+            if (romset_buildNeoFromFolder(debugger.config.neogeo.romFolder, neoPath, sizeof(neoPath))) {
+                target_neogeo_romFolderCacheStore(debugger.config.neogeo.romFolder,
+                                                  debugger.config.neogeo.libretro.saveDir,
+                                                  debugger.config.neogeo.libretro.systemDir,
+                                                  neoPath);
+                debugger_copyPath(debugger.libretro.romPath, sizeof(debugger.libretro.romPath), neoPath);
+            } else {
+                target_neogeo_romFolderCache.valid = 0;
+                debugger.libretro.romPath[0] = '\0';
+            }
+        }
+    } else {
+        if (target_neogeo_romFolderCache.valid) {
+            target_neogeo_romFolderCache.valid = 0;
         }
     }
 }

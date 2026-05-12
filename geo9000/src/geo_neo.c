@@ -261,6 +261,11 @@ int geo_neo_load(void *data, size_t size) {
             }
             break;
         }
+        case 0x264: { // Rage of the Dragons
+            geo_log(GEO_LOG_INF, "NGH264 board profile selected; .neo input must contain decrypted CMC50/PCM2 data\n");
+            geo_lspc_set_fix_banksw(FIX_BANKSW_TILE);
+            break;
+        }
         case 0x266: { // Matrimelee
             /* Fix the FIX layer! TerraOnion's NeoBuilder tool decrypts this
                incorrectly for matrimbl. Other free tools seem to do it the

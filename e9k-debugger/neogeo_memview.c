@@ -761,14 +761,22 @@ neogeo_memview_syncTextboxesFromState(neogeo_memview_state_t *ui)
     uint32_t baseAddr = 0u;
     uint32_t widthValue = 0u;
 
-    baseAddr = neogeo_memview_currentBaseAddr(ui);
     widthValue = ui->mode == neogeo_memview_mode_crom ?
         neogeo_memview_clampCromTilesPerRow(ui->cromTilesPerRow) :
         neogeo_memview_clampRamRowBytes(ui->ramRowBytes);
 
-    snprintf(label, sizeof(label), "0x%06X", (unsigned)(baseAddr & 0x00ffffffu));
     if (ui->addressBox) {
-        e9ui_textbox_setText(ui->addressBox, label);
+        if (ui->mode == neogeo_memview_mode_roms) {
+            e9ui_textbox_setPlaceholder(ui->addressBox, "");
+            e9ui_textbox_setText(ui->addressBox, "");
+            e9ui_setDisabled(ui->addressBox, 1);
+        } else {
+            baseAddr = neogeo_memview_currentBaseAddr(ui);
+            snprintf(label, sizeof(label), "0x%06X", (unsigned)(baseAddr & 0x00ffffffu));
+            e9ui_textbox_setPlaceholder(ui->addressBox, "0x00100000");
+            e9ui_textbox_setText(ui->addressBox, label);
+            e9ui_setDisabled(ui->addressBox, 0);
+        }
     }
     snprintf(label, sizeof(label), "%u", (unsigned)widthValue);
     if (ui->widthBox) {
@@ -2391,6 +2399,61 @@ neogeo_memview_romSampleColor(const uint8_t *data, size_t size, size_t start, si
     return neogeo_memview_argb(r, g, b);
 }
 
+static size_t
+neogeo_memview_romEntryDisplaySize(const e9k_debug_rom_entry_t *rom);
+
+static const uint8_t *
+neogeo_memview_romEntryDisplayData(const e9k_debug_rom_entry_t *rom)
+{
+    size_t displaySize = 0u;
+
+    if (!rom) {
+        return NULL;
+    }
+    displaySize = neogeo_memview_romEntryDisplaySize(rom);
+    if (displaySize != 0u && displaySize != rom->size && rom->size > 0x80000u && strcmp(rom->label, "M1") == 0) {
+        return rom->data + 0x10000u;
+    }
+    return rom->data;
+}
+
+static size_t
+neogeo_memview_romEntryDisplaySize(const e9k_debug_rom_entry_t *rom)
+{
+    const char *romPath = NULL;
+    FILE *file = NULL;
+    uint8_t header[104];
+    size_t readSize = 0u;
+    uint32_t displaySize = 0u;
+
+    if (!rom) {
+        return 0u;
+    }
+    if (strcmp(rom->label, "M1") != 0 || rom->size <= 0x80000u) {
+        return rom->size;
+    }
+
+    romPath = libretro_host_getRomPath();
+    if (!romPath || !*romPath) {
+        return rom->size;
+    }
+    file = fopen(romPath, "rb");
+    if (file) {
+        readSize = fread(header, 1, sizeof(header), file);
+        fclose(file);
+        if (readSize == sizeof(header) && memcmp(header + 96, "E9KD", 4) == 0) {
+            displaySize = (uint32_t)header[100] |
+                          ((uint32_t)header[101] << 8) |
+                          ((uint32_t)header[102] << 16) |
+                          ((uint32_t)header[103] << 24);
+            if (displaySize != 0u && (size_t)displaySize <= rom->size - 0x10000u) {
+                return (size_t)displaySize;
+            }
+        }
+    }
+    return rom->size;
+}
+
 static void
 neogeo_memview_drawRomContents(neogeo_memview_state_t *ui,
                                const e9k_debug_rom_entry_t *rom,
@@ -2402,8 +2465,15 @@ neogeo_memview_drawRomContents(neogeo_memview_state_t *ui,
                                int h)
 {
     size_t totalPixels = 0u;
+    const uint8_t *displayData = NULL;
+    size_t displaySize = 0u;
 
-    if (!ui || !rom || !rom->data || rom->size == 0u || w <= 0 || h <= 0) {
+    if (!ui || !rom || w <= 0 || h <= 0) {
+        return;
+    }
+    displayData = neogeo_memview_romEntryDisplayData(rom);
+    displaySize = neogeo_memview_romEntryDisplaySize(rom);
+    if (!displayData || displaySize == 0u) {
         return;
     }
     totalPixels = (size_t)w * (size_t)h;
@@ -2413,12 +2483,12 @@ neogeo_memview_drawRomContents(neogeo_memview_state_t *ui,
     for (int yy = 0; yy < h; ++yy) {
         for (int xx = 0; xx < w; ++xx) {
             size_t pixelIndex = (size_t)yy * (size_t)w + (size_t)xx;
-            size_t start = (size_t)(((uint64_t)pixelIndex * (uint64_t)rom->size) / (uint64_t)totalPixels);
-            size_t end = (size_t)(((uint64_t)(pixelIndex + 1u) * (uint64_t)rom->size) / (uint64_t)totalPixels);
+            size_t start = (size_t)(((uint64_t)pixelIndex * (uint64_t)displaySize) / (uint64_t)totalPixels);
+            size_t end = (size_t)(((uint64_t)(pixelIndex + 1u) * (uint64_t)displaySize) / (uint64_t)totalPixels);
 
             if (x + xx >= 0 && x + xx < texW && y + yy >= 0 && y + yy < texH) {
                 ui->mainPixels[(size_t)(y + yy) * (size_t)texW + (size_t)(x + xx)] =
-                    neogeo_memview_romSampleColor(rom->data, rom->size, start, end);
+                    neogeo_memview_romSampleColor(displayData, displaySize, start, end);
             }
         }
     }
@@ -2468,6 +2538,10 @@ neogeo_memview_romsContentToken(const e9k_debug_rom_entry_t *roms, size_t romCou
         hash *= NEOGEO_MEMVIEW_FNV1A64_PRIME;
         hash ^= (uint64_t)rom->size;
         hash *= NEOGEO_MEMVIEW_FNV1A64_PRIME;
+        hash ^= (uint64_t)(uintptr_t)neogeo_memview_romEntryDisplayData(rom);
+        hash *= NEOGEO_MEMVIEW_FNV1A64_PRIME;
+        hash ^= (uint64_t)neogeo_memview_romEntryDisplaySize(rom);
+        hash *= NEOGEO_MEMVIEW_FNV1A64_PRIME;
         for (size_t c = 0u; c < sizeof(rom->label) && rom->label[c]; ++c) {
             hash ^= (uint64_t)(uint8_t)rom->label[c];
             hash *= NEOGEO_MEMVIEW_FNV1A64_PRIME;
@@ -2485,10 +2559,6 @@ neogeo_memview_initRomsEntries(neogeo_memview_state_t *ui)
     memset(ui->mainRomsEntries, 0, sizeof(ui->mainRomsEntries));
     ui->mainRomsEntryCount = neogeo_memview_getRomEntries(ui->mainRomsEntries,
                                                           sizeof(ui->mainRomsEntries) / sizeof(ui->mainRomsEntries[0]));
-    ui->mainRomsTotalSize = 0u;
-    for (size_t i = 0u; i < ui->mainRomsEntryCount; ++i) {
-        ui->mainRomsTotalSize += ui->mainRomsEntries[i].size;
-    }
     ui->mainRomsContentToken = neogeo_memview_romsContentToken(ui->mainRomsEntries, ui->mainRomsEntryCount);
     ui->mainRomsEntriesValid = 1;
 }
@@ -2503,7 +2573,6 @@ neogeo_memview_canvasRenderRoms(neogeo_memview_state_t *ui,
 {
     e9k_debug_rom_entry_t *roms = ui->mainRomsEntries;
     size_t romCount = 0u;
-    size_t totalSize = 0u;
     TTF_Font *font = e9ui->theme.text.source ? e9ui->theme.text.source : ctx->font;
     int pad = e9ui_scale_px(&ui->ctx, 14);
     int gap = e9ui_scale_px(&ui->ctx, 14);
@@ -2513,7 +2582,6 @@ neogeo_memview_canvasRenderRoms(neogeo_memview_state_t *ui,
     int contentPad = e9ui_scale_px(&ui->ctx, 10);
     int contentY = labelH + contentPad + e9ui_scale_px(&ui->ctx, 4);
     int contentH = cardH - contentY - contentPad;
-    int footerH = labelH + e9ui_scale_px(&ui->ctx, 12);
     int gridH = 0;
     int usableW = bitViewW > cardW ? bitViewW : cardW;
     int cols = (usableW + gap) / (cardW + gap);
@@ -2531,7 +2599,6 @@ neogeo_memview_canvasRenderRoms(neogeo_memview_state_t *ui,
     ui->mainCromCacheValid = 0;
     neogeo_memview_initRomsEntries(ui);
     romCount = ui->mainRomsEntryCount;
-    totalSize = ui->mainRomsTotalSize;
     romsToken = ui->mainRomsContentToken;
     if (cols < 1) {
         cols = 1;
@@ -2542,7 +2609,7 @@ neogeo_memview_canvasRenderRoms(neogeo_memview_state_t *ui,
     }
     gridH = pad * 2 + rows * cardH + (rows - 1) * gap;
     texW = pad * 2 + cols * cardW + (cols - 1) * gap + e9ui_scale_px(&ui->ctx, NEOGEO_MEMVIEW_RIGHT_PAD_PX);
-    texH = gridH + footerH;
+    texH = gridH;
     if (!neogeo_memview_ensureTexture(ctx->renderer,
                                       &ui->mainTexture,
                                       &ui->mainPixels,
@@ -2630,20 +2697,13 @@ neogeo_memview_canvasRenderRoms(neogeo_memview_state_t *ui,
         int cardY = rowAreaY - ui->romsScrollY + pad + row * (cardH + gap);
 
         labelPos = 0u;
-        neogeo_memview_formatSize(roms[i].size, sizeLabel, sizeof(sizeLabel));
+        neogeo_memview_formatSize(neogeo_memview_romEntryDisplaySize(&roms[i]), sizeLabel, sizeof(sizeLabel));
         label[0] = '\0';
         neogeo_memview_appendText(label, sizeof(label), &labelPos, roms[i].label[0] ? roms[i].label : "ROM");
         neogeo_memview_appendText(label, sizeof(label), &labelPos, "  ");
         neogeo_memview_appendText(label, sizeof(label), &labelPos, sizeLabel);
         neogeo_memview_drawText(ui, ctx, font, label, (SDL_Color){ 236, 238, 242, 255 }, cardX + contentPad, cardY + contentPad);
     }
-    neogeo_memview_formatSize(totalSize, sizeLabel, sizeof(sizeLabel));
-    snprintf(label, sizeof(label), "%u ROMS", (unsigned)romCount);
-    labelPos = strlen(label);
-    neogeo_memview_appendText(label, sizeof(label), &labelPos, "  ");
-    neogeo_memview_appendText(label, sizeof(label), &labelPos, sizeLabel);
-    neogeo_memview_appendText(label, sizeof(label), &labelPos, " TOTAL");
-    neogeo_memview_drawText(ui, ctx, font, label, (SDL_Color){ 162, 171, 185, 255 }, bitAreaX + pad - ui->scrollX, rowAreaY - ui->romsScrollY + gridH + e9ui_scale_px(&ui->ctx, 6));
 }
 
 static void
@@ -3294,7 +3354,6 @@ neogeo_memview_releaseRuntimeState(neogeo_memview_state_t *ui)
     ui->mainRomsCacheToken = 0u;
     memset(ui->mainRomsEntries, 0, sizeof(ui->mainRomsEntries));
     ui->mainRomsEntryCount = 0u;
-    ui->mainRomsTotalSize = 0u;
     ui->mainRomsContentToken = 0u;
     ui->mainRomsEntriesValid = 0;
     ui->overviewTextureW = 0;
