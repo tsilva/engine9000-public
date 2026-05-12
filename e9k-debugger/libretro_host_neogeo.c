@@ -67,6 +67,21 @@ libretro_host_neogeo_getFixRom(e9k_debug_rom_region_t *out)
     return true;
 }
 
+size_t
+libretro_host_neogeo_getRoms(e9k_debug_rom_entry_t *out, size_t cap)
+{
+    size_t n = 0u;
+
+    if (!libretro_host.debugNeogeoGetRoms) {
+        return 0u;
+    }
+    n = libretro_host.debugNeogeoGetRoms(out, cap * sizeof(*out));
+    if (n > cap * sizeof(*out)) {
+        n = cap * sizeof(*out);
+    }
+    return n / sizeof(*out);
+}
+
 bool
 libretro_host_neogeo_getPaletteState(e9k_debug_palette_state_t *out)
 {
@@ -136,6 +151,8 @@ libretro_host_neogeo_bindApis(void)
         (e9k_debug_neogeo_get_c_rom_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_c_rom");
     libretro_host.debugNeogeoGetFixRom =
         (e9k_debug_neogeo_get_fix_rom_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_fix_rom");
+    libretro_host.debugNeogeoGetRoms =
+        (e9k_debug_neogeo_get_roms_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_roms");
     libretro_host.debugNeogeoGetPaletteState =
         (e9k_debug_neogeo_get_palette_state_fn_t)libretro_host_loadSymbol("e9k_debug_neogeo_get_palette_state");
     libretro_host.debugNeogeoGetAudioFrame =
@@ -153,6 +170,7 @@ libretro_host_neogeo_unbindApis(void)
     libretro_host.debugNeogeoGetP1Rom = NULL;
     libretro_host.debugNeogeoGetCRom = NULL;
     libretro_host.debugNeogeoGetFixRom = NULL;
+    libretro_host.debugNeogeoGetRoms = NULL;
     libretro_host.debugNeogeoGetPaletteState = NULL;
     libretro_host.debugNeogeoGetAudioFrame = NULL;
     libretro_host.debugNeogeoSetAudioVisEnabled = NULL;

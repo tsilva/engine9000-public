@@ -53,6 +53,7 @@
 #define NEOGEO_MEMVIEW_FOLLOW_MIN_SCORE 256u
 #define NEOGEO_MEMVIEW_FOLLOW_STABLE_FRAMES 3u
 #define NEOGEO_MEMVIEW_TOOLBAR_MAX_ROW_ITEMS 64
+#define NEOGEO_MEMVIEW_ROM_ENTRY_MAX 12
 #define NEOGEO_MEMVIEW_SPRITE_COUNT 382u
 #define NEOGEO_MEMVIEW_SPRITE_FIRST_VISIBLE 1u
 #define NEOGEO_MEMVIEW_SPRITE_CHAIN_SCAN_END 381u
@@ -68,11 +69,14 @@
 #define NEOGEO_MEMVIEW_SPRITE_TILE_HIGH_SHIFT 12u
 #define NEOGEO_MEMVIEW_SPRITE_PALETTE_SHIFT 8u
 #define NEOGEO_MEMVIEW_SPRITE_PALETTE_MASK 0x00ffu
+#define NEOGEO_MEMVIEW_FNV1A64_OFFSET_BASIS 1469598103934665603ull
+#define NEOGEO_MEMVIEW_FNV1A64_PRIME 1099511628211ull
 
 typedef enum neogeo_memview_mode {
     neogeo_memview_mode_ram = 0,
     neogeo_memview_mode_crom = 1,
-    neogeo_memview_mode_zram = 2
+    neogeo_memview_mode_zram = 2,
+    neogeo_memview_mode_roms = 3
 } neogeo_memview_mode_t;
 
 typedef struct neogeo_memview_overview_range {
@@ -90,6 +94,7 @@ struct neogeo_memview_state {
     e9ui_component_t *modeButtonRam;
     e9ui_component_t *modeButtonCrom;
     e9ui_component_t *modeButtonZram;
+    e9ui_component_t *modeButtonRoms;
     e9ui_component_t *addressBox;
     e9ui_component_t *widthBox;
     e9ui_component_t *widthSeek;
@@ -121,6 +126,7 @@ struct neogeo_memview_state {
     e9ui_step_buttons_state_t stepButtons;
     e9ui_scrollbar_state_t hScrollbar;
     int scrollX;
+    int romsScrollY;
     int contentPixelWidth;
     SDL_Renderer *renderer;
     SDL_Texture *mainTexture;
@@ -128,6 +134,30 @@ struct neogeo_memview_state {
     size_t mainPixelsCap;
     int mainTextureW;
     int mainTextureH;
+    int mainCromCacheValid;
+    uint32_t mainCromCacheBaseAddr;
+    uint32_t mainCromCacheCromTiles;
+    int mainCromCacheTilesPerRow;
+    int mainCromCacheVisibleRows;
+    int mainCromCachePixelPx;
+    int mainCromCacheTileGapPx;
+    int mainCromCacheTexW;
+    int mainCromCacheTexH;
+    uint64_t mainCromCachePaletteToken;
+    int mainRomsCacheValid;
+    int mainRomsCacheTexW;
+    int mainRomsCacheTexH;
+    int mainRomsCacheCols;
+    int mainRomsCacheCardW;
+    int mainRomsCacheCardH;
+    int mainRomsCacheContentW;
+    int mainRomsCacheContentH;
+    uint64_t mainRomsCacheToken;
+    e9k_debug_rom_entry_t mainRomsEntries[NEOGEO_MEMVIEW_ROM_ENTRY_MAX];
+    size_t mainRomsEntryCount;
+    size_t mainRomsTotalSize;
+    uint64_t mainRomsContentToken;
+    int mainRomsEntriesValid;
     uint16_t *followPrevSpriteVram;
     size_t followPrevSpriteVramWords;
     uint32_t followPendingStartRow;
@@ -137,6 +167,11 @@ struct neogeo_memview_state {
     size_t overviewPixelsCap;
     int overviewTextureW;
     int overviewTextureH;
+    uint32_t *overviewTileRows;
+    uint32_t *overviewTileCols;
+    size_t overviewTileMapCap;
+    uint32_t overviewTileMapCromTiles;
+    uint32_t overviewTileMapTilesPerRow;
     SDL_Texture *overviewBackgroundTexture;
     uint32_t *overviewBackgroundPixels;
     size_t overviewBackgroundPixelsCap;
@@ -241,12 +276,3 @@ neogeo_memview_rebuildOverviewTexture(neogeo_memview_state_t *ui,
 
 int
 neogeo_memview_overviewNavigate(neogeo_memview_state_t *ui, e9ui_component_t *self, e9ui_context_t *ctx, int mx, int my);
-
-uint64_t
-neogeo_memview_profileBegin(void);
-
-void
-neogeo_memview_profileEnd(const char *name, uint64_t startTicks, uint64_t units);
-
-void
-neogeo_memview_profileMark(const char *name, uint64_t units);

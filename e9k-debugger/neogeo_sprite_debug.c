@@ -74,6 +74,24 @@
 #define NEOGEO_SPRITE_DEBUG_CONTROL_GAP 8
 #define NEOGEO_SPRITE_DEBUG_CONTROL_VGAP 6
 #define NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT 4
+#define NEOGEO_SPRITE_DEBUG_LINE_COUNT NG_COORD_SIZE
+
+typedef struct neogeo_sprite_debug_decoded_sprite {
+    unsigned xpos;
+    unsigned ypos;
+    unsigned sprsize;
+    unsigned hshrink;
+    unsigned vshrink;
+    unsigned chainRootIndex;
+    unsigned paletteBank;
+    int width;
+    int hasAnimBits;
+} neogeo_sprite_debug_decoded_sprite_t;
+
+typedef struct neogeo_sprite_debug_line_sprites {
+    uint16_t indices[NG_SPRITES_PER_LINE_MAX];
+    uint8_t count;
+} neogeo_sprite_debug_line_sprites_t;
 
 typedef enum neogeo_sprite_debug_view_mode {
     neogeo_sprite_debug_view_mode_normal = 0,
@@ -167,8 +185,11 @@ neogeo_sprite_debug_drawRectAbs(uint32_t *pixels, int pitch, int extW, int extH,
                       int x, int y, int w, int h, uint32_t color);
 
 static void
-neogeo_sprite_debug_fillRectCoordWrapped(uint32_t *pixels, int pitch, int extW, int extH,
-                               int x, int y, int w, int h, uint32_t color);
+neogeo_sprite_debug_fillHLineCoordWrapped(uint32_t *pixels, int pitch, int extW, int extH,
+                               int x, int y, int w, uint32_t color);
+
+static void
+neogeo_sprite_debug_fillPixels(uint32_t *pixels, size_t count, uint32_t color);
 
 static int
 neogeo_sprite_debug_drawBadge(uint32_t *pixels, int pitch, int extW, int extH,
@@ -843,6 +864,14 @@ neogeo_sprite_debug_fillRectAbs(uint32_t *pixels, int pitch, int extW, int extH,
 }
 
 static void
+neogeo_sprite_debug_fillPixels(uint32_t *pixels, size_t count, uint32_t color)
+{
+    for (size_t i = 0; i < count; ++i) {
+        pixels[i] = color;
+    }
+}
+
+static void
 neogeo_sprite_debug_drawRectAbs(uint32_t *pixels, int pitch, int extW, int extH,
                       int x, int y, int w, int h, uint32_t color)
 {
@@ -886,13 +915,47 @@ neogeo_sprite_debug_fillRectCoord(uint32_t *pixels, int pitch, int extW, int ext
 }
 
 static void
-neogeo_sprite_debug_fillRectCoordWrapped(uint32_t *pixels, int pitch, int extW, int extH,
-                               int x, int y, int w, int h, uint32_t color)
+neogeo_sprite_debug_fillHLineCoord(uint32_t *pixels, int pitch, int extW, int extH,
+                         int cx, int cy, int cw, uint32_t color)
 {
-    neogeo_sprite_debug_fillRectCoord(pixels, pitch, extW, extH, x, y, w, h, color);
-    neogeo_sprite_debug_fillRectCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y, w, h, color);
-    neogeo_sprite_debug_fillRectCoord(pixels, pitch, extW, extH, x, y - NG_COORD_SIZE, w, h, color);
-    neogeo_sprite_debug_fillRectCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y - NG_COORD_SIZE, w, h, color);
+    if (!pixels || cw <= 0) {
+        return;
+    }
+
+    int sy = cy + NG_COORD_OFFSET_Y;
+    if (sy < 0 || sy >= NG_COORD_H || sy >= extH) {
+        return;
+    }
+
+    int x0 = cx + NG_COORD_OFFSET_X;
+    int x1 = x0 + cw;
+    if (x1 <= 0 || x0 >= NG_COORD_W || x0 >= extW) {
+        return;
+    }
+    if (x0 < 0) {
+        x0 = 0;
+    }
+    if (x1 > NG_COORD_W) {
+        x1 = NG_COORD_W;
+    }
+    if (x1 > extW) {
+        x1 = extW;
+    }
+
+    uint32_t *row = pixels + (size_t)sy * (size_t)pitch + x0;
+    for (int x = x0; x < x1; ++x) {
+        *row++ = color;
+    }
+}
+
+static void
+neogeo_sprite_debug_fillHLineCoordWrapped(uint32_t *pixels, int pitch, int extW, int extH,
+                               int x, int y, int w, uint32_t color)
+{
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x, y, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x, y - NG_COORD_SIZE, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y - NG_COORD_SIZE, w, color);
 }
 
 static int
@@ -1044,6 +1107,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     if (!neogeo_sprite_debugState.texture) {
         return;
     }
+
     uint32_t hash = neogeo_sprite_debug_hashSprites(scb2, scb3, scb4);
     hash ^= neogeo_sprite_debug_hashWords(vram + NG_FIX_MAP_BASE, NG_FIX_MAP_WORDS);
     hash *= 16777619u;
@@ -1060,6 +1124,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         neogeo_sprite_debugState.pixels = next;
         neogeo_sprite_debugState.pixelsCap = needed;
     }
+
     uint32_t *pixels = neogeo_sprite_debugState.pixels;
     const uint32_t colBg = neogeo_sprite_debug_color(68, 68, 68);
     const uint32_t colBlack = neogeo_sprite_debug_color(0, 0, 0);
@@ -1068,10 +1133,15 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     const uint32_t colAnim = neogeo_sprite_debug_color(255, 192, 0);
     const uint32_t colHistBg = neogeo_sprite_debug_color(34, 34, 34);
     const uint32_t colBounds = neogeo_sprite_debug_color(120, 120, 120);
-    for (size_t i = 0; i < needed; ++i) {
-        pixels[i] = colBlack;
+
+    for (int y = 0; y < extH; ++y) {
+        neogeo_sprite_debug_fillPixels(pixels + (size_t)y * (size_t)extW, (size_t)baseW, colBg);
+        if (extW > baseW) {
+            neogeo_sprite_debug_fillPixels(pixels + (size_t)y * (size_t)extW + (size_t)baseW,
+                                           (size_t)(extW - baseW),
+                                           colBlack);
+        }
     }
-    neogeo_sprite_debug_fillRectAbs(pixels, extW, extW, extH, 0, 0, baseW, baseH, colBg);
     neogeo_sprite_debug_drawRectAbs(pixels, extW, extW, extH,
                           NG_COORD_OFFSET_X, NG_COORD_OFFSET_Y,
                           NG_COORD_SIZE, NG_COORD_SIZE, colBounds);
@@ -1112,12 +1182,11 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         }
         i += len;
     }
-    unsigned sprlimit = st->sprlimit ? st->sprlimit : NG_SPRITES_PER_LINE_MAX;
-    int maxcnt = 0;
-    for (int line = 0; line < NG_COORD_SIZE; ++line) {
-        unsigned sprcount = 0;
-        unsigned viscount = 0;
 
+    neogeo_sprite_debug_decoded_sprite_t decodedSprites[NG_MAX_SPRITES];
+    neogeo_sprite_debug_line_sprites_t lineSprites[NEOGEO_SPRITE_DEBUG_LINE_COUNT];
+    memset(lineSprites, 0, sizeof(lineSprites));
+    {
         unsigned xpos = 0;
         unsigned ypos = 0;
         unsigned sprsize = 0;
@@ -1125,6 +1194,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         unsigned vshrink = NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK;
         unsigned chainRootIndex = 1;
 
+        memset(decodedSprites, 0, sizeof(decodedSprites));
         for (unsigned i = 1; i < (unsigned)NG_MAX_SPRITES; ++i) {
             uint16_t scb3w = scb3[i];
             uint16_t scb2w = scb2[i];
@@ -1142,61 +1212,85 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             hshrink = (unsigned)((scb2w >> NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_SHIFT) &
                                  NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK);
 
-            int vline = line + NG_LINE_OFFSET;
-            unsigned srow = (unsigned)(((vline - (int)(NG_COORD_SIZE - (int)ypos))) & NG_WRAP_MASK);
-            if ((sprsize == 0) || (srow >= (sprsize << 4))) {
-                continue;
-            }
+            decodedSprites[i].xpos = xpos;
+            decodedSprites[i].ypos = ypos;
+            decodedSprites[i].sprsize = sprsize;
+            decodedSprites[i].hshrink = hshrink;
+            decodedSprites[i].vshrink = vshrink;
+            decodedSprites[i].chainRootIndex = chainRootIndex;
+            decodedSprites[i].width = (int)neogeo_sprite_debug_countShrinkWidth(hshrink);
 
-            if (sprcount == NG_SPRITES_PER_LINE_MAX) {
-                break;
-            }
-            sprcount++;
-
-            int w = (int)neogeo_sprite_debug_countShrinkWidth(hshrink);
-            if (w <= 0) {
-                continue;
-            }
-            int hasAnimBits = 0;
-            unsigned paletteBank = 0;
             unsigned oddWordOffset = i * NEOGEO_SPRITE_DEBUG_SPRITE_VRAM_WORDS_PER_SPRITE +
                 NEOGEO_SPRITE_DEBUG_SPRITE_TILE_ODD_WORD_OFFSET;
             if (oddWordOffset < st->vram_words) {
-                if (vram[oddWordOffset] & NEOGEO_SPRITE_DEBUG_SPRITE_ANIM_MASK) {
-                    hasAnimBits = 1;
+                decodedSprites[i].hasAnimBits =
+                    (vram[oddWordOffset] & NEOGEO_SPRITE_DEBUG_SPRITE_ANIM_MASK) ? 1 : 0;
+                decodedSprites[i].paletteBank =
+                    (unsigned)((vram[oddWordOffset] >> NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_SHIFT) &
+                               NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_MASK);
+            }
+
+            unsigned totalH = sprsize << 4;
+            if (totalH == 0u) {
+                continue;
+            }
+            for (unsigned row = 0; row < totalH && row < (unsigned)NEOGEO_SPRITE_DEBUG_LINE_COUNT; ++row) {
+                unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - NG_LINE_OFFSET) & NG_WRAP_MASK);
+                neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
+
+                if (lineList->count >= NG_SPRITES_PER_LINE_MAX) {
+                    continue;
                 }
-                paletteBank = (unsigned)((vram[oddWordOffset] >> NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_SHIFT) &
-                                         NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_MASK);
+                lineList->indices[lineList->count] = (uint16_t)i;
+                lineList->count++;
             }
-            uint32_t spriteCol = hasAnimBits ? colAnim : colGreen;
+        }
+    }
+
+    unsigned sprlimit = st->sprlimit ? st->sprlimit : NG_SPRITES_PER_LINE_MAX;
+    int maxcnt = 0;
+    for (int line = 0; line < NG_COORD_SIZE; ++line) {
+        unsigned viscount = 0;
+        neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
+
+        for (unsigned lineSpriteIndex = 0; lineSpriteIndex < lineList->count; ++lineSpriteIndex) {
+            unsigned i = (unsigned)lineList->indices[lineSpriteIndex];
+            const neogeo_sprite_debug_decoded_sprite_t *sprite = &decodedSprites[i];
+            unsigned srow = (unsigned)(((line + NG_LINE_OFFSET) - (int)(NG_COORD_SIZE - (int)sprite->ypos)) & NG_WRAP_MASK);
+
+            int w = sprite->width;
+            if (w <= 0) {
+                continue;
+            }
+            uint32_t spriteCol = sprite->hasAnimBits ? colAnim : colGreen;
             if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_shrink) {
-                spriteCol = neogeo_sprite_debug_shrinkRgbColor(hshrink, vshrink);
+                spriteCol = neogeo_sprite_debug_shrinkRgbColor(sprite->hshrink, sprite->vshrink);
             } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_palette) {
-                spriteCol = neogeo_sprite_debug_paletteColor(paletteBank);
+                spriteCol = neogeo_sprite_debug_paletteColor(sprite->paletteBank);
             } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_chain) {
-                spriteCol = neogeo_sprite_debug_chainColor(chainRootIndex);
+                spriteCol = neogeo_sprite_debug_chainColor(sprite->chainRootIndex);
             }
-            int x0 = (int)(xpos & NG_WRAP_MASK);
+            int x0 = (int)(sprite->xpos & NG_WRAP_MASK);
             int xsum = x0 + w;
             int visible = (x0 < NG_VISIBLE_W) || (xsum > NG_COORD_SIZE);
             if (visible) {
                 viscount++;
             }
 
-            neogeo_sprite_debug_fillRectCoordWrapped(pixels, extW, extW, extH, x0, line, 1, 1, spriteCol);
-            neogeo_sprite_debug_fillRectCoordWrapped(pixels, extW, extW, extH, x0 + w - 1, line, 1, 1, spriteCol);
+            neogeo_sprite_debug_fillHLineCoordWrapped(pixels, extW, extW, extH, x0, line, 1, spriteCol);
+            neogeo_sprite_debug_fillHLineCoordWrapped(pixels, extW, extW, extH, x0 + w - 1, line, 1, spriteCol);
 
-            unsigned totalH = (unsigned)(sprsize << 4);
+            unsigned totalH = (unsigned)(sprite->sprsize << 4);
             if (srow == 0u || (srow + 1u) == totalH) {
-                neogeo_sprite_debug_fillRectCoordWrapped(pixels, extW, extW, extH, x0, line, w, 1, spriteCol);
+                neogeo_sprite_debug_fillHLineCoordWrapped(pixels, extW, extW, extH, x0, line, w, spriteCol);
             }
         }
 
         if (line >= NG_VISIBLE_Y0 && line < (NG_VISIBLE_Y0 + NG_VISIBLE_H)) {
             viscountLine[line - NG_VISIBLE_Y0] = viscount;
         }
-        if ((int)sprcount > maxcnt) {
-            maxcnt = (int)sprcount;
+        if ((int)lineList->count > maxcnt) {
+            maxcnt = (int)lineList->count;
         }
     }
 

@@ -83,6 +83,7 @@ typedef size_t (*e9k_debug_neogeo_get_sprite_state_fn_t)(e9k_debug_sprite_state_
 typedef size_t (*e9k_debug_neogeo_get_p1_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_c_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_fix_rom_fn_t)(e9k_debug_rom_region_t *out, size_t cap);
+typedef size_t (*e9k_debug_neogeo_get_roms_fn_t)(e9k_debug_rom_entry_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_palette_state_fn_t)(e9k_debug_palette_state_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_audio_frame_fn_t)(e9k_debug_audio_frame_t *out, size_t cap);
 typedef void (*e9k_debug_neogeo_set_audio_vis_enabled_fn_t)(int enabled);
@@ -249,6 +250,7 @@ typedef struct {
     e9k_debug_neogeo_get_p1_rom_fn_t debugNeogeoGetP1Rom;
     e9k_debug_neogeo_get_c_rom_fn_t debugNeogeoGetCRom;
     e9k_debug_neogeo_get_fix_rom_fn_t debugNeogeoGetFixRom;
+    e9k_debug_neogeo_get_roms_fn_t debugNeogeoGetRoms;
     e9k_debug_neogeo_get_palette_state_fn_t debugNeogeoGetPaletteState;
     e9k_debug_neogeo_get_audio_frame_fn_t debugNeogeoGetAudioFrame;
     e9k_debug_neogeo_set_audio_vis_enabled_fn_t debugNeogeoSetAudioVisEnabled;

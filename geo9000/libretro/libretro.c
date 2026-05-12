@@ -399,6 +399,79 @@ E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_fix_rom(e9k_debug_rom_region_t *out
     return sizeof(*out);
 }
 
+static void
+e9k_debug_neogeo_set_rom_entry(e9k_debug_rom_entry_t *entry, const char *label, const uint8_t *data, size_t size)
+{
+    size_t len = 0u;
+
+    if (!entry) {
+        return;
+    }
+    memset(entry, 0, sizeof(*entry));
+    if (label) {
+        len = strlen(label);
+        if (len >= sizeof(entry->label)) {
+            len = sizeof(entry->label) - 1u;
+        }
+        memcpy(entry->label, label, len);
+        entry->label[len] = '\0';
+    }
+    entry->data = data;
+    entry->size = size;
+}
+
+E9K_DEBUG_EXPORT size_t
+e9k_debug_neogeo_get_roms(e9k_debug_rom_entry_t *out, size_t cap)
+{
+    romdata_t *rom = geo_romdata_ptr();
+    e9k_debug_rom_entry_t entries[10];
+    size_t count = 0u;
+
+    if (!rom) {
+        return 0u;
+    }
+    if (rom->b && rom->bsz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "BIOS", rom->b, rom->bsz);
+    }
+    if (rom->sfix && rom->sfixsz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "SFIX", rom->sfix, rom->sfixsz);
+    }
+    if (rom->sm && rom->smsz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "SM1", rom->sm, rom->smsz);
+    }
+    if (rom->l0 && rom->l0sz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "L0", rom->l0, rom->l0sz);
+    }
+    if (rom->p && rom->psz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "P", rom->p, rom->psz);
+    }
+    if (rom->s && rom->ssz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "S", rom->s, rom->ssz);
+    }
+    if (rom->m && rom->msz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "M1", rom->m, rom->msz);
+    }
+    if (rom->v1 && rom->v1sz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], rom->v1 == rom->v2 ? "V" : "V1", rom->v1, rom->v1sz);
+    }
+    if (rom->v2 && rom->v2sz && rom->v2 != rom->v1) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "V2", rom->v2, rom->v2sz);
+    }
+    if (rom->c && rom->csz) {
+        e9k_debug_neogeo_set_rom_entry(&entries[count++], "C", rom->c, rom->csz);
+    }
+
+    if (out && cap >= sizeof(*out)) {
+        size_t outCount = cap / sizeof(*out);
+
+        if (outCount > count) {
+            outCount = count;
+        }
+        memcpy(out, entries, outCount * sizeof(*out));
+    }
+    return count * sizeof(*out);
+}
+
 E9K_DEBUG_EXPORT size_t e9k_debug_disassemble_quick(uint32_t pc, char *out, size_t cap) {
     if (!out || cap == 0) {
         return 0;

@@ -1779,6 +1779,7 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugNeogeoGetP1Rom = NULL;
     libretro_host.debugNeogeoGetCRom = NULL;
     libretro_host.debugNeogeoGetFixRom = NULL;
+    libretro_host.debugNeogeoGetRoms = NULL;
     libretro_host.debugNeogeoGetPaletteState = NULL;
     libretro_host.debugNeogeoGetAudioFrame = NULL;
     libretro_host.debugNeogeoSetAudioVisEnabled = NULL;

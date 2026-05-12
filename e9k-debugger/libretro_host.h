@@ -409,6 +409,9 @@ libretro_host_neogeo_getCRom(e9k_debug_rom_region_t *out);
 bool
 libretro_host_neogeo_getFixRom(e9k_debug_rom_region_t *out);
 
+size_t
+libretro_host_neogeo_getRoms(e9k_debug_rom_entry_t *out, size_t cap);
+
 bool
 libretro_host_neogeo_getAudioFrame(e9k_debug_audio_frame_t *out);
 

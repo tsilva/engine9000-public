@@ -35,6 +35,12 @@ typedef struct e9k_debug_rom_region {
     size_t size;
 } e9k_debug_rom_region_t;
 
+typedef struct e9k_debug_rom_entry {
+    char label[16];
+    const uint8_t *data;
+    size_t size;
+} e9k_debug_rom_entry_t;
+
 typedef struct geo_debug_sprite_state {
     const uint16_t *vram;
     size_t vram_words;

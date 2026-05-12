@@ -14,6 +14,9 @@ size_t
 e9k_debug_neogeo_get_fix_rom(e9k_debug_rom_region_t *out, size_t cap);
 
 size_t
+e9k_debug_neogeo_get_roms(e9k_debug_rom_entry_t *out, size_t cap);
+
+size_t
 e9k_debug_neogeo_get_palette_state(e9k_debug_palette_state_t *out, size_t cap);
 
 size_t
