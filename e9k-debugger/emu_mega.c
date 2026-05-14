@@ -16,6 +16,7 @@
 #include "emu_mega.h"
 #include "e9ui.h"
 #include "libretro.h"
+#include "mega_memview.h"
 #include "mega_sprite_debug.h"
 #include "target.h"
 
@@ -192,6 +193,14 @@ emu_mega_toggleSpriteDebug(e9ui_context_t *ctx, void *user)
     (void)ctx;
     (void)user;
     mega_sprite_debug_toggle();
+}
+
+static void
+emu_mega_toggleMemview(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    mega_memview_toggle();
 }
 
 static void
@@ -543,6 +552,14 @@ emu_mega_createOverlays(e9ui_component_t *comp, e9ui_component_t *button_stack)
         void *spriteDebugBtnMeta = alloc_strdup("mega_sprite_debug");
         e9ui_child_add(button_stack, btnDebug, spriteDebugBtnMeta);
     }
+
+    e9ui_component_t *btnMemview = e9ui_button_make("RAM/ROMS", emu_mega_toggleMemview, comp);
+    if (btnMemview) {
+        e9ui_button_setMini(btnMemview, 1);
+        e9ui_setFocusTarget(btnMemview, comp);
+        void *memviewBtnMeta = alloc_strdup("mega_memview");
+        e9ui_child_add(button_stack, btnMemview, memviewBtnMeta);
+    }
 }
 
 static void
@@ -553,6 +570,9 @@ emu_mega_render(e9ui_context_t *ctx, SDL_Rect *dst)
     }
     if (mega_sprite_debug_is_open() && emu_mega_spriteShadowReady) {
         mega_sprite_debug_render(&emu_mega_spriteShadow);
+    }
+    if (mega_memview_isOpen()) {
+        mega_memview_render();
     }
 }
 

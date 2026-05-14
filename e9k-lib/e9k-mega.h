@@ -33,6 +33,10 @@ typedef struct e9k_debug_mega_sprite_entry
     uint16_t height;
     uint16_t satIndex;
     uint16_t link;
+    uint16_t tileIndex;
+    uint8_t palette;
+    uint8_t widthTiles;
+    uint8_t heightTiles;
     uint8_t flags;
     uint8_t _reserved[3];
 } e9k_debug_mega_sprite_entry_t;
@@ -50,6 +54,7 @@ typedef struct e9k_debug_mega_sprite_state
     int tileLimitPerLine;
     int frameSpriteUsed;
     int frameSpriteMax;
+    uint8_t vdpRegs[32];
     uint8_t spritesPerLine[E9K_DEBUG_MEGA_MAX_LINES];
     uint8_t tilesPerLine[E9K_DEBUG_MEGA_MAX_LINES];
     uint8_t lineFlags[E9K_DEBUG_MEGA_MAX_LINES];

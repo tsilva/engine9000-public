@@ -13,6 +13,7 @@
 #include "debugger.h"
 #include "debug.h"
 #include "emu_mega.h"
+#include "mega_memview.h"
 #include "mega_sprite_debug.h"
 #include "megadrive_core_options.h"
 
@@ -434,6 +435,42 @@ mega_sprite_debug_persistConfig(FILE *file)
 
 int
 mega_sprite_debug_loadConfigProperty(const char *prop, const char *value)
+{
+    (void)prop;
+    (void)value;
+    return 0;
+}
+
+void
+mega_memview_toggle(void)
+{
+}
+
+int
+mega_memview_isOpen(void)
+{
+    return 0;
+}
+
+void
+mega_memview_render(void)
+{
+}
+
+void
+mega_memview_setMainWindowFocused(int focused)
+{
+    (void)focused;
+}
+
+void
+mega_memview_persistConfig(FILE *file)
+{
+    (void)file;
+}
+
+int
+mega_memview_loadConfigProperty(const char *prop, const char *value)
 {
     (void)prop;
     (void)value;

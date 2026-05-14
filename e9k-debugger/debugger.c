@@ -18,6 +18,7 @@
 #include "analyse.h"
 #include "linebuf.h"
 #include "neogeo_memview.h"
+#include "mega_memview.h"
 #include "neogeo_palette_debug.h"
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
@@ -670,6 +671,9 @@ debugger_cleanup(void)
   neogeo_register_log_shutdown();
   if (mega_sprite_debug_is_open()) {
     mega_sprite_debug_toggle();
+  }
+  if (mega_memview_isOpen()) {
+    mega_memview_toggle();
   }
   amiga_custom_log_shutdown();
   amiga_custom_shutdown();

@@ -31,7 +31,7 @@ endif
 
 DEBUG_FLAGS=-g -fno-omit-frame-pointer
 SANITIZER_LIBS=
-LTO_FLAGS := -flto
+#LTO_FLAGS := -flto
 ifeq ($(UNAME_S),Darwin)
 #DEBUG_FLAGS += -fsanitize=address,undefined
 #SANITIZER_LIBS += -fsanitize=address,undefined
@@ -135,7 +135,7 @@ else
 SRCS += gl_composite_stub.c
 endif
 ifeq ($(E9K_ENABLE_MEGADRIVE),1)
-SRCS += megadrive_core_options.c emu_mega.c mega_sprite_debug.c target_megadrive.c
+SRCS += megadrive_core_options.c emu_mega.c mega_sprite_debug.c mega_memview.c mega_memview_overview.c target_megadrive.c
 else
 SRCS += target_megadrive_stub.c
 endif
