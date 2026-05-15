@@ -199,16 +199,34 @@ elfutil_getTextBounds(const char *elf_path, uint64_t *out_lo, uint64_t *out_hi)
         // Iterate sections
         if (fseek(f, (long)eh.e_shoff, SEEK_SET) != 0) { alloc_free(strtab); fclose(f); return 0; }
         Elf32_Shdr sh;
-        uint64_t lo=0, hi=0;
+        uint64_t lo = 0;
+        uint64_t hi = 0;
+        uint64_t textLikeLo = 0;
+        uint64_t textLikeHi = 0;
+        int foundTextLike = 0;
         for (uint16_t i=0;i<shnum;i++) {
             if (fread(&sh, 1, sizeof(sh), f) != sizeof(sh)) break;
             swap_shdr32_if_needed(&sh, file_le);
             const char *nm = (strtab && sh.sh_name < strsz) ? (strtab + sh.sh_name) : NULL;
-            if (nm && (strcmp(nm, ".text") == 0 || starts_with(nm, ".text."))) {
-                lo = (uint64_t)sh.sh_addr; hi = lo + (uint64_t)sh.sh_size; break;
+            if (nm && strcmp(nm, ".text") == 0) {
+                lo = (uint64_t)sh.sh_addr;
+                hi = lo + (uint64_t)sh.sh_size;
+                break;
+            }
+            if (nm && starts_with(nm, ".text.")) {
+                uint64_t sectionLo = (uint64_t)sh.sh_addr;
+                uint64_t sectionHi = sectionLo + (uint64_t)sh.sh_size;
+                if (!foundTextLike || sectionLo < textLikeLo) {
+                    textLikeLo = sectionLo;
+                }
+                if (sectionHi > textLikeHi) {
+                    textLikeHi = sectionHi;
+                }
+                foundTextLike = 1;
             }
         }
-        if (lo != 0 && hi > lo) { alloc_free(strtab); fclose(f); *out_lo = lo; *out_hi = hi; return 1; }
+        if (hi > lo) { alloc_free(strtab); fclose(f); *out_lo = lo; *out_hi = hi; return 1; }
+        if (foundTextLike && textLikeHi > textLikeLo) { alloc_free(strtab); fclose(f); *out_lo = textLikeLo; *out_hi = textLikeHi; return 1; }
         // Fallback: program headers executable load
         // Handle extended phnum
         uint16_t phnum = eh.e_phnum;
@@ -220,16 +238,18 @@ elfutil_getTextBounds(const char *elf_path, uint64_t *out_lo, uint64_t *out_hi)
         if (eh.e_phoff != 0 && eh.e_phentsize >= sizeof(Elf32_Phdr) && phnum > 0) {
             if (fseek(f, (long)eh.e_phoff, SEEK_SET) == 0) {
                 uint64_t plo = 0, phi = 0;
+                int foundLoad = 0;
                 for (uint16_t i=0;i<phnum;i++) {
                     Elf32_Phdr ph; if (fread(&ph, 1, sizeof(ph), f) != sizeof(ph)) break;
                     swap_phdr32_if_needed(&ph, file_le);
                     if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X)) {
                         uint64_t a = ph.p_vaddr; uint64_t b = a + ph.p_memsz;
-                        if (plo == 0 || a < plo) plo = a;
+                        if (!foundLoad || a < plo) plo = a;
                         if (b > phi) phi = b;
+                        foundLoad = 1;
                     }
                 }
-                if (plo != 0 && phi > plo) { alloc_free(strtab); fclose(f); *out_lo = plo; *out_hi = phi; return 1; }
+                if (foundLoad && phi > plo) { alloc_free(strtab); fclose(f); *out_lo = plo; *out_hi = phi; return 1; }
             }
         }
         alloc_free(strtab);
@@ -262,15 +282,32 @@ elfutil_getTextBounds(const char *elf_path, uint64_t *out_lo, uint64_t *out_hi)
         }
         if (fseek(f, (long)eh.e_shoff, SEEK_SET) != 0) { alloc_free(strtab); fclose(f); return 0; }
         Elf64_Shdr sh; uint64_t lo=0, hi=0;
+        uint64_t textLikeLo = 0;
+        uint64_t textLikeHi = 0;
+        int foundTextLike = 0;
         for (uint16_t i=0;i<shnum;i++) {
             if (fread(&sh, 1, sizeof(sh), f) != sizeof(sh)) break;
             swap_shdr64_if_needed(&sh, file_le);
             const char *nm = (strtab && sh.sh_name < strsz) ? (strtab + sh.sh_name) : NULL;
-            if (nm && (strcmp(nm, ".text") == 0 || starts_with(nm, ".text."))) {
-                lo = (uint64_t)sh.sh_addr; hi = lo + (uint64_t)sh.sh_size; break;
+            if (nm && strcmp(nm, ".text") == 0) {
+                lo = (uint64_t)sh.sh_addr;
+                hi = lo + (uint64_t)sh.sh_size;
+                break;
+            }
+            if (nm && starts_with(nm, ".text.")) {
+                uint64_t sectionLo = (uint64_t)sh.sh_addr;
+                uint64_t sectionHi = sectionLo + (uint64_t)sh.sh_size;
+                if (!foundTextLike || sectionLo < textLikeLo) {
+                    textLikeLo = sectionLo;
+                }
+                if (sectionHi > textLikeHi) {
+                    textLikeHi = sectionHi;
+                }
+                foundTextLike = 1;
             }
         }
-        if (lo != 0 && hi > lo) { alloc_free(strtab); fclose(f); *out_lo = lo; *out_hi = hi; return 1; }
+        if (hi > lo) { alloc_free(strtab); fclose(f); *out_lo = lo; *out_hi = hi; return 1; }
+        if (foundTextLike && textLikeHi > textLikeLo) { alloc_free(strtab); fclose(f); *out_lo = textLikeLo; *out_hi = textLikeHi; return 1; }
         // Fallback: program headers executable load
         uint16_t phnum = eh.e_phnum;
         if (phnum == 0xFFFF) {
@@ -281,16 +318,18 @@ elfutil_getTextBounds(const char *elf_path, uint64_t *out_lo, uint64_t *out_hi)
         if (eh.e_phoff != 0 && eh.e_phentsize >= sizeof(Elf64_Phdr) && phnum > 0) {
             if (fseek(f, (long)eh.e_phoff, SEEK_SET) == 0) {
                 uint64_t plo = 0, phi = 0;
+                int foundLoad = 0;
                 for (uint16_t i=0;i<phnum;i++) {
                     Elf64_Phdr ph; if (fread(&ph, 1, sizeof(ph), f) != sizeof(ph)) break;
                     swap_phdr64_if_needed(&ph, file_le);
                     if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X)) {
                         uint64_t a = ph.p_vaddr; uint64_t b = a + ph.p_memsz;
-                        if (plo == 0 || a < plo) plo = a;
+                        if (!foundLoad || a < plo) plo = a;
                         if (b > phi) phi = b;
+                        foundLoad = 1;
                     }
                 }
-                if (plo != 0 && phi > plo) { alloc_free(strtab); fclose(f); *out_lo = plo; *out_hi = phi; return 1; }
+                if (foundLoad && phi > plo) { alloc_free(strtab); fclose(f); *out_lo = plo; *out_hi = phi; return 1; }
             }
         }
         alloc_free(strtab);

@@ -36,7 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "geo.h"
 #include "geo_lspc.h"
 #include "geo_z80.h"
-#include "geo_z80_dasm.h"
+#include "e9k-z80-dasm.h"
 #include "geo_serial.h"
 #include "e9k_debugger.h"
 #include "ymfm/ymfm_opn.h"
@@ -630,7 +630,7 @@ geo_z80_debugDisassemble(uint32_t pc, char *out, size_t cap)
     for (size_t i = 0; i < sizeof(bytes); ++i) {
         bytes[i] = geo_z80_mem_rd(NULL, (uint16_t)(pc + (uint32_t)i));
     }
-    return geo_z80_dasmDisassemble(bytes, pc, out, cap);
+    return e9k_z80_dasmDisassemble(bytes, pc, out, cap);
 }
 
 #ifdef E9K_HACK_REGISTER_LOG

@@ -1,6 +1,6 @@
 # Z80 debug sidecars
 
-How to get source level z80 debugging (neo geo only).
+How to get source level z80 debugging (neo geo/megadrive).
 
 The debugger looks for Z80 sidecar files next to the selected source/build dir. If `--source-dir` points at a project that has a `build/` directory, that `build/` directory wins. Otherwise the source dir itself is used. As a fallback it will look next to the selected ROM/ELF path.
 
@@ -51,7 +51,7 @@ Banked symbol files should use the same stem too:
 build/sound_bank1.noi
 ```
 
-If your toolchain cannot emit `.noi`, a small converter is enough. Generate one `DEF` line per exported symbol, with a 16-bit Z80 runtime address. The parser accepts `$1234`, `0x1234`, or plain hex.
+If your toolchain cannot emit `.noi`, a small converter is enough. Generate one `DEF` line per exported symbol, with a 16-bit Z80 runtime address. The parser accepts `$1234`, `0x1234`, or plain hex. For SJASM-style outputs see z80_srcmap tool.
 
 The `.z80srcmap` file provides address to source-line lookup. It is tab-separated:
 
@@ -62,7 +62,7 @@ The `.z80srcmap` file provides address to source-line lookup. It is tab-separate
 
 ## z80_srcmap
 
-`z80_srcmap` builds the `.z80srcmap` sidecar from assembler listings plus source files.
+`z80_srcmap` builds the `.z80srcmap` sidecar from assembler listings plus source files and generates .noi files for SJASM-style outputs.
 
 Basic usage:
 
@@ -86,6 +86,17 @@ Listings come from:
 The build dir is scanned recursively for `.lst` files, except listings under a `pack/` path are skipped. Source dirs are checked for immediate `.lst` files. Extra listing dirs are scanned recursively.
 
 The mapper also reads every `.noi` file directly under `--build-dir`. Those symbols are used to translate listing-local addresses into runtime Z80 addresses, so make sure your Z80 build emits `.noi` and `.lst` files into the build area.
+
+For SJASM-style Z80 images, use the SJASM listing parser and ask the mapper to emit a matching NoICE file:
+
+```sh
+z80_srcmap \
+  --listing-format sjasm \
+  --build-dir build \
+  --source-dir src \
+  --out build/whatever.z80srcmap \
+  --out-noi build/whatever.noi
+```
 
 ## Endian
 

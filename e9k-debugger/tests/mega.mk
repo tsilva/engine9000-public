@@ -1,5 +1,5 @@
-MEGA_TESTS=test-megasprite test-megamemview test-megapalette test-megastepping test-megasavestate
-MEGA_REMAKE=remake-test-megasprite remake-test-megamemview remake-test-megapalette remake-test-megastepping remake-test-megasavestate
+MEGA_TESTS=test-megasprite test-megamemview test-megapalette test-megastepping test-megasavestate test-megaz80
+MEGA_REMAKE=remake-test-megasprite remake-test-megamemview remake-test-megapalette remake-test-megastepping remake-test-megasavestate remake-test-megaz80
 
 MEGA_TEST_ROM=./tests/mega/champa/build/out.bin
 MEGA_TEST_ELF=./tests/mega/champa/build/out.elf
@@ -24,6 +24,9 @@ make-test-megastepping: all $(MEGA_TEST_ASSETS)
 make-test-megasavestate: all $(MEGA_TEST_ASSETS)
 	./e9k-debugger --volume=0 $(MEGA_TEST_ARGS) --make-test tests/results/mega/savestate
 
+make-test-megaz80: all $(MEGA_TEST_ASSETS)
+	./e9k-debugger --volume=0 $(MEGA_TEST_ARGS) --make-test tests/results/mega/z80
+
 
 # remakers
 
@@ -46,6 +49,10 @@ remake-test-megastepping: all $(MEGA_TEST_ASSETS)
 remake-test-megasavestate: all $(MEGA_TEST_ASSETS)
 	@printf "MEGA SAVE STATE ($@) ..."
 	./e9k-debugger --volume=0  $(MEGA_TEST_ARGS) --remake-test tests/results/mega/savestate
+
+remake-test-megaz80: all $(MEGA_TEST_ASSETS)
+	@printf "MEGA Z80 DEBUG ($@) ..."
+	./e9k-debugger --volume=0  $(MEGA_TEST_ARGS) --remake-test tests/results/mega/z80
 
 
 # testers
@@ -74,6 +81,11 @@ test-megastepping: all $(MEGA_TEST_ASSETS)
 test-megasavestate: all $(MEGA_TEST_ASSETS)
 	@printf "MEGA SAVE STATE ($@) ..."
 	@./e9k-debugger --volume=0 $(HEADLESS)  $(MEGA_TEST_ARGS) --test tests/results/mega/savestate >> test.log 2>&1
+	@echo "PASSED ✅"
+
+test-megaz80: all $(MEGA_TEST_ASSETS)
+	@printf "MEGA Z80 DEBUG ($@) ..."
+	@./e9k-debugger --volume=0 $(HEADLESS)  $(MEGA_TEST_ARGS) --test tests/results/mega/z80 >> test.log 2>&1
 	@echo "PASSED ✅"
 
 # assets

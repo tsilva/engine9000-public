@@ -1,0 +1,22 @@
+0001   0000                         ORG $0000
+0002   0000                         INCLUDE "macros.i80"
+0001+  0000                         macro wait8
+0002+  0000                         NOP
+0003+  0000                         XOR     A
+0004+  0000                         endm
+0005+  0000             incEntry
+0006+  0000 00                      NOP
+0003   0001                         foo     EQU $1234
+0004   0001             init
+0005   0001 F3                      DI
+0006   0002 31 00 16                LD      SP, STACK
+0007   0005                         wait8
+0007   0005 00          >            NOP
+0007   0006 AF          >            XOR     A
+0008   0007 C3 0A 00                JP      done
+0009   000A             done
+0010   000A C9                      RET
+0011   000B                         DEVICE ENGINE9000
+0012   000B                         OUTPUT "program.bin"
+0013   000B                         ASSERT $ == $000B
+0014   000B                         DEFINE FOO 1

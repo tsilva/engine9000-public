@@ -180,7 +180,7 @@ dasm_geo_preloadText(void)
   if (!elf || !*elf) {
     return dasm_preloadFromCore();
   }
-  if (!elfutil_getTextBounds(elf, &lo, &hi) || lo == 0 || hi <= lo) {
+  if (!elfutil_getTextBounds(elf, &lo, &hi) || hi <= lo) {
     debug_error("dasm: failed to read .text bounds from ELF (%s); falling back to core", elf);
     return dasm_preloadFromCore();
   }

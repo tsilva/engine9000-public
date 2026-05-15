@@ -1,0 +1,6 @@
+        macro wait8
+        NOP
+        XOR     A
+        endm
+incEntry
+        NOP

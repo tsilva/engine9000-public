@@ -1,0 +1,8 @@
+# engine9000 z80 source map v1
+0000	@TESTDIR@/src/macros.i80	6
+0001	@TESTDIR@/src/program.s80	5
+0002	@TESTDIR@/src/program.s80	6
+0005	@TESTDIR@/src/macros.i80	2
+0006	@TESTDIR@/src/macros.i80	3
+0007	@TESTDIR@/src/program.s80	8
+000A	@TESTDIR@/src/program.s80	10

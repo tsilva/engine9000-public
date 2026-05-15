@@ -14,4 +14,4 @@
 #include <stddef.h>
 #include <stdint.h>
 
-size_t geo_z80_dasmDisassemble(const uint8_t *bytes, uint32_t pc, char *out, size_t cap);
+size_t e9k_z80_dasmDisassemble(const uint8_t *bytes, uint32_t pc, char *out, size_t cap);

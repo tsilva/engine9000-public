@@ -83,12 +83,21 @@ typedef struct map_entry_list {
     int count;
 } map_entry_list_t;
 
+typedef enum listing_format {
+    listing_format_asxxxx,
+    listing_format_sjasm
+} listing_format_t;
+
 typedef struct args {
     const char *buildDir;
     string_list_t sourceDirs;
     string_list_t listingDirs;
     const char *outPath;
+    const char *outNoiPath;
+    listing_format_t listingFormat;
 } args_t;
+
+static void main_makeParentDirs(const char *path);
 
 static int
 main_hasSuffix(const char *s, const char *suffix)
@@ -492,11 +501,65 @@ main_symbolFree(symbol_list_t *list)
     list->count = 0;
 }
 
+static int
+main_symbolCompare(const void *a, const void *b)
+{
+    const symbol_entry_t *ea = *(const symbol_entry_t * const *)a;
+    const symbol_entry_t *eb = *(const symbol_entry_t * const *)b;
+    int cmp;
+
+    if (ea->addr < eb->addr) {
+        return -1;
+    }
+    if (ea->addr > eb->addr) {
+        return 1;
+    }
+    cmp = strcmp(ea->name, eb->name);
+    return cmp;
+}
+
 static void
-main_readNoiSymbols(const char *buildDir, symbol_list_t *symbols)
+main_writeNoiOutput(const char *path, const symbol_list_t *symbols)
+{
+    FILE *fp;
+    symbol_entry_t **sorted;
+    int itemIndex = 0;
+
+    if (!path || !path[0] || !symbols) {
+        return;
+    }
+    main_makeParentDirs(path);
+    fp = fopen(path, "w");
+    if (!fp) {
+        printf("z80_srcmap: failed to create NoICE output\n");
+        exit(1);
+    }
+    sorted = NULL;
+    if (symbols->count > 0) {
+        sorted = (symbol_entry_t **)malloc((size_t)symbols->count * sizeof(*sorted));
+        for (list_t *node = symbols->head; node; node = node->next) {
+            sorted[itemIndex++] = (symbol_entry_t *)node->data;
+        }
+        if (symbols->count > 1) {
+            qsort(sorted, (size_t)symbols->count, sizeof(*sorted), main_symbolCompare);
+        }
+    }
+    for (int i = 0; i < symbols->count; i++) {
+        fprintf(fp, "DEF %s 0x%04X\n", sorted[i]->name, sorted[i]->addr);
+    }
+    free(sorted);
+    fclose(fp);
+}
+
+static void
+main_readNoiSymbols(const char *buildDir, const char *skipPath, symbol_list_t *symbols)
 {
     string_list_t paths = {0};
+    char *skipPathReal = NULL;
 
+    if (skipPath) {
+        skipPathReal = main_realPathDup(skipPath);
+    }
     main_collectImmediate(buildDir, ".noi", &paths);
     main_stringListSort(&paths);
     for (int i = 0; i < paths.count; i++) {
@@ -504,6 +567,9 @@ main_readNoiSymbols(const char *buildDir, symbol_list_t *symbols)
         char *line = NULL;
         size_t cap = 0;
 
+        if (skipPathReal && strcmp(paths.sorted[i], skipPathReal) == 0) {
+            continue;
+        }
         fp = fopen(paths.sorted[i], "r");
         if (!fp) {
             continue;
@@ -526,6 +592,7 @@ main_readNoiSymbols(const char *buildDir, symbol_list_t *symbols)
         free(line);
         fclose(fp);
     }
+    free(skipPathReal);
     main_stringListFree(&paths);
 }
 
@@ -1190,13 +1257,596 @@ main_parseListing(const char *path,
     main_areaFree(&areas);
 }
 
+static const char *
+main_stripAsmComment(char *s)
+{
+    int inString = 0;
+    char quote = '\0';
+
+    if (!s) {
+        return "";
+    }
+    for (char *p = s; *p; p++) {
+        if (inString) {
+            if (*p == quote) {
+                inString = 0;
+            }
+        } else if (*p == '\'' || *p == '"') {
+            inString = 1;
+            quote = *p;
+        } else if (*p == ';') {
+            *p = '\0';
+            break;
+        }
+    }
+    return s;
+}
+
+static int
+main_firstAsmToken(char *out, size_t cap, const char *sourceText)
+{
+    char *trimmed;
+    char *p;
+    size_t len;
+
+    if (!out || cap == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    trimmed = main_trimDup(sourceText);
+    main_stripAsmComment(trimmed);
+    p = trimmed;
+    while (*p && !isspace((unsigned char)*p)) {
+        p++;
+    }
+    *p = '\0';
+    len = strlen(trimmed);
+    while (len > 0 && trimmed[len - 1] == ':') {
+        trimmed[--len] = '\0';
+    }
+    if (len >= cap) {
+        len = cap - 1;
+    }
+    memcpy(out, trimmed, len);
+    out[len] = '\0';
+    free(trimmed);
+    return out[0] != '\0';
+}
+
+static int
+main_stringEqualsAny(const char *s, const char * const *items, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        if (strcmp(s, items[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+main_asciiCaseCmp(const char *a, const char *b)
+{
+    while (*a && *b) {
+        int ac = toupper((unsigned char)*a);
+        int bc = toupper((unsigned char)*b);
+
+        if (ac != bc) {
+            return ac - bc;
+        }
+        a++;
+        b++;
+    }
+    return toupper((unsigned char)*a) - toupper((unsigned char)*b);
+}
+
+static int
+main_isHexOnly(const char *s)
+{
+    if (!s || !s[0]) {
+        return 0;
+    }
+    for (const char *p = s; *p; p++) {
+        if (!main_isHexChar(*p)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int
+main_isSymbolName(const char *s)
+{
+    if (!s || !s[0]) {
+        return 0;
+    }
+    if (!isalpha((unsigned char)s[0]) && s[0] != '_' && s[0] != '.') {
+        return 0;
+    }
+    for (const char *p = s + 1; *p; p++) {
+        if (!isalnum((unsigned char)*p) && *p != '_' && *p != '.') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int
+main_secondAsmToken(char *out, size_t cap, const char *sourceText)
+{
+    char *trimmed;
+    char *p;
+    size_t len;
+
+    if (!out || cap == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    trimmed = main_trimDup(sourceText);
+    main_stripAsmComment(trimmed);
+    p = trimmed;
+    while (*p && !isspace((unsigned char)*p)) {
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    len = 0;
+    while (p[len] && !isspace((unsigned char)p[len])) {
+        len++;
+    }
+    if (len >= cap) {
+        len = cap - 1;
+    }
+    memcpy(out, p, len);
+    out[len] = '\0';
+    free(trimmed);
+    return out[0] != '\0';
+}
+
+static int
+main_isSjasmEqu(const char *sourceText)
+{
+    char token[256];
+
+    return main_secondAsmToken(token, sizeof(token), sourceText) &&
+        main_asciiCaseCmp(token, "EQU") == 0;
+}
+
+static int
+main_parseSjasmLabel(const char *sourceText, char *out, size_t cap)
+{
+    static const char * const directives[] = {
+        "ALIGN", "ASSERT", "BINARY", "BLOCK", "BYTE", "CODE", "DB", "DD",
+        "DEFINE", "DEFB", "DEFS", "DEFW", "DEPHASE", "DEVICE", "DISP",
+        "DISPLAY", "DM", "DS", "DWORD", "ELSE", "EMPTYTAP", "ENDIF",
+        "ENDLUA", "ENDM", "ENDMODULE", "ENDR", "ENDSLUA", "ENDSTRUCT",
+        "ENT", "EQU", "EXPORT", "FIELD", "IF", "IFDEF", "IFNDEF",
+        "IFUSED", "INCBIN", "INCHOB", "INCLUDE", "INCLUDELUA", "INSERT",
+        "LABELSLIST", "LUA", "MACRO", "MAP", "MEMORYMAP", "MMU", "MODULE",
+        "ORG", "OUTPUT", "PAGE", "PHASE", "REPT", "SAVEBIN", "SAVEBLOCK",
+        "SAVECDT", "SAVEDEV", "SAVENEX", "SAVESNA", "SAVESNAPSHOT",
+        "SAVETAP", "SAVEWAV", "SLUA", "STRUCT", "TAPEND", "TAPOUT",
+        "TEXT", "UNDEFINE", "WORD"
+    };
+    static const char * const opcodes[] = {
+        "ADC", "ADD", "AND", "BIT", "CALL", "CCF", "CP", "CPD", "CPDR", "CPI",
+        "CPIR", "CPL", "DAA", "DB", "DEC", "DEFB", "DEFM", "DEFS", "DEFW",
+        "DI", "DJNZ", "DM", "DS", "DW", "EI", "EX", "EXX", "HALT", "IM",
+        "IN", "INC", "IND", "INDR", "INI", "INIR", "JP", "JR", "LD", "LDD",
+        "LDDR", "LDI", "LDIR", "NEG", "NOP", "OR", "OTDR", "OTIR", "OUT",
+        "OUTD", "OUTI", "POP", "PUSH", "RES", "RET", "RETI", "RETN", "RL",
+        "RLA", "RLC", "RLCA", "RLD", "RR", "RRA", "RRC", "RRCA", "RRD",
+        "RST", "SBC", "SCF", "SET", "SLA", "SLL", "SRA", "SRL", "SUB", "XOR"
+    };
+    char token[256];
+    char upper[256];
+    size_t len;
+
+    if (!out || cap == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    if (!sourceText || !sourceText[0] || isspace((unsigned char)sourceText[0])) {
+        return 0;
+    }
+    if (!main_firstAsmToken(token, sizeof(token), sourceText)) {
+        return 0;
+    }
+    if (!main_isSymbolName(token) || main_isHexOnly(token)) {
+        return 0;
+    }
+    len = strlen(token);
+    if (len >= sizeof(upper)) {
+        len = sizeof(upper) - 1;
+    }
+    for (size_t i = 0; i < len; i++) {
+        upper[i] = (char)toupper((unsigned char)token[i]);
+    }
+    upper[len] = '\0';
+    if (main_stringEqualsAny(upper, directives, sizeof(directives) / sizeof(directives[0])) ||
+        main_stringEqualsAny(upper, opcodes, sizeof(opcodes) / sizeof(opcodes[0]))) {
+        return 0;
+    }
+    if (main_isSjasmEqu(sourceText)) {
+        return 0;
+    }
+    if (strlen(token) + 1u > cap) {
+        return 0;
+    }
+    strcpy(out, token);
+    return 1;
+}
+
+static int
+main_parseSjasmListingLine(char *line,
+                           uint16_t *outAddr,
+                           int *outEmitted,
+                           int *outMacroExpanded,
+                           int *outIncludedSource,
+                           int *outLine,
+                           char **outSource)
+{
+    char lineText[16];
+    char addrText[16];
+    int byteStart = 12;
+    int byteEnd = 36;
+    int sourceCol;
+    int emitted = 0;
+    size_t len;
+
+    len = strlen(line);
+    if (len < 11) {
+        return 0;
+    }
+    for (int i = 0; i < 4; i++) {
+        if (!isdigit((unsigned char)line[i])) {
+            return 0;
+        }
+    }
+    if (!isspace((unsigned char)line[4]) && line[4] != '+') {
+        return 0;
+    }
+    for (int i = 7; i < 11; i++) {
+        if (!main_isHexChar(line[i])) {
+            return 0;
+        }
+    }
+    memcpy(lineText, line, 4);
+    lineText[4] = '\0';
+    memcpy(addrText, line + 7, 4);
+    addrText[4] = '\0';
+    if (!main_parseHex16(addrText, outAddr)) {
+        return 0;
+    }
+    *outLine = atoi(lineText);
+    if (*outLine <= 0) {
+        return 0;
+    }
+    if (len > (size_t)byteStart) {
+        char *p = line + byteStart;
+        while ((int)(p - line) < byteEnd && *p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        emitted = (int)(p - line) < byteEnd && main_isHexChar(p[0]) && main_isHexChar(p[1]) &&
+            (!p[2] || isspace((unsigned char)p[2]));
+    }
+    sourceCol = emitted ? 36 : 24;
+    if (sourceCol > (int)len) {
+        sourceCol = (int)len;
+    }
+    *outEmitted = emitted;
+    *outMacroExpanded = 0;
+    *outIncludedSource = (line[4] == '+' || line[11] == '~') ? 1 : 0;
+    for (int i = byteStart; i < byteEnd && i < (int)len; i++) {
+        if (line[i] == '>') {
+            *outMacroExpanded = 1;
+            break;
+        }
+    }
+    *outSource = line + sourceCol;
+    return 1;
+}
+
+static const char *
+main_baseName(const char *path)
+{
+    const char *base;
+
+    if (!path) {
+        return "";
+    }
+    base = strrchr(path, '/');
+    return base ? base + 1 : path;
+}
+
+static int
+main_pathMatchesIncludeName(const char *path, const char *includeName)
+{
+    const char *pathBase;
+    const char *includeBase;
+
+    if (!path || !includeName || !includeName[0]) {
+        return 0;
+    }
+    pathBase = main_baseName(path);
+    includeBase = main_baseName(includeName);
+    return strcmp(pathBase, includeBase) == 0;
+}
+
+static int
+main_parseSjasmIncludeName(const char *sourceText, char *out, size_t cap)
+{
+    char token[256];
+    char *trimmed;
+    char *p;
+    char quote;
+    size_t len;
+
+    if (!out || cap == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    if (!main_firstAsmToken(token, sizeof(token), sourceText) ||
+        main_asciiCaseCmp(token, "INCLUDE") != 0) {
+        return 0;
+    }
+    trimmed = main_trimDup(sourceText);
+    main_stripAsmComment(trimmed);
+    p = trimmed;
+    while (*p && !isspace((unsigned char)*p)) {
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    quote = '\0';
+    if (*p == '"' || *p == '\'') {
+        quote = *p++;
+    }
+    len = 0;
+    while (p[len] && ((quote && p[len] != quote) || (!quote && !isspace((unsigned char)p[len])))) {
+        len++;
+    }
+    if (len >= cap) {
+        len = cap - 1;
+    }
+    memcpy(out, p, len);
+    out[len] = '\0';
+    free(trimmed);
+    return out[0] != '\0';
+}
+
+static const char *
+main_findSourcePathForInclude(const source_line_list_t *lines, const char *includeName, const char *listingPath)
+{
+    const char *bestPath = NULL;
+    int bestScore = -1;
+
+    if (!lines || !includeName || !includeName[0]) {
+        return NULL;
+    }
+    for (int i = 0; i < lines->count; i++) {
+        const char *path = lines->sorted[i]->path;
+        int score;
+
+        if (!main_pathMatchesIncludeName(path, includeName)) {
+            continue;
+        }
+        score = main_pathScore(path, listingPath);
+        if (!bestPath || score > bestScore ||
+            (score == bestScore && strcmp(path, bestPath) < 0)) {
+            bestPath = path;
+            bestScore = score;
+        }
+    }
+    return bestPath;
+}
+
+static const source_line_t *
+main_chooseSourceLineFromCandidates(const source_line_list_t *lines,
+                                    int first,
+                                    int count,
+                                    const char *preferredPath,
+                                    const char *preferredIncludeName,
+                                    const char *listingPath)
+{
+    const source_line_t *best = NULL;
+    int bestScore = -1;
+
+    if (!lines) {
+        return NULL;
+    }
+    if (preferredIncludeName && preferredIncludeName[0]) {
+        for (int i = 0; i < count; i++) {
+            source_line_t *entry = lines->sorted[first + i];
+
+            if (main_pathMatchesIncludeName(entry->path, preferredIncludeName)) {
+                return entry;
+            }
+        }
+    }
+    if (preferredPath) {
+        for (int i = 0; i < count; i++) {
+            source_line_t *entry = lines->sorted[first + i];
+
+            if (strcmp(entry->path, preferredPath) == 0) {
+                return entry;
+            }
+        }
+    }
+    for (int i = 0; i < count; i++) {
+        source_line_t *entry = lines->sorted[first + i];
+        int score = main_pathScore(entry->path, listingPath);
+
+        if (!best || score > bestScore ||
+            (score == bestScore && strcmp(entry->path, best->path) < 0) ||
+            (score == bestScore && strcmp(entry->path, best->path) == 0 && entry->line < best->line)) {
+            best = entry;
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+static const source_line_t *
+main_chooseSourceLineByText(const source_line_list_t *lines, const char *text, const char *listingPath)
+{
+    const source_line_t *best = NULL;
+    int bestScore = -1;
+
+    if (!lines || !text) {
+        return NULL;
+    }
+    for (list_t *node = lines->head; node; node = node->next) {
+        source_line_t *entry = (source_line_t *)node->data;
+        int score;
+
+        if (strcmp(entry->text, text) != 0) {
+            continue;
+        }
+        score = main_pathScore(entry->path, listingPath);
+        if (!best || score > bestScore ||
+            (score == bestScore && strcmp(entry->path, best->path) < 0) ||
+            (score == bestScore && strcmp(entry->path, best->path) == 0 && entry->line < best->line)) {
+            best = entry;
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+static const source_line_t *
+main_chooseMacroSourceLineByText(const source_line_list_t *lines, const char *text, const char *listingPath)
+{
+    const source_line_t *best = NULL;
+    char listingStem[PATH_MAX];
+    int bestScore = -1;
+
+    if (!lines || !text) {
+        return NULL;
+    }
+    main_stem(listingStem, sizeof(listingStem), listingPath);
+    for (list_t *node = lines->head; node; node = node->next) {
+        source_line_t *entry = (source_line_t *)node->data;
+        char pathStem[PATH_MAX];
+        int score;
+
+        if (strcmp(entry->text, text) != 0) {
+            continue;
+        }
+        main_stem(pathStem, sizeof(pathStem), entry->path);
+        score = main_pathScore(entry->path, listingPath);
+        if (strcmp(pathStem, listingStem) != 0) {
+            score += 1000;
+        }
+        if (main_hasSuffix(entry->path, ".i80") || main_hasSuffix(entry->path, ".inc")) {
+            score += 100;
+        }
+        if (!best || score > bestScore ||
+            (score == bestScore && strcmp(entry->path, best->path) < 0) ||
+            (score == bestScore && strcmp(entry->path, best->path) == 0 && entry->line < best->line)) {
+            best = entry;
+            bestScore = score;
+        }
+    }
+    return best;
+}
+
+static void
+main_parseSjasmListing(const char *path,
+                       symbol_list_t *symbols,
+                       const source_line_list_t *lineIndex,
+                       map_entry_list_t *out)
+{
+    FILE *fp;
+    char *line = NULL;
+    size_t cap = 0;
+    size_t lineLen;
+    source_line_list_t macroLines = {0};
+    const char *currentIncludedPath = NULL;
+    char currentIncludeName[PATH_MAX] = "";
+
+    fp = fopen(path, "r");
+    if (!fp) {
+        return;
+    }
+    while (main_readLine(fp, &line, &cap)) {
+        uint16_t addr;
+        int emitted;
+        int macroExpanded;
+        int includedSource;
+        int lineNo;
+        char *sourceText;
+        char label[256];
+        char *trimmed;
+        int first;
+        int count;
+        char includeName[PATH_MAX];
+        const source_line_t *sourceLine = NULL;
+
+        lineLen = strlen(line);
+        while (lineLen > 0 && (line[lineLen - 1] == '\n' || line[lineLen - 1] == '\r')) {
+            line[--lineLen] = '\0';
+        }
+        if (!main_parseSjasmListingLine(line, &addr, &emitted, &macroExpanded, &includedSource, &lineNo, &sourceText)) {
+            continue;
+        }
+        if (!includedSource && main_parseSjasmIncludeName(sourceText, includeName, sizeof(includeName))) {
+            strcpy(currentIncludeName, includeName);
+            currentIncludedPath = main_findSourcePathForInclude(lineIndex, includeName, path);
+        }
+        if (main_parseSjasmLabel(sourceText, label, sizeof(label))) {
+            main_symbolAdd(symbols, label, addr);
+        }
+        trimmed = main_trimDup(sourceText);
+        if (includedSource && currentIncludedPath &&
+            main_findCandidates(lineIndex, lineNo, trimmed, &first, &count)) {
+            sourceLine = main_chooseSourceLineFromCandidates(lineIndex,
+                                                            first,
+                                                            count,
+                                                            currentIncludedPath,
+                                                            currentIncludeName,
+                                                            path);
+            if (sourceLine) {
+                main_sourceLineAdd(&macroLines, sourceLine->line, sourceLine->text, sourceLine->path);
+            }
+        }
+        if (emitted) {
+            if (macroExpanded) {
+                sourceLine = main_chooseSourceLineByText(&macroLines, trimmed, path);
+            }
+            if (!sourceLine && main_findCandidates(lineIndex, lineNo, trimmed, &first, &count)) {
+                sourceLine = main_chooseSourceLineFromCandidates(lineIndex,
+                                                                first,
+                                                                count,
+                                                                includedSource ? currentIncludedPath : NULL,
+                                                                includedSource ? currentIncludeName : NULL,
+                                                                path);
+            }
+            if (!sourceLine && macroExpanded) {
+                sourceLine = main_chooseMacroSourceLineByText(lineIndex, trimmed, path);
+            }
+            if (sourceLine) {
+                main_mapEntryAdd(out, addr, sourceLine->path, sourceLine->line);
+            }
+        }
+        free(trimmed);
+    }
+    free(line);
+    fclose(fp);
+    main_sourceLineFree(&macroLines);
+}
+
 static void
 main_collectSourceFiles(const args_t *args, string_list_t *out)
 {
     for (int i = 0; i < args->sourceDirs.count; i++) {
         main_collectRecursive(args->sourceDirs.sorted[i], ".s", ".inc", out);
+        main_collectRecursive(args->sourceDirs.sorted[i], ".s80", ".i80", out);
     }
     main_collectRecursive(args->buildDir, ".s", ".inc", out);
+    main_collectRecursive(args->buildDir, ".s80", ".i80", out);
     main_stringListSort(out);
 }
 
@@ -1282,6 +1932,7 @@ static int
 main_parseArgs(int argc, char **argv, args_t *args)
 {
     memset(args, 0, sizeof(*args));
+    args->listingFormat = listing_format_asxxxx;
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
 
@@ -1301,6 +1952,28 @@ main_parseArgs(int argc, char **argv, args_t *args)
             args->outPath = argv[++i];
         } else if (strncmp(arg, "--out=", 6) == 0) {
             args->outPath = arg + 6;
+        } else if (strcmp(arg, "--out-noi") == 0 && i + 1 < argc) {
+            args->outNoiPath = argv[++i];
+        } else if (strncmp(arg, "--out-noi=", 10) == 0) {
+            args->outNoiPath = arg + 10;
+        } else if ((strcmp(arg, "--listing-format") == 0 || strcmp(arg, "--format") == 0) && i + 1 < argc) {
+            const char *format = argv[++i];
+            if (strcmp(format, "asxxxx") == 0) {
+                args->listingFormat = listing_format_asxxxx;
+            } else if (strcmp(format, "sjasm") == 0) {
+                args->listingFormat = listing_format_sjasm;
+            } else {
+                return 0;
+            }
+        } else if (strncmp(arg, "--listing-format=", 17) == 0 || strncmp(arg, "--format=", 9) == 0) {
+            const char *format = strchr(arg, '=') + 1;
+            if (strcmp(format, "asxxxx") == 0) {
+                args->listingFormat = listing_format_asxxxx;
+            } else if (strcmp(format, "sjasm") == 0) {
+                args->listingFormat = listing_format_sjasm;
+            } else {
+                return 0;
+            }
         } else {
             return 0;
         }
@@ -1320,7 +1993,7 @@ main(int argc, char **argv)
     char *buildDirReal;
 
     if (!main_parseArgs(argc, argv, &args)) {
-        printf("usage: z80_srcmap --build-dir DIR --source-dir DIR [--source-dir DIR ...] [--listing-dir DIR ...] --out FILE\n");
+        printf("usage: z80_srcmap --build-dir DIR --source-dir DIR [--source-dir DIR ...] [--listing-dir DIR ...] [--listing-format asxxxx|sjasm] --out FILE [--out-noi FILE]\n");
         main_stringListFree(&args.sourceDirs);
         main_stringListFree(&args.listingDirs);
         return 1;
@@ -1333,14 +2006,21 @@ main(int argc, char **argv)
     main_stringListSort(&args.sourceDirs);
     main_stringListSort(&args.listingDirs);
 
-    main_readNoiSymbols(args.buildDir, &symbols);
+    main_readNoiSymbols(args.buildDir, args.outNoiPath, &symbols);
     main_collectSourceFiles(&args, &sourceFiles);
     main_buildLineIndex(&sourceFiles, &lineIndex);
     main_collectListingFiles(&args, &listingFiles);
     for (int i = 0; i < listingFiles.count; i++) {
-        main_parseListing(listingFiles.sorted[i], &symbols, &lineIndex, &entries);
+        if (args.listingFormat == listing_format_sjasm) {
+            main_parseSjasmListing(listingFiles.sorted[i], &symbols, &lineIndex, &entries);
+        } else {
+            main_parseListing(listingFiles.sorted[i], &symbols, &lineIndex, &entries);
+        }
     }
     main_writeOutput(args.outPath, &entries);
+    if (args.outNoiPath) {
+        main_writeNoiOutput(args.outNoiPath, &symbols);
+    }
 
     main_mapEntryFree(&entries);
     main_sourceLineFree(&lineIndex);

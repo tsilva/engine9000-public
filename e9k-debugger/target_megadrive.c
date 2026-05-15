@@ -19,6 +19,8 @@
 #include "file.h"
 #include "strutil.h"
 
+#define TARGET_MEGADRIVE_Z80_PROCESSOR_ID 1u
+
 static const char *
 target_megadrive_defaultCorePath(void);
 
@@ -611,20 +613,31 @@ static int
 target_megadrive_memoryGetSpaces(target_memory_space_t *outSpaces, size_t cap, size_t *outCount)
 {
     if (outCount) {
-        *outCount = 1;
+        *outCount = 2;
     }
     if (!outSpaces || cap == 0) {
         return 1;
     }
     outSpaces[0] = (target_memory_space_t){
-        .value = "main",
-        .label = "Main",
+        .value = "68k",
+        .label = "68K",
         .minAddr = 0x00000000u,
         .maxAddr = 0x00ffffffu,
         .addressDigits = 6,
         .processorMemory = 0,
         .processorId = 0
     };
+    if (cap > 1) {
+        outSpaces[1] = (target_memory_space_t){
+            .value = "z80",
+            .label = "Z80",
+            .minAddr = 0x0000u,
+            .maxAddr = 0xffffu,
+            .addressDigits = 4,
+            .processorMemory = 1,
+            .processorId = TARGET_MEGADRIVE_Z80_PROCESSOR_ID
+        };
+    }
     return 1;
 }
 
@@ -645,13 +658,25 @@ target_megadrive_memoryTrackGetRanges(target_memory_range_t *outRanges, size_t c
 static int
 target_megadrive_registersReadExtra(const char **outTitle, e9k_debug_processor_reg_t *outRegs, size_t cap, size_t *outCount)
 {
-    (void)outRegs;
-    (void)cap;
+    size_t count = 0;
+
     if (outTitle) {
-        *outTitle = NULL;
+        *outTitle = "Z80";
     }
     if (outCount) {
         *outCount = 0;
+    }
+    if (!outRegs || cap == 0) {
+        return 1;
+    }
+    if (!libretro_host_debugReadProcessorRegs(TARGET_MEGADRIVE_Z80_PROCESSOR_ID, outRegs, cap, &count)) {
+        if (outTitle) {
+            *outTitle = NULL;
+        }
+        return 0;
+    }
+    if (outCount) {
+        *outCount = count;
     }
     return 1;
 }

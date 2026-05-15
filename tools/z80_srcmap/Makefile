@@ -13,8 +13,10 @@ BUILDDIR=build
 EXE=$(BUILDDIR)/z80_srcmap
 W64_EXE=$(BUILDDIR)/z80_srcmap.exe
 SYSTEM_DIR=../../e9k-debugger/system
+Z80_SRCMAP_TEST_DIR=tests
+Z80_SRCMAP_TEST_EXE=$(EXE)
 
-.PHONY: all w64 clean
+.PHONY: all w64 test clean
 
 all: $(EXE)
 	cp $(EXE) $(SYSTEM_DIR)/z80_srcmap
@@ -28,9 +30,13 @@ w64: $(W64_EXE)
 $(W64_EXE): main.c list.c list.h | $(BUILDDIR)
 	$(W64_CC) $(CFLAGS) main.c list.c -o $@
 
+include tests/test.mk
+
+test: $(EXE) $(Z80_SRCMAP_TESTS)
+
 $(BUILDDIR):
 	mkdir -p $@
 
-clean:
+clean: clean-z80srcmap-tests
 	rm -rf $(BUILDDIR)
 	rm -f z80_srcmap z80_srcmap.exe

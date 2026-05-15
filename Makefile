@@ -3,6 +3,7 @@ JOBS= -j12
 MEGA9000_DIR=mega9000
 MEGA9000_MAKEFILE=$(MEGA9000_DIR)/Makefile.libretro
 PUBLIC_DIR=../engine9000-public
+PUBLIC_ROOT=Makefile README.md
 PUBLIC_MODULES=e9k-debugger geo9000 ami9000 mega9000
 PUBLIC_SHARED=e9k-lib tools e9ui
 HOST_OS := $(shell uname -s)
@@ -87,14 +88,20 @@ mega9000-clean:
 
 update-public:
 	@mkdir -p "$(PUBLIC_DIR)"
-	@rsync -a --delete --exclude='.git/' --exclude='.git' Makefile "$(PUBLIC_DIR)/"
+	@rsync -a --delete --exclude='.git/' --exclude='.git' $(PUBLIC_ROOT) "$(PUBLIC_DIR)/"
 	@for d in $(PUBLIC_MODULES) $(PUBLIC_SHARED); do \
 		if [ -d "$$d" ]; then \
-			rsync -a --delete \
-				--exclude='.git/' \
-				--exclude='.git' \
-				--exclude='build/' \
-				"$$d/" "$(PUBLIC_DIR)/$$d/"; \
+			if [ "$$d" = "$(MEGA9000_DIR)" ]; then \
+				rsync -a --delete \
+					--exclude='build/' \
+					"$$d/" "$(PUBLIC_DIR)/$$d/"; \
+			else \
+				rsync -a --delete \
+					--exclude='.git/' \
+					--exclude='.git' \
+					--exclude='build/' \
+					"$$d/" "$(PUBLIC_DIR)/$$d/"; \
+			fi; \
 		else \
 			echo "$$d is skipped (repo not present)."; \
 		fi; \

@@ -24,6 +24,8 @@
 #include "file.h"
 #include "strutil.h"
 
+#define TARGET_NEOGEO_Z80_PROCESSOR_ID 1u
+
 typedef struct target_neogeo_systemtype_state {
     e9ui_component_t *aesCheckbox;
     e9ui_component_t *mvsCheckbox;
@@ -915,54 +917,10 @@ target_neogeo_memoryGetLimits(uint32_t *outMinAddr, uint32_t *outMaxAddr)
 }
 
 static int
-target_neogeo_findProcessorByName(const char *name, uint32_t *outProcessorId)
-{
-    enum
-    {
-        target_neogeo_defaultZ80ProcessorId = 1
-    };
-    e9k_debug_processor_info_t processors[8];
-    size_t count = 0;
-
-    if (outProcessorId) {
-        *outProcessorId = 0;
-    }
-    if (!name) {
-        return 0;
-    }
-    if (!libretro_host_debugReadProcessors(processors,
-                                           sizeof(processors) / sizeof(processors[0]),
-                                           &count)) {
-        if (strcmp(name, "Z80") == 0) {
-            if (outProcessorId) {
-                *outProcessorId = target_neogeo_defaultZ80ProcessorId;
-            }
-            return 1;
-        }
-        return 0;
-    }
-    if (count > sizeof(processors) / sizeof(processors[0])) {
-        count = sizeof(processors) / sizeof(processors[0]);
-    }
-    for (size_t i = 0; i < count; ++i) {
-        if (strcmp(processors[i].name, name) == 0) {
-            if (outProcessorId) {
-                *outProcessorId = processors[i].id;
-            }
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int
 target_neogeo_memoryGetSpaces(target_memory_space_t *outSpaces, size_t cap, size_t *outCount)
 {
-    uint32_t z80ProcessorId = 0;
-    int hasZ80 = target_neogeo_findProcessorByName("Z80", &z80ProcessorId);
-
     if (outCount) {
-        *outCount = hasZ80 ? 2 : 1;
+        *outCount = 2;
     }
     if (!outSpaces || cap == 0) {
         return 1;
@@ -977,7 +935,7 @@ target_neogeo_memoryGetSpaces(target_memory_space_t *outSpaces, size_t cap, size
         .processorMemory = 0,
         .processorId = 0
     };
-    if (hasZ80 && cap > 1) {
+    if (cap > 1) {
         outSpaces[1] = (target_memory_space_t){
             .value = "z80",
             .label = "Z80",
@@ -985,7 +943,7 @@ target_neogeo_memoryGetSpaces(target_memory_space_t *outSpaces, size_t cap, size
             .maxAddr = 0xffffu,
             .addressDigits = 4,
             .processorMemory = 1,
-            .processorId = z80ProcessorId
+            .processorId = TARGET_NEOGEO_Z80_PROCESSOR_ID
         };
     }
     return 1;
@@ -1019,11 +977,7 @@ target_neogeo_registersReadExtra(const char **outTitle, e9k_debug_processor_reg_
     if (!outRegs || cap == 0) {
         return 1;
     }
-    uint32_t z80ProcessorId = 0;
-    if (!target_neogeo_findProcessorByName("Z80", &z80ProcessorId)) {
-        return 0;
-    }
-    if (!libretro_host_debugReadProcessorRegs(z80ProcessorId, outRegs, cap, &count)) {
+    if (!libretro_host_debugReadProcessorRegs(TARGET_NEOGEO_Z80_PROCESSOR_ID, outRegs, cap, &count)) {
         return 0;
     }
     if (outCount) {

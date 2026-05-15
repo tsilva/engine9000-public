@@ -309,9 +309,6 @@ source_z80_isModeAvailable(void)
 {
     uint32_t processorId = 0;
 
-    if (target != target_neogeo()) {
-        return 0;
-    }
     return source_z80_findProcessorId(&processorId);
 }
 
@@ -323,12 +320,6 @@ source_z80_findProcessorId(uint32_t *outProcessorId)
 
     if (outProcessorId) {
         *outProcessorId = 0;
-    }
-    if (target == target_neogeo() && source_z80_processorIdCached) {
-        if (outProcessorId) {
-            *outProcessorId = source_z80_cachedProcessorId;
-        }
-        return 1;
     }
     if (!libretro_host_debugReadProcessors(processors, countof(processors), &count)) {
         return 0;

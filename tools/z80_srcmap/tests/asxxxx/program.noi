@@ -1,0 +1,2 @@
+DEF start 0x0100
+DEF done 0x0105

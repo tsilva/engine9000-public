@@ -1,0 +1,14 @@
+        ORG $0000
+        INCLUDE "macros.i80"
+foo     EQU $1234
+init
+        DI
+        LD      SP, STACK
+        wait8
+        JP      done
+done
+        RET
+DEVICE ENGINE9000
+OUTPUT "program.bin"
+ASSERT $ == $000B
+DEFINE FOO 1

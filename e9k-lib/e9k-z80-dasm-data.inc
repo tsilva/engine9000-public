@@ -8,19 +8,19 @@
  * later.
  */
 
-typedef struct geo_z80_dasm_comm
+typedef struct e9k_z80_dasm_comm
 {
     const char *com1;
     const char *com2;
     int bytes;
     int type;
     int proc;
-} geo_z80_dasm_comm_t;
+} e9k_z80_dasm_comm_t;
 
-static const char *geo_z80_dasmRarg[]={"b","c","d","e","h","l","(hl)","a"};
+static const char *e9k_z80_dasmRarg[]={"b","c","d","e","h","l","(hl)","a"};
 
 /********opcodes for z80 **********/
-static const geo_z80_dasm_comm_t geo_z80_dasmComtab[]={
+static const e9k_z80_dasm_comm_t e9k_z80_dasmComtab[]={
 /*00*/{"nop","vv",1,0,0},
 /*01*/{"ld bc,","vv",3,2,0},
 /*02*/{"ld (bc),a","vv",1,0,0},
@@ -279,7 +279,7 @@ static const geo_z80_dasm_comm_t geo_z80_dasmComtab[]={
 /*ff*/{"rst 38h","vv",1,0,0},
 	};
 
-static const char *geo_z80_dasmEd40[]={
+static const char *e9k_z80_dasmEd40[]={
 /*40*/"in b,(c)",
 /*41*/"out (c),b",
 /*42*/"sbc hl,bc",
@@ -298,7 +298,7 @@ static const char *geo_z80_dasmEd40[]={
 /*4f*/"ld r,a",
 };
 
-static const char *geo_z80_dasmEd50[]={
+static const char *e9k_z80_dasmEd50[]={
 /*50*/"in d,(c)",
 /*51*/"out (c),d",
 /*52*/"sbc hl,de",
@@ -317,7 +317,7 @@ static const char *geo_z80_dasmEd50[]={
 /*5f*/"ld a,r",
 };
 
-static const char *geo_z80_dasmEd60[]={
+static const char *e9k_z80_dasmEd60[]={
 /*60*/"in h,(c)",
 /*61*/"out (c),h",
 /*62*/"sbc hl,hl",
@@ -336,7 +336,7 @@ static const char *geo_z80_dasmEd60[]={
 /*6f*/"rld",
 };
 
-static const char *geo_z80_dasmEd70[]={
+static const char *e9k_z80_dasmEd70[]={
 /*70*/"in f,(c)",
 /*71*/"out (c),0",
 /*72*/"sbc hl,sp",
@@ -355,7 +355,7 @@ static const char *geo_z80_dasmEd70[]={
 /*7f*/"00",
 };
 
-static const char *geo_z80_dasmEda0[]={
+static const char *e9k_z80_dasmEda0[]={
 /*a0*/"ldi",
 /*a1*/"cpi",
 /*a2*/"ini",
@@ -374,7 +374,7 @@ static const char *geo_z80_dasmEda0[]={
 /*af*/"00",
 };
 
-static const char *geo_z80_dasmEdb0[]={
+static const char *e9k_z80_dasmEdb0[]={
 /*b0*/"ldir",
 /*b1*/"cpir",
 /*b2*/"inir",
@@ -393,7 +393,7 @@ static const char *geo_z80_dasmEdb0[]={
 /*bf*/"00",
 };
 
-static const char *geo_z80_dasmDdfd[]={
+static const char *e9k_z80_dasmDdfd[]={
 /*00*/"00",
 /*01*/"00",
 /*02*/"00",

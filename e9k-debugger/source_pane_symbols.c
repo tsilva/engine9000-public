@@ -97,10 +97,12 @@ source_pane_symbols_hasCSourceExtension(const char *path)
         return 0;
     }
     if (strcmp(dot, ".s") == 0 || strcmp(dot, ".S") == 0 ||
+        strcmp(dot, ".s80") == 0 || strcmp(dot, ".S80") == 0 ||
         strcmp(dot, ".asm") == 0 || strcmp(dot, ".ASM") == 0) {
         return 1;
     }
-    if (strcmp(dot, ".inc") == 0 || strcmp(dot, ".INC") == 0) {
+    if (strcmp(dot, ".inc") == 0 || strcmp(dot, ".INC") == 0 ||
+        strcmp(dot, ".i80") == 0 || strcmp(dot, ".I80") == 0) {
         return 1;
     }
     return strcmp(dot, ".c") == 0 || strcmp(dot, ".cc") == 0 ||
@@ -1151,9 +1153,7 @@ source_pane_symbols_collectAsmSymbols(source_pane_state_t *st, const char *elf_p
         added += source_pane_symbols_addAsmSymbol(st, symbolName, symbolAddr, NULL);
     }
     pclose(fp);
-    if (added == 0) {
-        added += source_pane_symbols_collectObjdumpTextAsmSymbols(st, elf_path);
-    }
+    added += source_pane_symbols_collectObjdumpTextAsmSymbols(st, elf_path);
     return added;
 }
 
