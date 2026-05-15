@@ -79,7 +79,6 @@ static neogeo_memview_state_t neogeo_memview_stateSingleton = {
 };
 
 static const aux_window_ops_t neogeo_memview_auxWindowOps = {
-    .setFocus = neogeo_memview_setMainWindowFocused,
     .render = neogeo_memview_render,
 };
 
@@ -3191,15 +3190,6 @@ neogeo_memview_windowBackend(void)
     return e9ui_window_backend_overlay;
 }
 
-static int
-neogeo_memview_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 neogeo_memview_syncOverlayContext(neogeo_memview_state_t *ui, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -3288,7 +3278,6 @@ neogeo_memview_makeOverlayBodyHost(neogeo_memview_state_t *ui)
     state->ui = ui;
     host->name = "neogeo_memview_overlay_body";
     host->state = state;
-    host->preferredHeight = neogeo_memview_overlayBodyPreferredHeight;
     host->layout = neogeo_memview_overlayBodyLayout;
     host->render = neogeo_memview_overlayBodyRender;
     host->dtor = neogeo_memview_overlayBodyDtor;
@@ -3469,12 +3458,6 @@ int
 neogeo_memview_isOpen(void)
 {
     return neogeo_memview_stateSingleton.windowState.open ? 1 : 0;
-}
-
-void
-neogeo_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

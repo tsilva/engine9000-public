@@ -17,12 +17,6 @@ neogeo_palette_debug_toggle(void);
 int
 neogeo_palette_debug_isOpen(void);
 
-int
-neogeo_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev);
-
-void
-neogeo_palette_debug_setMainWindowFocused(int focused);
-
 void
 neogeo_palette_debug_render(void);
 

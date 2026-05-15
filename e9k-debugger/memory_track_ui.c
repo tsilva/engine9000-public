@@ -190,7 +190,6 @@ static memory_track_ui_t memory_track_ui_state = {
 };
 
 static const aux_window_ops_t memory_track_ui_auxWindowOps = {
-    .setFocus = memory_track_ui_setMainWindowFocused,
     .render = memory_track_ui_render,
 };
 
@@ -2803,15 +2802,6 @@ memory_track_ui_rebuildRoot(memory_track_ui_t *ui)
     ui->needsRefresh = 1;
 }
 
-static int
-memory_track_ui_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 memory_track_ui_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -2944,7 +2934,6 @@ memory_track_ui_makeOverlayBodyHost(memory_track_ui_t *ui)
     st->ui = ui;
     host->name = "memory_track_ui_overlay_body";
     host->state = st;
-    host->preferredHeight = memory_track_ui_overlayBodyPreferredHeight;
     host->layout = memory_track_ui_overlayBodyLayout;
     host->render = memory_track_ui_overlayBodyRender;
     host->dtor = memory_track_ui_overlayBodyDtor;
@@ -3123,12 +3112,6 @@ int
 memory_track_ui_isOpen(void)
 {
     return memory_track_ui_state.windowState.open ? 1 : 0;
-}
-
-void
-memory_track_ui_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

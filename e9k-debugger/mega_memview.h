@@ -20,9 +20,6 @@ void
 mega_memview_render(void);
 
 void
-mega_memview_setMainWindowFocused(int focused);
-
-void
 mega_memview_persistConfig(FILE *file);
 
 int

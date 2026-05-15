@@ -546,13 +546,6 @@ trainer_listRebuild(trainer_list_state_t *st, e9ui_context_t *ctx)
     trainer_rebuildEntries(st, ctx);
 }
 
-static int
-trainer_listPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self; (void)ctx; (void)availW;
-    return 0;
-}
-
 static void
 trainer_listLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -727,7 +720,6 @@ trainer_makeList(void)
 
     trainer_registerListState(st);
 
-    c->preferredHeight = trainer_listPreferredHeight;
     c->layout = trainer_listLayout;
     c->render = trainer_listRender;
     c->dtor = trainer_listDtor;

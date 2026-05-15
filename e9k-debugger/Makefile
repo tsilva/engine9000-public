@@ -31,10 +31,10 @@ endif
 
 DEBUG_FLAGS=-g -fno-omit-frame-pointer
 SANITIZER_LIBS=
-#LTO_FLAGS := -flto
+LTO_FLAGS := -flto
 ifeq ($(UNAME_S),Darwin)
-#DEBUG_FLAGS += -fsanitize=address,undefined
-#SANITIZER_LIBS += -fsanitize=address,undefined
+DEBUG_FLAGS += -fsanitize=address,undefined
+SANITIZER_LIBS += -fsanitize=address,undefined
 CFLAGS += 
 endif
 CFLAGS += $(DEBUG_FLAGS) -Wall -Wextra -std=c99 -MMD -MP -Werror -pthread
@@ -307,9 +307,10 @@ HEADLESS ?= --headless
 
 include tests/neogeo.mk
 include tests/amiga.mk
+include tests/mega.mk
 include tests/ui.mk
 
-test:  $(AMIGA_TESTS) $(NEOGEO_TESTS) $(UI_TESTS)
+test:  $(AMIGA_TESTS) $(NEOGEO_TESTS) $(MEGA_TESTS) $(UI_TESTS)
 	@echo
 	@echo "✅✅✅ TESTS PASSED ✅✅✅"
 
@@ -329,7 +330,11 @@ test-neogeo: $(NEOGEO_TESTS)
 	@echo
 	@echo "✅✅✅ NEO GEO TESTS PASSED ✅✅✅"
 
-test-remake: $(AMIGA_REMAKE) $(UI_REMAKE) $(NEOGEO_REMAKE)
+test-mega: $(MEGA_TESTS)
+	@echo
+	@echo "✅✅✅ MEGA TESTS PASSED ✅✅✅"
+
+test-remake: $(AMIGA_REMAKE) $(UI_REMAKE) $(NEOGEO_REMAKE) $(MEGA_REMAKE)
 	@echo
 	@echo "✅✅✅ REMAKE COMPLETE ✅✅✅"
 
@@ -344,6 +349,10 @@ test-remake-ui: $(UI_REMAKE)
 test-remake-neogeo: $(NEOGEO_REMAKE)
 	@echo
 	@echo "✅✅✅ REMAKE NEOGEO COMPLETE ✅✅✅"
+
+test-remake-mega: $(MEGA_REMAKE)
+	@echo
+	@echo "✅✅✅ REMAKE MEGA COMPLETE ✅✅✅"
 
 test-show: HEADLESS :=
 test-show: test

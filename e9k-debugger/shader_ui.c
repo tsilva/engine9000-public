@@ -133,7 +133,6 @@ static e9k_shader_ui_t shader_ui_state = {
 };
 
 static const aux_window_ops_t shader_ui_auxWindowOps = {
-    .setFocus = shader_ui_setMainWindowFocused,
     .render = shader_ui_render,
 };
 
@@ -992,15 +991,6 @@ shader_ui_measureRootHeight(e9ui_component_t *root, e9ui_context_t *ctx, int ava
     return total;
 }
 
-static int
-shader_ui_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 shader_ui_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1064,7 +1054,6 @@ shader_ui_makeOverlayBodyHost(e9k_shader_ui_t *ui)
     st->ui = ui;
     host->name = "shader_ui_overlay_body";
     host->state = st;
-    host->preferredHeight = shader_ui_overlayBodyPreferredHeight;
     host->layout = shader_ui_overlayBodyLayout;
     host->render = shader_ui_overlayBodyRender;
     e9ui_child_add(host, ui->root, alloc_strdup("shader_ui_root"));
@@ -1161,12 +1150,6 @@ int
 shader_ui_isOpen(void)
 {
     return shader_ui_state.windowState.open ? 1 : 0;
-}
-
-void
-shader_ui_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

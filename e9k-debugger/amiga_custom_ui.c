@@ -55,7 +55,6 @@ amiga_custom_ui_state_t amiga_custom_ui_state = {
 };
 
 static const aux_window_ops_t amiga_custom_ui_auxWindowOps = {
-    .setFocus = amiga_custom_ui_setMainWindowFocused,
     .render = amiga_custom_ui_render,
 };
 
@@ -700,15 +699,6 @@ amiga_custom_ui_prepareFrame(amiga_custom_ui_state_t *ui, const e9ui_context_t *
     amiga_custom_ui_syncEstimateFpsDisplay(ui);
 }
 
-static int
-amiga_custom_ui_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 amiga_custom_ui_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -757,7 +747,6 @@ amiga_custom_ui_makeOverlayBodyHost(amiga_custom_ui_state_t *ui)
     st->ui = ui;
     host->name = "amiga_custom_ui_overlay_body";
     host->state = st;
-    host->preferredHeight = amiga_custom_ui_overlayBodyPreferredHeight;
     host->layout = amiga_custom_ui_overlayBodyLayout;
     host->render = amiga_custom_ui_overlayBodyRender;
     e9ui_child_add(host, ui->root, alloc_strdup("amiga_custom_ui_root"));
@@ -940,12 +929,6 @@ int
 amiga_custom_ui_isOpen(void)
 {
     return amiga_custom_ui_state.windowState.open ? 1 : 0;
-}
-
-void
-amiga_custom_ui_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 int

@@ -27,9 +27,6 @@ void
 amiga_memview_setViewIfOpen(uint32_t baseAddr, uint32_t rowBytes, int resetScroll);
 
 void
-amiga_memview_setMainWindowFocused(int focused);
-
-void
 amiga_memview_render(void);
 
 void

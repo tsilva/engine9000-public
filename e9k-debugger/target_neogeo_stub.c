@@ -427,19 +427,6 @@ neogeo_sprite_debug_render(const e9k_debug_sprite_state_t *st)
     (void)st;
 }
 
-int
-neogeo_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    (void)kev;
-    return 0;
-}
-
-void
-neogeo_sprite_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
 void
 neogeo_sprite_debug_persistConfig(FILE *file)
 {
@@ -471,19 +458,6 @@ neogeo_audio_vis_render(const e9k_debug_audio_frame_t *frame)
     (void)frame;
 }
 
-int
-neogeo_audio_vis_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    (void)kev;
-    return 0;
-}
-
-void
-neogeo_audio_vis_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
 void
 neogeo_audio_vis_persistConfig(FILE *file)
 {
@@ -507,19 +481,6 @@ int
 neogeo_palette_debug_isOpen(void)
 {
     return 0;
-}
-
-int
-neogeo_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    (void)kev;
-    return 0;
-}
-
-void
-neogeo_palette_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void
@@ -550,12 +511,6 @@ int
 neogeo_memview_isOpen(void)
 {
     return 0;
-}
-
-void
-neogeo_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void
@@ -597,12 +552,6 @@ int
 neogeo_register_log_isOpen(void)
 {
     return 0;
-}
-
-void
-neogeo_register_log_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

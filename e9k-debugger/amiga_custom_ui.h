@@ -49,9 +49,6 @@ void
 amiga_custom_ui_setBplptrLineLimitRange(int start, int end);
 
 void
-amiga_custom_ui_setMainWindowFocused(int focused);
-
-void
 amiga_custom_ui_render(void);
 
 void

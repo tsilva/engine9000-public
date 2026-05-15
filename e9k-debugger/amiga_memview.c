@@ -174,7 +174,6 @@ static amiga_memview_state_t amiga_memview_stateSingleton = {
 };
 
 static const aux_window_ops_t amiga_memview_auxWindowOps = {
-    .setFocus = amiga_memview_setMainWindowFocused,
     .render = amiga_memview_render,
 };
 
@@ -3728,12 +3727,6 @@ amiga_memview_setViewIfOpen(uint32_t baseAddr, uint32_t rowBytes, int resetScrol
         return;
     }
     amiga_memview_setView(ui, baseAddr, rowBytes, resetScroll);
-}
-
-void
-amiga_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

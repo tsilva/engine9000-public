@@ -17,12 +17,6 @@ mega_palette_debug_toggle(void);
 int
 mega_palette_debug_isOpen(void);
 
-int
-mega_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev);
-
-void
-mega_palette_debug_setMainWindowFocused(int focused);
-
 void
 mega_palette_debug_render(void);
 

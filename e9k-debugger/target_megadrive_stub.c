@@ -415,19 +415,6 @@ mega_sprite_debug_render(const e9k_debug_mega_sprite_state_t *st)
     (void)st;
 }
 
-int
-mega_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    (void)kev;
-    return 0;
-}
-
-void
-mega_sprite_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
 void
 mega_sprite_debug_persistConfig(FILE *file)
 {
@@ -459,12 +446,6 @@ mega_memview_render(void)
 }
 
 void
-mega_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
-void
 mega_memview_persistConfig(FILE *file)
 {
     (void)file;
@@ -487,19 +468,6 @@ int
 mega_palette_debug_isOpen(void)
 {
     return 0;
-}
-
-int
-mega_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    (void)kev;
-    return 0;
-}
-
-void
-mega_palette_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

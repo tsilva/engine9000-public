@@ -27,9 +27,6 @@ int
 amiga_custom_log_isOpen(void);
 
 void
-amiga_custom_log_setMainWindowFocused(int focused);
-
-void
 amiga_custom_log_render(void);
 
 void

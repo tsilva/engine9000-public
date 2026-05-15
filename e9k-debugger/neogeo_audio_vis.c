@@ -14,7 +14,6 @@
 #include <string.h>
 
 #include "alloc.h"
-#include "aux_window.h"
 #include "config.h"
 #include "e9ui.h"
 #include "e9ui_stack.h"
@@ -66,27 +65,6 @@ neogeo_audio_vis_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
-
-int
-neogeo_audio_vis_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev || !neogeo_audio_vis_state.windowState.open) {
-        return 0;
-    }
-    if (kev->repeat != 0) {
-        return 0;
-    }
-    if (kev->keysym.sym == SDLK_ESCAPE) {
-        neogeo_audio_vis_toggle();
-        return 1;
-    }
-    return 0;
-}
-
-static const aux_window_ops_t neogeo_audio_vis_auxWindowOps = {
-    .setFocus = neogeo_audio_vis_setMainWindowFocused,
-    .handleKeydown = neogeo_audio_vis_handleKeydown,
-};
 
 static int
 neogeo_audio_vis_parseInt(const char *value, int *out)
@@ -495,15 +473,6 @@ neogeo_audio_vis_updateSegmentBrightnessAll(const e9k_debug_audio_frame_t *frame
 }
 
 static int
-neogeo_audio_vis_bodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
-static int
 neogeo_audio_vis_bodyRowHeight(const e9ui_rect_t *bounds)
 {
     int pad = 16;
@@ -734,7 +703,6 @@ neogeo_audio_vis_makeBody(void)
     }
     body->name = "neogeo_audio_vis_body";
     body->state = st;
-    body->preferredHeight = neogeo_audio_vis_bodyPreferredHeight;
     body->layout = neogeo_audio_vis_bodyLayout;
     body->render = neogeo_audio_vis_bodyRender;
     body->dtor = neogeo_audio_vis_bodyDtor;
@@ -795,7 +763,6 @@ neogeo_audio_vis_toggle(void)
         neogeo_audio_vis_state.muteMask = 0;
         neogeo_audio_vis_state.hasLastFrame = 0;
         neogeo_audio_vis_resetSegmentBrightness();
-        aux_window_register(&neogeo_audio_vis_auxWindowOps, &neogeo_audio_vis_state);
         libretro_host_neogeo_setAudioVisEnabled(1);
         neogeo_audio_vis_applyMuteMask();
     } else {
@@ -803,7 +770,6 @@ neogeo_audio_vis_toggle(void)
         neogeo_audio_vis_state.muteMask = 0;
         neogeo_audio_vis_applyMuteMask();
         libretro_host_neogeo_setAudioVisEnabled(0);
-        aux_window_unregister(&neogeo_audio_vis_auxWindowOps, &neogeo_audio_vis_state);
         if (neogeo_audio_vis_state.windowState.windowHost) {
             e9ui_windowDestroy(neogeo_audio_vis_state.windowState.windowHost);
             neogeo_audio_vis_state.windowState.windowHost = NULL;
@@ -833,12 +799,6 @@ neogeo_audio_vis_render(const e9k_debug_audio_frame_t *frame)
     }
     neogeo_audio_vis_state.lastFrame = *frame;
     neogeo_audio_vis_state.hasLastFrame = 1;
-}
-
-void
-neogeo_audio_vis_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

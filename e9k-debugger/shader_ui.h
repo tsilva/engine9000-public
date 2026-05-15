@@ -21,9 +21,6 @@ int
 shader_ui_isOpen(void);
 
 void
-shader_ui_setMainWindowFocused(int focused);
-
-void
 shader_ui_render(void);
 
 void

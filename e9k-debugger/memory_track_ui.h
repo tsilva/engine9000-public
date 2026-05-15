@@ -21,9 +21,6 @@ int
 memory_track_ui_isOpen(void);
 
 void
-memory_track_ui_setMainWindowFocused(int focused);
-
-void
 memory_track_ui_render(void);
 
 void

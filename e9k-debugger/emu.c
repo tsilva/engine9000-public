@@ -598,15 +598,6 @@ emu_rangeBarSync(e9ui_component_t *bar, size_t index)
 }
 
 
-static int
-emu_viewPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 emu_viewLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1019,15 +1010,6 @@ restore_clip:
     }
 }
 
-static int
-emu_hostPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 emu_hostLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1189,7 +1171,6 @@ emu_makeComponent(void)
     }
 
     comp->name = "emu";
-    comp->preferredHeight = emu_hostPreferredHeight;
     comp->layout = emu_hostLayout;
     comp->render = emu_hostRender;
     comp->handleEvent = emu_hostHandleEvent;
@@ -1197,7 +1178,6 @@ emu_makeComponent(void)
     comp->state = state;
 
     view->name = "emu_view";
-    view->preferredHeight = emu_viewPreferredHeight;
     view->layout = emu_viewLayout;
     view->render = emu_viewRender;
     view->handleEvent = emu_handleEvent;

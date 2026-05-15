@@ -61,10 +61,16 @@ void
 e9ui_windowSetMinSize(e9ui_window_t *window, int minWidthPx, int minHeightPx);
 
 void
+e9ui_windowSetCloseOnEscape(e9ui_window_t *window, int closeOnEscape);
+
+void
 e9ui_windowClose(e9ui_window_t *window);
 
 void
 e9ui_windowCloseAllOverlay(void);
+
+int
+e9ui_windowCloseTopOverlay(void);
 
 void
 e9ui_window_resetOverlayResources(void);

@@ -25,9 +25,6 @@ int
 amiga_custom_isOpen(void);
 
 void
-amiga_custom_setMainWindowFocused(int focused);
-
-void
 amiga_custom_render(void);
 
 void

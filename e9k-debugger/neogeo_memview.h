@@ -17,9 +17,6 @@ int
 neogeo_memview_isOpen(void);
 
 void
-neogeo_memview_setMainWindowFocused(int focused);
-
-void
 neogeo_memview_render(void);
 
 void

@@ -87,24 +87,6 @@ aux_window_setFocus(int focused)
     }
 }
 
-int
-aux_window_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev) {
-        return 0;
-    }
-    aux_window_entry_t snapshot[AUX_WINDOW_MAX];
-    size_t count = aux_window_snapshot(snapshot, AUX_WINDOW_MAX);
-    for (size_t i = count; i > 0; --i) {
-        const aux_window_entry_t *entry = &snapshot[i - 1];
-        if (entry->ops->handleKeydown &&
-            entry->ops->handleKeydown(kev)) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 void
 aux_window_render(void)
 {

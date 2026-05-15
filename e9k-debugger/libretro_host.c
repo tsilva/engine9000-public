@@ -24,6 +24,7 @@
 #include "input_record.h"
 #include "alloc.h"
 #include "machine.h"
+#include "smoke_test.h"
 #include "state_wrap.h"
 #include "libretro_host_internal.h"
 
@@ -1259,8 +1260,20 @@ static int16_t
 libretro_host_clampToInt16(int value);
 
 static void
+libretro_host_markSmokeAudioFailed(void)
+{
+    debugger.smokeTestFailed = 1;
+    debugger.smokeTestExitCode = 1;
+}
+
+static void
 libretro_host_audioSample(int16_t left, int16_t right)
 {
+    int16_t sample[2] = { left, right };
+    if (smoke_test_captureAudio(sample, 1) != 0) {
+        libretro_host_markSmokeAudioFailed();
+        return;
+    }
     if (!libretro_host.audioDev) {
         return;
     }
@@ -1268,7 +1281,6 @@ libretro_host_audioSample(int16_t left, int16_t right)
     if (volume <= 0) {
         return;
     }
-    int16_t sample[2] = { left, right };
     if (volume < 100) {
         int leftScaled = ((int)left * volume) / 100;
         int rightScaled = ((int)right * volume) / 100;
@@ -1288,6 +1300,10 @@ libretro_host_audioSample(int16_t left, int16_t right)
 static size_t
 libretro_host_audioSampleBatch(const int16_t *data, size_t frames)
 {
+    if (smoke_test_captureAudio(data, frames) != 0) {
+        libretro_host_markSmokeAudioFailed();
+        return frames;
+    }
     if (!libretro_host.audioDev || !data || frames == 0) {
         return frames;
     }
@@ -1834,6 +1850,7 @@ libretro_host_start(const char *corePath, const char *romPath,
     }
     libretro_host.gameLoaded = true;
     libretro_host.getSystemAvInfo(&libretro_host.avInfo);
+    smoke_test_setAudioFormat((int)libretro_host.avInfo.timing.sample_rate, 2);
     libretro_host.audioEnabled = debugger_getAudioEnabled();
     libretro_host_openAudio();
     if (libretro_host.avInfo.geometry.base_width && libretro_host.avInfo.geometry.base_height) {

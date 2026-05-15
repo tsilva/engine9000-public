@@ -70,7 +70,6 @@ static mega_palette_debug_state_t mega_palette_debugState = {
 };
 
 static const aux_window_ops_t mega_palette_debug_auxWindowOps = {
-    .setFocus = mega_palette_debug_setMainWindowFocused,
     .render = mega_palette_debug_render,
 };
 
@@ -664,22 +663,6 @@ mega_palette_debug_windowDefaultRect(const e9ui_context_t *ctx)
     return rect;
 }
 
-int
-mega_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev || !mega_palette_debugState.windowState.open) {
-        return 0;
-    }
-    if (kev->repeat != 0) {
-        return 0;
-    }
-    if (kev->keysym.sym == SDLK_ESCAPE) {
-        mega_palette_debug_toggle();
-        return 1;
-    }
-    return 0;
-}
-
 void
 mega_palette_debug_toggle(void)
 {
@@ -756,12 +739,6 @@ int
 mega_palette_debug_isOpen(void)
 {
     return mega_palette_debugState.windowState.open ? 1 : 0;
-}
-
-void
-mega_palette_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

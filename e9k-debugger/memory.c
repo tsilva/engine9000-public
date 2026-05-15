@@ -2199,13 +2199,6 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
     }
 }
 
-static void
-memory_dtor(e9ui_component_t *self, e9ui_context_t *ctx)
-{
-  (void)ctx;
-  (void)self;
-}
-
 e9ui_component_t *
 memory_makeComponent(void)
 {
@@ -2226,7 +2219,6 @@ memory_makeComponent(void)
     c->layout = memory_layout;
     c->render = memory_render;
     c->handleEvent = memory_handleEvent;
-    c->dtor = memory_dtor;
     c->focusable = 1;
     st->ownerView = c;
 

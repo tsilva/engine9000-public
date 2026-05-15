@@ -37,6 +37,7 @@ typedef struct e9ui_window_overlay_state
     int minHeightPx;
     int maximized;
     int restoreRectValid;
+    int closeOnEscape;
     e9ui_window_close_cb_t onClose;
     void *onCloseUser;
 } e9ui_window_overlay_state_t;
@@ -55,6 +56,7 @@ struct e9ui_window
     int open;
     int minWidthPx;
     int minHeightPx;
+    int closeOnEscape;
 };
 
 static SDL_Cursor *e9ui_window_overlayCursorArrow = NULL;
@@ -851,7 +853,7 @@ e9ui_window_overlayHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, cons
     if (ev->type == SDL_KEYDOWN && ev->key.keysym.sym == SDLK_ESCAPE) {
         e9ui_component_t *focus = e9ui_getFocus(ctx);
         if (focus && e9ui_window_componentContainsComponent(self, focus)) {
-            if (st->onClose) {
+            if (st->closeOnEscape && st->onClose) {
                 e9ui_window_overlayNotifyCloseDeferred(ctx, st);
             }
             return 1;
@@ -969,6 +971,7 @@ e9ui_window_overlayMake(e9ui_window_t *owner,
     st->body = body;
     st->minWidthPx = owner ? owner->minWidthPx : 0;
     st->minHeightPx = owner ? owner->minHeightPx : 0;
+    st->closeOnEscape = owner ? owner->closeOnEscape : 1;
     st->onClose = onClose;
     st->onCloseUser = onCloseUser;
     if (title && *title) {
@@ -999,6 +1002,7 @@ e9ui_windowCreate(e9ui_window_backend_t backend)
         return NULL;
     }
     window->backend = backend;
+    window->closeOnEscape = 1;
     return window;
 }
 
@@ -1015,6 +1019,20 @@ e9ui_windowSetMinSize(e9ui_window_t *window, int minWidthPx, int minHeightPx)
         e9ui_window_overlay_state_t *st = (e9ui_window_overlay_state_t *)window->windowComp->state;
         st->minWidthPx = window->minWidthPx;
         st->minHeightPx = window->minHeightPx;
+    }
+}
+
+void
+e9ui_windowSetCloseOnEscape(e9ui_window_t *window, int closeOnEscape)
+{
+    if (!window) {
+        return;
+    }
+    window->closeOnEscape = closeOnEscape ? 1 : 0;
+    if (window->windowComp && window->windowComp->state &&
+        window->backend == e9ui_window_backend_overlay) {
+        e9ui_window_overlay_state_t *st = (e9ui_window_overlay_state_t *)window->windowComp->state;
+        st->closeOnEscape = window->closeOnEscape;
     }
 }
 
@@ -1141,6 +1159,54 @@ e9ui_windowCloseAllOverlay(void)
             }
         }
     }
+}
+
+int
+e9ui_windowCloseTopOverlay(void)
+{
+    if (!e9ui) {
+        return 0;
+    }
+    e9ui_component_t *hostRoot = e9ui_getOverlayHost();
+    if (!hostRoot) {
+        hostRoot = e9ui->root;
+    }
+    if (!hostRoot) {
+        return 0;
+    }
+    e9ui_child_reverse_iterator iter;
+    if (!e9ui_child_iterateChildrenReverse(hostRoot, &iter)) {
+        return 0;
+    }
+    for (e9ui_child_reverse_iterator *it = e9ui_child_iteratePrev(&iter);
+         it;
+         it = e9ui_child_iteratePrev(&iter)) {
+        if (!it->child || !it->child->name) {
+            continue;
+        }
+        if (strcmp(it->child->name, "e9ui_window_overlay") != 0) {
+            continue;
+        }
+        e9ui_window_overlay_state_t *st = (e9ui_window_overlay_state_t *)it->child->state;
+        if (st && !st->closeOnEscape) {
+            return 0;
+        }
+        if (st && st->onClose) {
+            e9ui_window_overlayNotifyCloseDeferred(&e9ui->ctx, st);
+            return 1;
+        }
+        if (st && st->owner) {
+            e9ui_windowClose(st->owner);
+            return 1;
+        }
+        if (hostRoot->name && strcmp(hostRoot->name, "e9ui_stack") == 0) {
+            e9ui_stack_remove(hostRoot, &e9ui->ctx, it->child);
+        } else {
+            e9ui_childRemove(hostRoot, it->child, &e9ui->ctx);
+        }
+        return 1;
+    }
+    return 0;
 }
 
 int

@@ -110,7 +110,6 @@ static amiga_custom_state_t amiga_custom_state = {
 };
 
 static const aux_window_ops_t amiga_custom_auxWindowOps = {
-    .setFocus = amiga_custom_setMainWindowFocused,
     .render = amiga_custom_render,
 };
 
@@ -1084,15 +1083,6 @@ amiga_custom_buildRoot(amiga_custom_state_t *ui)
     return root;
 }
 
-static int
-amiga_custom_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 amiga_custom_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1189,7 +1179,6 @@ amiga_custom_makeOverlayBodyHost(amiga_custom_state_t *ui)
     st->ui = ui;
     host->name = "amiga_custom_overlay_body";
     host->state = st;
-    host->preferredHeight = amiga_custom_overlayBodyPreferredHeight;
     host->layout = amiga_custom_overlayBodyLayout;
     host->render = amiga_custom_overlayBodyRender;
     host->dtor = amiga_custom_overlayBodyDtor;
@@ -1308,12 +1297,6 @@ int
 amiga_custom_isOpen(void)
 {
     return amiga_custom_state.windowState.open ? 1 : 0;
-}
-
-void
-amiga_custom_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

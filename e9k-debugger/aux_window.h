@@ -8,12 +8,9 @@
 
 #pragma once
 
-#include <SDL.h>
-
 typedef struct aux_window_ops
 {
     void (*setFocus)(int focused);
-    int (*handleKeydown)(const SDL_KeyboardEvent *kev);
     void (*render)(void);
 } aux_window_ops_t;
 
@@ -25,9 +22,6 @@ aux_window_unregister(const aux_window_ops_t *ops, void *registrationKey);
 
 void
 aux_window_setFocus(int focused);
-
-int
-aux_window_handleKeydown(const SDL_KeyboardEvent *kev);
 
 void
 aux_window_render(void);

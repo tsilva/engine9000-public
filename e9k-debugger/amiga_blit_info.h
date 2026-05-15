@@ -31,9 +31,6 @@ void
 amiga_blit_info_showHits(const e9k_debug_ami_blitter_vis_point_t *hits, size_t hitCount, size_t selectedIndex);
 
 void
-amiga_blit_info_setMainWindowFocused(int focused);
-
-void
 amiga_blit_info_render(void);
 
 void

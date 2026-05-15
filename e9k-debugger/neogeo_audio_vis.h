@@ -22,12 +22,6 @@ neogeo_audio_vis_isOpen(void);
 void
 neogeo_audio_vis_render(const e9k_debug_audio_frame_t *frame);
 
-int
-neogeo_audio_vis_handleKeydown(const SDL_KeyboardEvent *kev);
-
-void
-neogeo_audio_vis_setMainWindowFocused(int focused);
-
 void
 neogeo_audio_vis_persistConfig(FILE *file);
 

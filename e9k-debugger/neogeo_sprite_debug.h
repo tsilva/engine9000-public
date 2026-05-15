@@ -21,12 +21,6 @@ neogeo_sprite_debug_is_open(void);
 void
 neogeo_sprite_debug_render(const e9k_debug_sprite_state_t *st);
 
-int
-neogeo_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev);
-
-void
-neogeo_sprite_debug_setMainWindowFocused(int focused);
-
 void
 neogeo_sprite_debug_persistConfig(FILE *file);
 

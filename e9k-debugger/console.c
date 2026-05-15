@@ -465,13 +465,6 @@ console_handleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_even
     return 0;
 }
 
-static void
-console_dtor(e9ui_component_t *self, e9ui_context_t *ctx)
-{
-  (void)ctx;
-  (void)self;
-}
-
 e9ui_component_t *
 console_makeComponent(void)
 {
@@ -482,6 +475,5 @@ console_makeComponent(void)
     c->layout = console_layout;
     c->render = console_render;
     c->handleEvent = console_handleEvent;
-    c->dtor = console_dtor;
     return c;
 }

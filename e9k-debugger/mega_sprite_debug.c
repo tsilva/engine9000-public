@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "aux_window.h"
 #include "mega_sprite_debug.h"
 #include "alloc.h"
 #include "config.h"
@@ -92,11 +91,6 @@ mega_sprite_debug_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
 }
-
-static const aux_window_ops_t mega_sprite_debug_auxWindowOps = {
-    .setFocus = mega_sprite_debug_setMainWindowFocused,
-    .handleKeydown = mega_sprite_debug_handleKeydown,
-};
 
 static uint32_t
 mega_sprite_debug_color(uint8_t r, uint8_t g, uint8_t b)
@@ -188,15 +182,6 @@ mega_sprite_debug_windowDefaultRect(const e9ui_context_t *ctx)
         e9ui_scale_px(ctx, 560)
     };
     return rect;
-}
-
-static int
-mega_sprite_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
 }
 
 static void
@@ -327,7 +312,6 @@ mega_sprite_debug_makeOverlayBodyHost(void)
     host->name = "mega_sprite_debug_overlay_body";
     host->state = st;
     host->focusable = 1;
-    host->preferredHeight = mega_sprite_debug_overlayBodyPreferredHeight;
     host->layout = mega_sprite_debug_overlayBodyLayout;
     host->render = mega_sprite_debug_overlayBodyRender;
     host->handleEvent = mega_sprite_debug_overlayBodyHandleEvent;
@@ -664,11 +648,9 @@ mega_sprite_debug_toggle(void)
         mega_sprite_debug_state.highlightIssuesOnly = 0;
         mega_sprite_debug_state.cachedValid = 0;
         mega_sprite_debug_state.lastHash = 0u;
-        aux_window_register(&mega_sprite_debug_auxWindowOps, &mega_sprite_debug_state);
         return;
     }
 
-    aux_window_unregister(&mega_sprite_debug_auxWindowOps, &mega_sprite_debug_state);
     if (mega_sprite_debug_state.texture) {
         SDL_DestroyTexture(mega_sprite_debug_state.texture);
         mega_sprite_debug_state.texture = NULL;
@@ -696,30 +678,6 @@ int
 mega_sprite_debug_is_open(void)
 {
     return mega_sprite_debug_state.windowState.open ? 1 : 0;
-}
-
-int
-mega_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev || !mega_sprite_debug_state.windowState.open) {
-        return 0;
-    }
-    if (kev->repeat != 0) {
-        return 0;
-    }
-    if (kev->keysym.sym == SDLK_ESCAPE) {
-        if (mega_sprite_debug_is_open()) {
-            mega_sprite_debug_toggle();
-        }
-        return 1;
-    }
-    return 0;
-}
-
-void
-mega_sprite_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 static void

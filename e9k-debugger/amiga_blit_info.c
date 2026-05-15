@@ -91,7 +91,6 @@ static amiga_blit_info_state_t amiga_blit_info_state = {
 };
 
 static const aux_window_ops_t amiga_blit_info_auxWindowOps = {
-    .setFocus = amiga_blit_info_setMainWindowFocused,
     .render = amiga_blit_info_render,
 };
 
@@ -649,15 +648,6 @@ amiga_blit_info_buildRoot(amiga_blit_info_state_t *ui)
     return root;
 }
 
-static int
-amiga_blit_info_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 amiga_blit_info_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -734,7 +724,6 @@ amiga_blit_info_makeOverlayBodyHost(amiga_blit_info_state_t *ui)
     state->ui = ui;
     host->name = "amiga_blit_info_overlay_body";
     host->state = state;
-    host->preferredHeight = amiga_blit_info_overlayBodyPreferredHeight;
     host->layout = amiga_blit_info_overlayBodyLayout;
     host->render = amiga_blit_info_overlayBodyRender;
     e9ui_child_add(host, ui->root, alloc_strdup("amiga_blit_info_root"));
@@ -876,12 +865,6 @@ amiga_blit_info_showHits(const e9k_debug_ami_blitter_vis_point_t *hits, size_t h
         return;
     }
     amiga_blit_info_syncState(ui);
-}
-
-void
-amiga_blit_info_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

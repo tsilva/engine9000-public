@@ -69,9 +69,14 @@ runtime_onVblank(void *user)
             debugger.smokeTestFailed = 1;
             debugger.smokeTestExitCode = 1;
         } else if (smokeResult == 2) {
-            debugger.smokeTestCompleted = 1;
-            debugger.smokeTestExitCode = 0;
-            debug_printf("*** SMOKE TEST PASSED ***");
+            if (smoke_test_finishAudioCompare() != 0) {
+                debugger.smokeTestFailed = 1;
+                debugger.smokeTestExitCode = 1;
+            } else {
+                debugger.smokeTestCompleted = 1;
+                debugger.smokeTestExitCode = 0;
+                debug_printf("*** SMOKE TEST PASSED ***");
+            }
         }
     }
 }
@@ -341,9 +346,17 @@ runtime_runLoop(void)
         if (debugger.smokeTestMode != SMOKE_TEST_MODE_NONE &&
             debugger.smokeTestMode != SMOKE_TEST_MODE_RECORD &&
             input_record_isPlaybackComplete()) {
-            debugger.smokeTestCompleted = 1;
-            debugger.smokeTestExitCode = 0;
-            if (debugger.smokeTestMode == SMOKE_TEST_MODE_COMPARE) {
+            if (debugger.smokeTestMode == SMOKE_TEST_MODE_COMPARE &&
+                smoke_test_finishAudioCompare() != 0) {
+                debugger.smokeTestFailed = 1;
+                debugger.smokeTestExitCode = 1;
+            } else {
+                debugger.smokeTestCompleted = 1;
+                debugger.smokeTestExitCode = 0;
+            }
+            if (debugger.smokeTestFailed) {
+                break;
+            } else if (debugger.smokeTestMode == SMOKE_TEST_MODE_COMPARE) {
                 debug_printf("*** SMOKE TEST PASSED ***");
             } else if (debugger.smokeTestMode == SMOKE_TEST_MODE_REMAKE) {
                 debug_printf("*** REMAKE SMOKE COMPLETE ***");

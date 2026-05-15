@@ -119,7 +119,6 @@ static amiga_custom_log_state_t amiga_custom_log_state = {
 };
 
 static const aux_window_ops_t amiga_custom_log_auxWindowOps = {
-    .setFocus = amiga_custom_log_setMainWindowFocused,
     .render = amiga_custom_log_render,
 };
 
@@ -1096,21 +1095,6 @@ amiga_custom_log_isOpen(void)
     return amiga_custom_log_state.windowState.open ? 1 : 0;
 }
 
-void
-amiga_custom_log_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
-static int
-amiga_custom_log_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 amiga_custom_log_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1572,7 +1556,6 @@ amiga_custom_log_makeOverlayBodyHost(amiga_custom_log_state_t *ui)
     st->ui = ui;
     host->name = "amiga_custom_log_overlay_body";
     host->state = st;
-    host->preferredHeight = amiga_custom_log_overlayBodyPreferredHeight;
     host->layout = amiga_custom_log_overlayBodyLayout;
     host->render = amiga_custom_log_overlayBodyRender;
     host->handleEvent = amiga_custom_log_overlayBodyHandleEvent;

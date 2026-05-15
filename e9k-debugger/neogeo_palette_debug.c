@@ -68,7 +68,6 @@ static neogeo_palette_debug_state_t neogeo_palette_debugState = {
 };
 
 static const aux_window_ops_t neogeo_palette_debug_auxWindowOps = {
-    .setFocus = neogeo_palette_debug_setMainWindowFocused,
     .render = neogeo_palette_debug_render,
 };
 
@@ -654,22 +653,6 @@ neogeo_palette_debug_windowDefaultRect(const e9ui_context_t *ctx)
     return rect;
 }
 
-int
-neogeo_palette_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev || !neogeo_palette_debugState.windowState.open) {
-        return 0;
-    }
-    if (kev->repeat != 0) {
-        return 0;
-    }
-    if (kev->keysym.sym == SDLK_ESCAPE) {
-        neogeo_palette_debug_toggle();
-        return 1;
-    }
-    return 0;
-}
-
 void
 neogeo_palette_debug_toggle(void)
 {
@@ -746,12 +729,6 @@ int
 neogeo_palette_debug_isOpen(void)
 {
     return neogeo_palette_debugState.windowState.open ? 1 : 0;
-}
-
-void
-neogeo_palette_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

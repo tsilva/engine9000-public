@@ -364,12 +364,6 @@ amiga_custom_isOpen(void)
 }
 
 void
-amiga_custom_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
-void
 amiga_custom_render(void)
 {
 }
@@ -416,12 +410,6 @@ amiga_memview_setViewIfOpen(uint32_t baseAddr, uint32_t rowBytes, int resetScrol
     (void)baseAddr;
     (void)rowBytes;
     (void)resetScroll;
-}
-
-void
-amiga_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void
@@ -472,12 +460,6 @@ amiga_blit_info_show(const e9k_debug_ami_blitter_vis_point_t *info)
 }
 
 void
-amiga_blit_info_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
-void
 amiga_blit_info_render(void)
 {
 }
@@ -516,12 +498,6 @@ int
 amiga_custom_log_isOpen(void)
 {
     return 0;
-}
-
-void
-amiga_custom_log_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void
@@ -629,12 +605,6 @@ amiga_custom_ui_setBplptrLineLimitRange(int start, int end)
 {
     (void)start;
     (void)end;
-}
-
-void
-amiga_custom_ui_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

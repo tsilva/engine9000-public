@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "aux_window.h"
 #include "neogeo_sprite_debug.h"
 #include "alloc.h"
 #include "config.h"
@@ -231,29 +230,6 @@ neogeo_sprite_debug_windowBackend(void)
     return e9ui_window_backend_overlay;
 }
 
-int
-neogeo_sprite_debug_handleKeydown(const SDL_KeyboardEvent *kev)
-{
-    if (!kev || !neogeo_sprite_debugState.windowState.open) {
-        return 0;
-    }
-    if (kev->repeat != 0) {
-        return 0;
-    }
-    if (kev->keysym.sym == SDLK_ESCAPE) {
-        if (neogeo_sprite_debug_is_open()) {
-            neogeo_sprite_debug_toggle();
-        }
-        return 1;
-    }
-    return 0;
-}
-
-static const aux_window_ops_t neogeo_sprite_debug_auxWindowOps = {
-    .setFocus = neogeo_sprite_debug_setMainWindowFocused,
-    .handleKeydown = neogeo_sprite_debug_handleKeydown,
-};
-
 static int
 neogeo_sprite_debug_parseInt(const char *value, int *out)
 {
@@ -336,15 +312,6 @@ neogeo_sprite_debug_windowDefaultRect(const e9ui_context_t *ctx)
         e9ui_scale_px(ctx, 768)
     };
     return rect;
-}
-
-static int
-neogeo_sprite_debug_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
 }
 
 static void
@@ -613,7 +580,6 @@ neogeo_sprite_debug_makeOverlayBodyHost(void)
         return NULL;
     }
     host->name = "neogeo_sprite_debug_overlay_body";
-    host->preferredHeight = neogeo_sprite_debug_overlayBodyPreferredHeight;
     host->layout = neogeo_sprite_debug_overlayBodyLayout;
     host->render = neogeo_sprite_debug_overlayBodyRender;
     return host;
@@ -1054,9 +1020,7 @@ neogeo_sprite_debug_toggle(void)
         neogeo_sprite_debugState.window = e9ui->ctx.window;
         neogeo_sprite_debugState.renderer = e9ui->ctx.renderer;
         neogeo_sprite_debugState.windowState.open = 1;
-        aux_window_register(&neogeo_sprite_debug_auxWindowOps, &neogeo_sprite_debugState);
     } else {
-        aux_window_unregister(&neogeo_sprite_debug_auxWindowOps, &neogeo_sprite_debugState);
         if (neogeo_sprite_debugState.texture) {
             SDL_DestroyTexture(neogeo_sprite_debugState.texture);
             neogeo_sprite_debugState.texture = NULL;
@@ -1089,12 +1053,6 @@ int
 neogeo_sprite_debug_is_open(void)
 {
     return neogeo_sprite_debugState.windowState.open ? 1 : 0;
-}
-
-void
-neogeo_sprite_debug_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

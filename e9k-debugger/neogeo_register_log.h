@@ -27,9 +27,6 @@ int
 neogeo_register_log_isOpen(void);
 
 void
-neogeo_register_log_setMainWindowFocused(int focused);
-
-void
 neogeo_register_log_render(void);
 
 void

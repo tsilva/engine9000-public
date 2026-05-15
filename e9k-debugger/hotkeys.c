@@ -11,13 +11,13 @@
 #include <string.h>
 
 #include "hotkeys.h"
-#include "aux_window.h"
 #include "e9ui.h"
 #include "e9ui_checkbox.h"
 #include "e9ui_scroll.h"
 #include "e9ui_text.h"
 #include "e9ui_text_select.h"
 #include "e9ui_textbox.h"
+#include "e9ui_window.h"
 #include "help.h"
 #include "core_options.h"
 #include "settings.h"
@@ -2244,7 +2244,7 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
             hex_convert_close();
             return 1;
         }
-        if (aux_window_handleKeydown(kev)) {
+        if (e9ui_windowCloseTopOverlay()) {
             return 1;
         }
         if (e9ui->helpModal) {
@@ -2274,9 +2274,6 @@ hotkeys_handleKeydown(e9ui_context_t *ctx, const SDL_KeyboardEvent *kev)
              strcmp(focus->name, "e9ui_data_edit") == 0)) {
             return 0;
         }
-        return 1;
-    }
-    if (aux_window_handleKeydown(kev)) {
         return 1;
     }
     if (hotkeys_eventMatchesAction(kev, "help")) {

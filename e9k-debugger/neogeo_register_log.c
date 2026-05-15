@@ -121,7 +121,6 @@ static neogeo_register_log_state_t neogeo_register_log_state = {
 };
 
 static const aux_window_ops_t neogeo_register_log_auxWindowOps = {
-    .setFocus = neogeo_register_log_setMainWindowFocused,
     .render = neogeo_register_log_render,
 };
 
@@ -1262,21 +1261,6 @@ neogeo_register_log_isOpen(void)
     return neogeo_register_log_state.windowState.open ? 1 : 0;
 }
 
-void
-neogeo_register_log_setMainWindowFocused(int focused)
-{
-    (void)focused;
-}
-
-static int
-neogeo_register_log_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 neogeo_register_log_overlayBodyLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -1385,7 +1369,6 @@ neogeo_register_log_makeOverlayBodyHost(neogeo_register_log_state_t *ui)
     st->ui = ui;
     host->name = "neogeo_register_log_overlay_body";
     host->state = st;
-    host->preferredHeight = neogeo_register_log_overlayBodyPreferredHeight;
     host->layout = neogeo_register_log_overlayBodyLayout;
     host->render = neogeo_register_log_overlayBodyRender;
     host->dtor = neogeo_register_log_overlayBodyDtor;

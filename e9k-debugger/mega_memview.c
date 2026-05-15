@@ -84,7 +84,6 @@ static mega_memview_state_t mega_memview_stateSingleton = {
 };
 
 static const aux_window_ops_t mega_memview_auxWindowOps = {
-    .setFocus = mega_memview_setMainWindowFocused,
     .render = mega_memview_render,
 };
 
@@ -3739,15 +3738,6 @@ mega_memview_windowBackend(void)
     return e9ui_window_backend_overlay;
 }
 
-static int
-mega_memview_overlayBodyPreferredHeight(e9ui_component_t *self, e9ui_context_t *ctx, int availW)
-{
-    (void)self;
-    (void)ctx;
-    (void)availW;
-    return 0;
-}
-
 static void
 mega_memview_syncOverlayContext(mega_memview_state_t *ui, e9ui_context_t *ctx, e9ui_rect_t bounds)
 {
@@ -3836,7 +3826,6 @@ mega_memview_makeOverlayBodyHost(mega_memview_state_t *ui)
     state->ui = ui;
     host->name = "mega_memview_overlay_body";
     host->state = state;
-    host->preferredHeight = mega_memview_overlayBodyPreferredHeight;
     host->layout = mega_memview_overlayBodyLayout;
     host->render = mega_memview_overlayBodyRender;
     host->dtor = mega_memview_overlayBodyDtor;
@@ -4018,12 +4007,6 @@ int
 mega_memview_isOpen(void)
 {
     return mega_memview_stateSingleton.windowState.open ? 1 : 0;
-}
-
-void
-mega_memview_setMainWindowFocused(int focused)
-{
-    (void)focused;
 }
 
 void

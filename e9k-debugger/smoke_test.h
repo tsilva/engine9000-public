@@ -58,3 +58,12 @@ smoke_test_cleanup(void);
 
 int
 smoke_test_captureFrame(uint64_t frame);
+
+void
+smoke_test_setAudioFormat(int sampleRate, int channels);
+
+int
+smoke_test_captureAudio(const int16_t *data, size_t frames);
+
+int
+smoke_test_finishAudioCompare(void);
