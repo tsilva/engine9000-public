@@ -3205,11 +3205,11 @@ e9ui_textbox_selectOverlayHandleEvent(e9ui_context_t *ctx, const e9ui_event_t *e
                 hoverFilteredIdx = textbox_select_overlay.scrollIndex;
             }
             if (ev->wheel.y > 0) {
-                textbox_select_overlay.scrollIndex -= 1;
-                hoverFilteredIdx -= 1;
-            } else if (ev->wheel.y < 0) {
                 textbox_select_overlay.scrollIndex += 1;
                 hoverFilteredIdx += 1;
+            } else if (ev->wheel.y < 0) {
+                textbox_select_overlay.scrollIndex -= 1;
+                hoverFilteredIdx -= 1;
             }
             textbox_selectOverlay_clampScroll(st, visibleCount, filter);
             if (hoverFilteredIdx < textbox_select_overlay.scrollIndex) {
