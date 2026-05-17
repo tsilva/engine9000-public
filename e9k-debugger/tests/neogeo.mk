@@ -1,5 +1,5 @@
-NEOGEO_TESTS=test-neogeosound test-neogeosavestate test-neogeostepping test-neogeoprint test-neogeoz80 test-neogeosprite test-neogeotracker test-neogeolog test-neogeomemview test-neogeoaudiovis test-neogeozip test-neogeofolder test-neogeosmoke
-NEOGEO_REMAKE=remake-test-neogeosound remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeoprint remake-test-neogeoz80 remake-test-neogeosprite remake-test-neogeotracker remake-test-neogeolog remake-test-neogeomemview remake-test-neogeoaudiovis remake-test-neogeozip remake-test-neogeofolder
+NEOGEO_TESTS=test-neogeosound test-neogeosavestate test-neogeostepping test-neogeoprint test-neogeoz80 test-neogeosprite test-neogeotracker test-neogeolog test-neogeomemview test-neogeopalette test-neogeoaudiovis test-neogeozip test-neogeofolder test-neogeosmoke
+NEOGEO_REMAKE=remake-test-neogeosound remake-test-neogeosavestate remake-test-neogeostepping remake-test-neogeoprint remake-test-neogeoz80 remake-test-neogeosprite remake-test-neogeotracker remake-test-neogeolog remake-test-neogeomemview remake-test-neogeopalette remake-test-neogeoaudiovis remake-test-neogeozip remake-test-neogeofolder
 
 # makers
 
@@ -20,6 +20,9 @@ make-test-neogeotracker: all
 
 make-test-neogeomemview: all 
 	./e9k-debugger --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --make-test tests/results/neogeo/memview
+
+make-test-neogeopalette: all
+	./e9k-debugger --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --make-test tests/results/neogeo/palette
 
 make-test-neogeoaudiovis: all
 	./e9k-debugger --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --make-test tests/results/neogeo/audiovis
@@ -68,6 +71,10 @@ remake-test-neogeotracker: all
 remake-test-neogeomemview: all 
 	@printf "NEO GEO MEMORY VIEW ($@) ..."
 	./e9k-debugger --neogeo --volume=0 --rom=./tests/neogeo/sound/st.neo --remake-test tests/results/neogeo/memview
+
+remake-test-neogeopalette: all
+	@printf "NEO GEO PALETTE ($@) ..."
+	./e9k-debugger --neogeo --volume=0 --rom=./tests/neogeo/sound/st.neo --remake-test tests/results/neogeo/palette
 
 remake-test-neogeoaudiovis: all
 	@printf "NEO GEO AUDIOVIS ($@) ..."
@@ -125,6 +132,11 @@ test-neogeotracker: all
 test-neogeomemview: all
 	@printf "NEO GEO MEMORY VIEW ($@) ..." 
 	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/memview >> test.log 2>&1
+	@echo "PASSED ✅"
+
+test-neogeopalette: all
+	@printf "NEO GEO PALETTE ($@) ..."
+	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/palette >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeoaudiovis: all
