@@ -16,6 +16,7 @@
 #include "mega_memview.h"
 #include "mega_palette_debug.h"
 #include "mega_sprite_debug.h"
+#include "mega_vdp.h"
 #include "megadrive_core_options.h"
 
 static void
@@ -514,6 +515,36 @@ mega_audio_vis_persistConfig(FILE *file)
 
 int
 mega_audio_vis_loadConfigProperty(const char *prop, const char *value)
+{
+    (void)prop;
+    (void)value;
+    return 0;
+}
+
+void
+mega_vdp_toggle(void)
+{
+}
+
+int
+mega_vdp_isOpen(void)
+{
+    return 0;
+}
+
+void
+mega_vdp_render(void)
+{
+}
+
+void
+mega_vdp_persistConfig(FILE *file)
+{
+    (void)file;
+}
+
+int
+mega_vdp_loadConfigProperty(const char *prop, const char *value)
 {
     (void)prop;
     (void)value;

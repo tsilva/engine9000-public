@@ -20,6 +20,8 @@
 #include "neogeo_core_options.h"
 #include "core_options.h"
 #include "libretro_host.h"
+#include "profile.h"
+#include "smoke_test.h"
 #include "system_badge.h"
 #include "ui_test.h"
 #include "alloc.h"
@@ -1089,6 +1091,25 @@ target_amiga_onCoreStarted(void)
     }
 }
 
+static void
+target_amiga_onDebugExitFromCore(void)
+{
+    profile_analyseOnExitIfRunning();
+    debugger.exitRequested = 1;
+}
+
+static void
+target_amiga_onDebugSmokeStartFromCore(void)
+{
+    smoke_test_startFromFrame(debugger.frameCounter);
+}
+
+static void
+target_amiga_onDebugProfileStartFromCore(void)
+{
+    profile_startFromDebugWrite();
+}
+
 
 static void target_amiga_onVblank(void) {}
 
@@ -1137,6 +1158,18 @@ target_amiga_validateAPI(void)
   }
   if (!libretro_host_amiga_setDebugBreakpointCallback(debugger_onAddBreakpointFromCore)) {
     debug_error("breakpoint: core does not expose e9k_debug_set_debug_breakpoint_callback");
+  }
+  if (!libretro_host_amiga_setDebugExitCallback(target_amiga_onDebugExitFromCore)) {
+    debug_error("exit: core does not expose e9k_debug_set_debug_exit_callback");
+  }
+  if (!libretro_host_amiga_setDebugSmokeStartCallback(target_amiga_onDebugSmokeStartFromCore)) {
+    debug_error("smoke_start: core does not expose e9k_debug_set_debug_smoke_start_callback");
+  }
+  if (!libretro_host_amiga_setDebugProfileStartCallback(target_amiga_onDebugProfileStartFromCore)) {
+    debug_error("profile_start: core does not expose e9k_debug_set_debug_profile_start_callback");
+  }
+  if (!libretro_host_amiga_setDebugArgs(debugger.debugArgs, (size_t)debugger.debugArgCount)) {
+    debug_error("debug_args: core does not expose e9k_debug_set_debug_args");
   }
   int *debugDma = NULL;
   if (libretro_host_amiga_getDmaAddr(&debugDma)) {

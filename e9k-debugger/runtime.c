@@ -54,6 +54,16 @@ runtime_watchAccessSourceName(uint32_t accessSource)
     }
 }
 
+static void
+runtime_markSmokeTestFailed(void)
+{
+    if (!debugger.smokeTestFailed) {
+        debug_error("*** SMOKE TEST FAILED ***");
+    }
+    debugger.smokeTestFailed = 1;
+    debugger.smokeTestExitCode = 1;
+}
+
 void
 runtime_onVblank(void *user)
 {
@@ -66,12 +76,10 @@ runtime_onVblank(void *user)
     if (!debugger.smokeTestFailed && !debugger.smokeTestCompleted) {
         int smokeResult = smoke_test_captureFrame(debugger.frameCounter);
         if (smokeResult == 1) {
-            debugger.smokeTestFailed = 1;
-            debugger.smokeTestExitCode = 1;
+            runtime_markSmokeTestFailed();
         } else if (smokeResult == 2) {
             if (smoke_test_finishAudioCompare() != 0) {
-                debugger.smokeTestFailed = 1;
-                debugger.smokeTestExitCode = 1;
+                runtime_markSmokeTestFailed();
             } else {
                 debugger.smokeTestCompleted = 1;
                 debugger.smokeTestExitCode = 0;
@@ -170,6 +178,9 @@ runtime_runLoop(void)
             break;
         }
         if (debugger.restartRequested) {
+            break;
+        }
+        if (debugger.exitRequested) {
             break;
         }
         if (e9ui->pendingRemove) {
@@ -346,10 +357,13 @@ runtime_runLoop(void)
         if (debugger.smokeTestMode != SMOKE_TEST_MODE_NONE &&
             debugger.smokeTestMode != SMOKE_TEST_MODE_RECORD &&
             input_record_isPlaybackComplete()) {
-            if (debugger.smokeTestMode == SMOKE_TEST_MODE_COMPARE &&
-                smoke_test_finishAudioCompare() != 0) {
-                debugger.smokeTestFailed = 1;
-                debugger.smokeTestExitCode = 1;
+            if (!smoke_test_hasStarted()) {
+                debug_error("smoke-test: playback completed before smoke-start-on-write");
+                runtime_markSmokeTestFailed();
+            } else if (debugger.smokeTestMode == SMOKE_TEST_MODE_COMPARE &&
+                (smoke_test_finishScreenCompare() != 0 ||
+                 smoke_test_finishAudioCompare() != 0)) {
+                runtime_markSmokeTestFailed();
             } else {
                 debugger.smokeTestCompleted = 1;
                 debugger.smokeTestExitCode = 0;

@@ -17,6 +17,7 @@
 #include "e9ui.h"
 #include "libretro.h"
 #include "mega_audio_vis.h"
+#include "mega_vdp.h"
 #include "mega_memview.h"
 #include "mega_palette_debug.h"
 #include "mega_sprite_debug.h"
@@ -232,6 +233,14 @@ emu_mega_toggleAudioVis(e9ui_context_t *ctx, void *user)
     (void)ctx;
     (void)user;
     mega_audio_vis_toggle();
+}
+
+static void
+emu_mega_toggleVdp(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    mega_vdp_toggle();
 }
 
 static void
@@ -607,6 +616,14 @@ emu_mega_createOverlays(e9ui_component_t *comp, e9ui_component_t *button_stack)
         void *audioBtnMeta = alloc_strdup("mega_audio_vis");
         e9ui_child_add(button_stack, btnAudio, audioBtnMeta);
     }
+
+    e9ui_component_t *btnVdp = e9ui_button_make("VDP", emu_mega_toggleVdp, comp);
+    if (btnVdp) {
+        e9ui_button_setMini(btnVdp, 1);
+        e9ui_setFocusTarget(btnVdp, comp);
+        void *vdpBtnMeta = alloc_strdup("mega_vdp");
+        e9ui_child_add(button_stack, btnVdp, vdpBtnMeta);
+    }
 }
 
 static void
@@ -623,6 +640,9 @@ emu_mega_render(e9ui_context_t *ctx, SDL_Rect *dst)
     }
     if (mega_audio_vis_isOpen() && emu_mega_audioFrameReady) {
         mega_audio_vis_render(&emu_mega_audioFrame);
+    }
+    if (mega_vdp_isOpen()) {
+        mega_vdp_render();
     }
 }
 

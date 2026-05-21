@@ -349,6 +349,18 @@ bool
 libretro_host_amiga_setDebugBreakpointCallback(void (*cb)(uint32_t addr));
 
 bool
+libretro_host_amiga_setDebugExitCallback(void (*cb)(void));
+
+bool
+libretro_host_amiga_setDebugSmokeStartCallback(void (*cb)(void));
+
+bool
+libretro_host_amiga_setDebugProfileStartCallback(void (*cb)(void));
+
+bool
+libretro_host_amiga_setDebugArgs(const uint32_t *args, size_t count);
+
+bool
 libretro_host_amiga_setDeterministic(int enabled);
 
 const e9k_debug_ami_dma_debug_frame_view_t *
@@ -445,6 +457,9 @@ libretro_host_megadrive_getPaletteGreyscaleMask(uint32_t *outMask);
 
 bool
 libretro_host_megadrive_getAudioFrame(e9k_debug_mega_audio_frame_t *out);
+
+bool
+libretro_host_megadrive_getVdpBandwidthFrame(e9k_debug_mega_vdp_bandwidth_frame_t *out);
 
 bool
 libretro_host_megadrive_setAudioVisEnabled(int enabled);

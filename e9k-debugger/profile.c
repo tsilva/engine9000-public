@@ -128,6 +128,22 @@ profile_uiAnalyse(e9ui_context_t *ctx, void *user)
 }
 
 void
+profile_analyseOnExitIfRunning(void)
+{
+    if (!debugger.libretro.enabled || !debugger.geo.profilerEnabled) {
+        return;
+    }
+    debug_printf("profile: debug exit requested; stopping profiler before analysis\n");
+    if (!libretro_host_profilerStop()) {
+        debug_error("profile: failed to stop profiler before debug exit");
+    }
+    profile_drainStream();
+    profile_streamStop();
+    profile_updateEnabled(0);
+    profile_uiAnalyse(NULL, NULL);
+}
+
+void
 analyse_buttonRefresh(void)
 {
     e9ui_component_t *btn = e9ui->analyseButton;
@@ -157,6 +173,21 @@ profile_uiToggle(e9ui_context_t *ctx, void *user)
         profile_streamStart();
         profile_updateEnabled(1);
     }
+}
+
+void
+profile_startFromDebugWrite(void)
+{
+    if (!debugger.profileStartOnWrite || !debugger.libretro.enabled || debugger.geo.profilerEnabled) {
+        return;
+    }
+    debug_printf("profile: started on debug write\n");
+    if (!libretro_host_profilerStart(1)) {
+        debug_error("profile-start-on-write: failed to start profiler");
+        return;
+    }
+    profile_streamStart();
+    profile_updateEnabled(1);
 }
 
 void

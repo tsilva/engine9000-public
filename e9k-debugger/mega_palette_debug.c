@@ -432,11 +432,42 @@ mega_palette_debug_paletteAtPoint(const e9ui_rect_t *bounds, int mx, int my, uns
 }
 
 static void
-mega_palette_debug_applyGreyscaleMask(uint32_t mask)
+mega_palette_debug_syncGreyscaleMaskFromCore(void)
+{
+    uint32_t mask = 0u;
+
+    if (!libretro_host_megadrive_getPaletteGreyscaleMask(&mask)) {
+        return;
+    }
+    mask &= 0x0fu;
+    if (mega_palette_debugState.greyscaleMask == mask) {
+        return;
+    }
+    mega_palette_debugState.greyscaleMask = mask;
+    mega_palette_debugState.cachedValid = 0;
+}
+
+void
+mega_palette_debug_setGreyscaleMask(uint32_t mask)
 {
     mega_palette_debugState.greyscaleMask = mask & 0x0fu;
     mega_palette_debugState.cachedValid = 0;
     (void)libretro_host_megadrive_setPaletteGreyscaleMask(mega_palette_debugState.greyscaleMask);
+}
+
+uint32_t
+mega_palette_debug_getGreyscaleMask(void)
+{
+    mega_palette_debug_syncGreyscaleMaskFromCore();
+    return mega_palette_debugState.greyscaleMask;
+}
+
+void
+mega_palette_debug_togglePaletteGreyscale(unsigned paletteIndex)
+{
+    uint32_t mask = mega_palette_debug_getGreyscaleMask();
+
+    mega_palette_debug_setGreyscaleMask(mask ^ (1u << (paletteIndex & 3u)));
 }
 
 static void
@@ -445,7 +476,6 @@ mega_palette_debug_overlayBodyClick(e9ui_component_t *self,
                                     const e9ui_mouse_event_t *mouseEv)
 {
     unsigned bankIndex = 0;
-    uint32_t mask = 0u;
 
     (void)ctx;
 
@@ -455,8 +485,7 @@ mega_palette_debug_overlayBodyClick(e9ui_component_t *self,
     if (!mega_palette_debug_paletteAtPoint(&self->bounds, mouseEv->x, mouseEv->y, &bankIndex)) {
         return;
     }
-    mask = mega_palette_debugState.greyscaleMask ^ (1u << (bankIndex & 3u));
-    mega_palette_debug_applyGreyscaleMask(mask);
+    mega_palette_debug_togglePaletteGreyscale(bankIndex);
 }
 
 static void
@@ -493,7 +522,7 @@ mega_palette_debug_renderFrameInternal(const e9ui_rect_t *bounds)
     }
 
     mega_palette_debug_baseSize(&baseW, &baseH);
-    (void)libretro_host_megadrive_getPaletteGreyscaleMask(&mega_palette_debugState.greyscaleMask);
+    mega_palette_debug_syncGreyscaleMaskFromCore();
     cram = (const uint16_t *)libretro_host_getMemory(MEGA_PALETTE_DEBUG_CRAM_MEMORY_ID, &cramBytes);
     cramWords = cramBytes / sizeof(*cram);
     if (!cram || cramWords == 0u) {

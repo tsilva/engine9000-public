@@ -215,6 +215,22 @@ e9k_debug_set_debug_base_stack_callback(void (*cb)(uint32_t section, uint32_t ba
 void
 e9k_debug_set_debug_breakpoint_callback(void (*cb)(uint32_t addr));
 
+// Optional host callback invoked when the target requests debugger exit via a fake debug peripheral.
+void
+e9k_debug_set_debug_exit_callback(void (*cb)(void));
+
+// Optional host callback invoked when the target requests smoke-test start via a fake debug peripheral.
+void
+e9k_debug_set_debug_smoke_start_callback(void (*cb)(void));
+
+// Optional host callback invoked when the target requests profile start via a fake debug peripheral.
+void
+e9k_debug_set_debug_profile_start_callback(void (*cb)(void));
+
+// Debug arguments exposed to the target via fake read-only debug peripherals.
+void
+e9k_debug_set_debug_args(const uint32_t *args, size_t count);
+
 // Optional host callback used for source location resolution in cores that support source-line stepping.
 void
 e9k_debug_set_source_location_resolver(int (*resolver)(uint32_t pc24, uint64_t *out_location, void *user), void *user);

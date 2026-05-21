@@ -79,3 +79,25 @@ typedef struct e9k_debug_mega_audio_frame
     e9k_debug_mega_audio_source_t dac;
     e9k_debug_mega_audio_source_t mixed;
 } e9k_debug_mega_audio_frame_t;
+
+typedef struct e9k_debug_mega_vdp_bandwidth_frame
+{
+    uint64_t frameNo;
+    uint32_t cpuWriteSlots;
+    uint32_t dma68kSlots;
+    uint32_t dmaCopySlots;
+    uint32_t dmaFillSlots;
+    uint32_t readSlots;
+    uint32_t totalSlots;
+    uint32_t estimatedMaxSlots;
+    uint32_t activeLines;
+    uint32_t blankLines;
+    uint32_t dma68kVramBytes;
+    uint32_t dma68kCramBytes;
+    uint32_t dma68kVsramBytes;
+    uint32_t dmaCopyVramBytes;
+    uint32_t dmaFillVramBytes;
+    uint32_t dmaFillCramBytes;
+    uint32_t dmaFillVsramBytes;
+    uint32_t dmaTotalBytes;
+} e9k_debug_mega_vdp_bandwidth_frame_t;

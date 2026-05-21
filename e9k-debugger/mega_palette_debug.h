@@ -10,6 +10,7 @@
 
 #include <SDL.h>
 #include <stdio.h>
+#include <stdint.h>
 
 void
 mega_palette_debug_toggle(void);
@@ -19,6 +20,15 @@ mega_palette_debug_isOpen(void);
 
 void
 mega_palette_debug_render(void);
+
+void
+mega_palette_debug_setGreyscaleMask(uint32_t mask);
+
+uint32_t
+mega_palette_debug_getGreyscaleMask(void);
+
+void
+mega_palette_debug_togglePaletteGreyscale(unsigned paletteIndex);
 
 void
 mega_palette_debug_persistConfig(FILE *file);

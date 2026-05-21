@@ -102,8 +102,11 @@ NOTE: Testing on Linux/Windows builds has been minimal at this stage.
 - `0xFC000C` - writing a long word to this address sets this as the base address of the .bss section
 - `0xFC0010` - writing a long word to this address sets a breakpoint at the written address
 - `0xFC0020` - write checkpoint slot index (`0-63`) for checkpoint profiling
+- `0xFC0024` - write the word `0xDEAD` to this address exits the debugger
+- `0xFC0028` - any write starts a smoke test configured with `--smoke-start-on-write` and/or a profiling session configured with `--profile-start-on-write`; does nothing otherwise
+- `0xB7E900` through `0xB7E924` - read-only 32-bit debug argument registers 0-9, set with `--debug-arg VALUE`
 - `0xFC0100` - checkpoint description array base (`uint32_t[64]`), write `description_ptr` to `0xFC0100 + index*4`
-- These overlay with ROM addresses - other emulators or real Amiga might crash if you use these
+- `0xFCxxxx` debug registers overlay ROM addresses; the `0xB7E900` argument block is mapped as an e9k-only debug peripheral outside ROM and outside the usual Zorro II fast RAM range. Other emulators or real Amiga might crash if you use these.
 
 ### Profiling Features
 
@@ -673,7 +676,8 @@ Run `e9k-debugger --help` for the full list. The current options include:
 - `--audio-buffer-ms MS` (currently Neo Geo only)
 - `--window-size WxH`
 - `--record PATH`, `--playback PATH`
-- `--make-smoke PATH`, `--smoke-test PATH`, `--smoke-open`
+- `--make-smoke PATH`, `--smoke-test PATH`, `--smoke-start-on-write`, `--profile-start-on-write`, `--smoke-threshold N`, `--smoke-open`
+- `--debug-arg VALUE` (repeat up to 10; Amiga reads these as 32-bit debug args at `0xB7E900 + index*4`)
 - `--headless` - hide the main window (also disables rolling state recording by default)
 - `--warp` - start in speed multiplier mode
 - `--fullscreen` (alias: `--start-fullscreen`) - start in UI fullscreen mode (ESC toggle)

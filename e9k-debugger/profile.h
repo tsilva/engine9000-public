@@ -20,7 +20,13 @@ void
 profile_uiToggle(e9ui_context_t *ctx, void *user);
 
 void
+profile_startFromDebugWrite(void);
+
+void
 profile_uiAnalyse(e9ui_context_t *ctx, void *user);
+
+void
+profile_analyseOnExitIfRunning(void);
 
 void
 profile_drainStream(void);
@@ -29,5 +35,3 @@ void
 profile_streamStop(void);
 
 void analyse_buttonRefresh(void);
-
-

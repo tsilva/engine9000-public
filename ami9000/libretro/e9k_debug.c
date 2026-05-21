@@ -174,6 +174,11 @@ static int e9k_debug_prof_savedCachesize = -1;
 static void (*e9k_debug_setDebugBaseCb)(uint32_t section, uint32_t base) = NULL;
 static void (*e9k_debug_pushDebugBaseCb)(uint32_t section, uint32_t base, uint32_t size) = NULL;
 static void (*e9k_debug_setDebugBreakpointCb)(uint32_t addr) = NULL;
+static void (*e9k_debug_setDebugExitCb)(void) = NULL;
+static void (*e9k_debug_setDebugSmokeStartCb)(void) = NULL;
+static void (*e9k_debug_setDebugProfileStartCb)(void) = NULL;
+static uint32_t e9k_debug_debugArgs[10];
+
 static int (*e9k_debug_sourceLocationResolver)(uint32_t pc24, uint64_t *out_location, void *user) = NULL;
 static void *e9k_debug_sourceLocationResolverUser = NULL;
 static uint32_t e9k_debug_bitplaneMask = 0xffu;
@@ -1307,6 +1312,33 @@ e9k_debug_set_debug_breakpoint_callback(void (*cb)(uint32_t addr))
 }
 
 E9K_DEBUG_EXPORT void
+e9k_debug_set_debug_exit_callback(void (*cb)(void))
+{
+	e9k_debug_setDebugExitCb = cb;
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_set_debug_smoke_start_callback(void (*cb)(void))
+{
+	e9k_debug_setDebugSmokeStartCb = cb;
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_set_debug_profile_start_callback(void (*cb)(void))
+{
+	e9k_debug_setDebugProfileStartCb = cb;
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_set_debug_args(const uint32_t *args, size_t count)
+{
+	size_t i = 0;
+	for (; i < 10u; ++i) {
+		e9k_debug_debugArgs[i] = (args && i < count) ? args[i] : 0u;
+	}
+}
+
+E9K_DEBUG_EXPORT void
 e9k_debug_set_source_location_resolver(int (*resolver)(uint32_t pc24, uint64_t *out_location, void *user), void *user)
 {
 	e9k_debug_sourceLocationResolver = resolver;
@@ -1460,6 +1492,39 @@ e9k_debug_add_breakpoint_fromPeripheral(uint32_t addr)
 	if (!had && e9k_debug_setDebugBreakpointCb) {
 		e9k_debug_setDebugBreakpointCb(addr24);
 	}
+}
+
+void
+e9k_debug_exit_fromPeripheral(void)
+{
+	if (e9k_debug_setDebugExitCb) {
+		e9k_debug_setDebugExitCb();
+	}
+}
+
+void
+e9k_debug_smoke_start_fromPeripheral(void)
+{
+	if (e9k_debug_setDebugSmokeStartCb) {
+		e9k_debug_setDebugSmokeStartCb();
+	}
+}
+
+void
+e9k_debug_profile_start_fromPeripheral(void)
+{
+	if (e9k_debug_setDebugProfileStartCb) {
+		e9k_debug_setDebugProfileStartCb();
+	}
+}
+
+uint32_t
+e9k_debug_arg_read_fromPeripheral(uint32_t index)
+{
+	if (index >= 10u) {
+		return 0u;
+	}
+	return e9k_debug_debugArgs[index];
 }
 
 E9K_DEBUG_EXPORT void

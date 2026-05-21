@@ -24,6 +24,7 @@
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
 #include "mega_audio_vis.h"
+#include "mega_vdp.h"
 #include "mega_memview.h"
 #include "mega_palette_debug.h"
 #include "mega_sprite_debug.h"
@@ -184,6 +185,7 @@ config_persistConfig(FILE *f)
     neogeo_palette_debug_persistConfig(f);
     neogeo_memview_persistConfig(f);
     mega_audio_vis_persistConfig(f);
+    mega_vdp_persistConfig(f);
     mega_memview_persistConfig(f);
     mega_palette_debug_persistConfig(f);
     mega_sprite_debug_persistConfig(f);
@@ -384,6 +386,11 @@ config_loadConfigFile(const char *path)
         if (strncmp(key, "comp.mega_audio_vis.", 20) == 0) {
             const char *prop = key + 20;
             mega_audio_vis_loadConfigProperty(prop, value);
+            continue;
+        }
+        if (strncmp(key, "comp.mega_vdp.", 14) == 0) {
+            const char *prop = key + 14;
+            mega_vdp_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.mega_palette_debug.", 24) == 0) {

@@ -6,6 +6,9 @@
  * See COPYING for license details
  */
 
+#include <errno.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 
 #include "cli.h"
@@ -50,6 +53,38 @@ cli_setError(const char *message)
         debug_error("%s", message);
     }
     cli_errorFlag = 1;
+}
+
+static int
+cli_parseUint32(const char *value, uint32_t *out)
+{
+    if (!value || !*value || !out) {
+        return 0;
+    }
+    errno = 0;
+    char *end = NULL;
+    unsigned long long parsed = strtoull(value, &end, 0);
+    if (errno != 0 || !end || *end != '\0' || parsed > UINT32_MAX) {
+        return 0;
+    }
+    *out = (uint32_t)parsed;
+    return 1;
+}
+
+static int
+cli_addDebugArg(const char *value)
+{
+    if (debugger.debugArgCount >= 10) {
+        cli_setError("debug-arg: maximum is 10 values");
+        return 0;
+    }
+    uint32_t parsed = 0;
+    if (!cli_parseUint32(value, &parsed)) {
+        cli_setError("debug-arg: value must be a 32-bit integer");
+        return 0;
+    }
+    debugger.debugArgs[debugger.debugArgCount++] = parsed;
+    return 1;
 }
 
 static int
@@ -492,6 +527,64 @@ cli_parseArgs(int argc, char **argv)
             debugger.smokeTestMode = SMOKE_TEST_MODE_REMAKE;
             continue;
         }
+        if (strcmp(argv[i], "--smoke-start-on-write") == 0) {
+            debugger.smokeTestStartOnWrite = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--profile-start-on-write") == 0) {
+            debugger.profileStartOnWrite = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--debug-arg") == 0) {
+            if (i + 1 >= argc) {
+                cli_setError("debug-arg: missing value");
+                return;
+            }
+            if (!cli_addDebugArg(argv[++i])) {
+                return;
+            }
+            continue;
+        }
+        if (strncmp(argv[i], "--debug-arg=", sizeof("--debug-arg=") - 1) == 0) {
+            const char *value = argv[i] + sizeof("--debug-arg=") - 1;
+            if (!value[0]) {
+                cli_setError("debug-arg: missing value");
+                return;
+            }
+            if (!cli_addDebugArg(value)) {
+                return;
+            }
+            continue;
+        }
+        if (strcmp(argv[i], "--smoke-threshold") == 0) {
+            if (i + 1 >= argc) {
+                cli_setError("smoke-threshold: missing value");
+                return;
+            }
+            char *end = NULL;
+            long threshold = strtol(argv[++i], &end, 10);
+            if (!end || *end != '\0' || threshold <= 0 || threshold > INT_MAX) {
+                cli_setError("smoke-threshold: value must be greater than 0");
+                return;
+            }
+            debugger.smokeTestThreshold = (int)threshold;
+            continue;
+        }
+        if (strncmp(argv[i], "--smoke-threshold=", sizeof("--smoke-threshold=") - 1) == 0) {
+            const char *value = argv[i] + sizeof("--smoke-threshold=") - 1;
+            if (!value[0]) {
+                cli_setError("smoke-threshold: missing value");
+                return;
+            }
+            char *end = NULL;
+            long threshold = strtol(value, &end, 10);
+            if (!end || *end != '\0' || threshold <= 0 || threshold > INT_MAX) {
+                cli_setError("smoke-threshold: value must be greater than 0");
+                return;
+            }
+            debugger.smokeTestThreshold = (int)threshold;
+            continue;
+        }
         if (strcmp(argv[i], "--make-test") == 0 && i + 1 < argc) {
             char folder[PATH_MAX];
             folder[0] = '\0';
@@ -695,6 +788,10 @@ cli_printUsage(const char *argv0)
     printf("  --make-smoke PATH            Save frames and inputs to a folder\n");
     printf("  --remake-smoke PATH          Replay inputs and regenerate smoke frames\n");
     printf("  --smoke-test PATH            Replay inputs and compare frames\n");
+    printf("  --smoke-start-on-write       Start smoke capture after Amiga debug write\n");
+    printf("  --profile-start-on-write     Start profiling after Amiga debug write\n");
+    printf("  --smoke-threshold N          Fail after N smoke screen mismatches\n");
+    printf("  --debug-arg VALUE            Set Amiga debug arg register (repeat up to 10)\n");
     printf("  --smoke-open                 Open montage on smoke-test failure\n");
     printf("  --make-test PATH             Record inputs + UI test frame captures\n");
     printf("  --remake-test PATH           Replay events and regenerate UI test frames\n");

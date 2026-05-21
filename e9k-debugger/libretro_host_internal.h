@@ -95,6 +95,7 @@ typedef uint32_t (*e9k_debug_megadrive_get_palette_greyscale_mask_fn_t)(void);
 typedef size_t (*e9k_debug_megadrive_get_audio_frame_fn_t)(e9k_debug_mega_audio_frame_t *out, size_t cap);
 typedef void (*e9k_debug_megadrive_set_audio_vis_enabled_fn_t)(int enabled);
 typedef void (*e9k_debug_megadrive_set_audio_mute_mask_fn_t)(uint32_t mask);
+typedef size_t (*e9k_debug_megadrive_get_vdp_bandwidth_frame_fn_t)(e9k_debug_mega_vdp_bandwidth_frame_t *out, size_t cap);
 typedef size_t (*e9k_debug_disassemble_quick_fn_t)(uint32_t pc, char *out, size_t cap);
 typedef size_t (*e9k_debug_read_known_pcs_fn_t)(uint32_t startAddr, uint32_t endAddr, uint32_t *out, size_t cap);
 typedef void (*e9k_debug_reset_known_pcs_fn_t)(void);
@@ -128,6 +129,10 @@ typedef int (*e9k_debug_amiga_core_line_to_video_line_fn_t)(int coreLine);
 typedef const e9k_debug_ami_video_line_state_t *(*e9k_debug_amiga_get_video_line_states_fn_t)(void);
 typedef bool (*e9k_debug_amiga_set_floppy_path_fn_t)(int drive, const char *path);
 typedef void (*e9k_debug_set_breakpoint_callback_fn_t)(void (*cb)(uint32_t addr));
+typedef void (*e9k_debug_set_exit_callback_fn_t)(void (*cb)(void));
+typedef void (*e9k_debug_set_smoke_start_callback_fn_t)(void (*cb)(void));
+typedef void (*e9k_debug_set_profile_start_callback_fn_t)(void (*cb)(void));
+typedef void (*e9k_debug_set_args_fn_t)(const uint32_t *args, size_t count);
 typedef void (*e9k_debug_set_source_location_resolver_fn_t)(int (*resolver)(uint32_t pc24, uint64_t *out_location, void *user), void *user);
 typedef void (*e9k_debug_set_debug_option_fn_t)(e9k_debug_option_t option, uint32_t argument, void *user);
 
@@ -268,6 +273,7 @@ typedef struct {
     e9k_debug_megadrive_get_audio_frame_fn_t debugMegadriveGetAudioFrame;
     e9k_debug_megadrive_set_audio_vis_enabled_fn_t debugMegadriveSetAudioVisEnabled;
     e9k_debug_megadrive_set_audio_mute_mask_fn_t debugMegadriveSetAudioMuteMask;
+    e9k_debug_megadrive_get_vdp_bandwidth_frame_fn_t debugMegadriveGetVdpBandwidthFrame;
     e9k_debug_disassemble_quick_fn_t debugDisassembleQuick;
     e9k_debug_read_known_pcs_fn_t debugReadKnownPcs;
     e9k_debug_reset_known_pcs_fn_t debugResetKnownPcs;
@@ -283,6 +289,10 @@ typedef struct {
     e9k_debug_amiga_set_base_callback_fn_t setAmigaDebugBaseCallback;
     e9k_debug_amiga_set_base_stack_callback_fn_t setAmigaDebugBaseStackCallback;
     e9k_debug_set_breakpoint_callback_fn_t setAmigaDebugBreakpointCallback;
+    e9k_debug_set_exit_callback_fn_t setAmigaDebugExitCallback;
+    e9k_debug_set_smoke_start_callback_fn_t setAmigaDebugSmokeStartCallback;
+    e9k_debug_set_profile_start_callback_fn_t setAmigaDebugProfileStartCallback;
+    e9k_debug_set_args_fn_t setAmigaDebugArgs;
     e9k_debug_amiga_get_dma_addr_fn_t debugAmigaGetDmaAddr;
     e9k_debug_amiga_get_copper_addr_fn_t debugAmigaGetCopperAddr;
     e9k_debug_amiga_get_custom_regs_fn_t debugAmigaGetCustomRegs;

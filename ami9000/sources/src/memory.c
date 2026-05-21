@@ -52,6 +52,13 @@
 
 static uint32_t memory_e9kChipmemWriteSource = E9K_WATCH_ACCESS_SOURCE_UNKNOWN;
 
+#define E9K_DBG_ARG_BASE_ADDR 0x00B7E900u
+#define E9K_DBG_ARG_COUNT     10u
+#define E9K_DBG_ARG_SIZE      4u
+#define E9K_DBG_ARG_LAST_ADDR (E9K_DBG_ARG_BASE_ADDR + (E9K_DBG_ARG_COUNT * E9K_DBG_ARG_SIZE) - 1u)
+
+uae_u32 e9k_debug_arg_read_fromPeripheral(uae_u32 index);
+
 uint32_t
 memory_e9kChipmemSetWriteSource(uint32_t source)
 {
@@ -65,6 +72,48 @@ memory_e9kChipmemRestoreWriteSource(uint32_t previousSource)
 {
 	memory_e9kChipmemWriteSource = previousSource;
 }
+
+static int
+memory_e9kDebugArgReadLong(uaecptr addr, uae_u32 *valueOut)
+{
+	if (!valueOut) {
+		return 0;
+	}
+	addr &= 0x00ffffffu;
+	if (addr < E9K_DBG_ARG_BASE_ADDR || addr > E9K_DBG_ARG_LAST_ADDR) {
+		return 0;
+	}
+	uaecptr offset = addr - E9K_DBG_ARG_BASE_ADDR;
+	if ((offset & 3u) != 0u) {
+		return 0;
+	}
+	*valueOut = e9k_debug_arg_read_fromPeripheral((uae_u32)(offset >> 2));
+	return 1;
+}
+
+static int
+memory_e9kDebugArgReadWord(uaecptr addr, uae_u32 *valueOut)
+{
+	if (!valueOut) {
+		return 0;
+	}
+	addr &= 0x00ffffffu;
+	if (addr < E9K_DBG_ARG_BASE_ADDR || addr > E9K_DBG_ARG_LAST_ADDR) {
+		return 0;
+	}
+	if ((addr & 1u) != 0u) {
+		return 0;
+	}
+
+	uaecptr longAddr = addr & ~3u;
+	uae_u32 value = 0;
+	if (!memory_e9kDebugArgReadLong(longAddr, &value)) {
+		return 0;
+	}
+	*valueOut = (addr & 2u) ? (value & 0xffffu) : (value >> 16);
+	return 1;
+}
+
 #endif
 
 #ifdef __LIBRETRO__
@@ -480,6 +529,43 @@ static uae_u32 REGPARAM2 dummy_bget (uaecptr addr)
 		dummylog(0, addr, sz_byte, 0, 0);
 	return dummy_get(addr, sz_byte, false, nonexistingdata());
 }
+
+#if E9K_HACK_DEBUGGER_RUNTIME
+static uae_u32 REGPARAM2
+memory_e9kDebugArgLget(uaecptr addr)
+{
+	uae_u32 value = 0;
+	if (memory_e9kDebugArgReadLong(addr, &value)) {
+		return value;
+	}
+	if (currprefs.illegal_mem) {
+		dummylog(0, addr, sz_long, 0, 0);
+	}
+	return dummy_get(addr, sz_long, false, nonexistingdata());
+}
+
+static uae_u32 REGPARAM2
+memory_e9kDebugArgWget(uaecptr addr)
+{
+	uae_u32 value = 0;
+	if (memory_e9kDebugArgReadWord(addr, &value)) {
+		return value;
+	}
+	if (currprefs.illegal_mem) {
+		dummylog(0, addr, sz_word, 0, 0);
+	}
+	return dummy_get(addr, sz_word, false, nonexistingdata());
+}
+
+static uae_u32 REGPARAM2
+memory_e9kDebugArgBget(uaecptr addr)
+{
+	if (currprefs.illegal_mem) {
+		dummylog(0, addr, sz_byte, 0, 0);
+	}
+	return dummy_get(addr, sz_byte, false, nonexistingdata());
+}
+#endif
 
 static void REGPARAM2 dummy_lput (uaecptr addr, uae_u32 l)
 {
@@ -1112,6 +1198,9 @@ uae_u16 kickstart_version;
 #define AMI_DBG_PUSHBASE_BASE_ADDR 0x00FC0014u // Fake debug base stack arg: runtime base (long write)
 #define AMI_DBG_PUSHBASE_TYPE_ADDR 0x00FC0018u // Fake debug base stack arg: section type (long write)
 #define AMI_DBG_PUSHBASE_SIZE_ADDR 0x00FC001Cu // Fake debug base stack arg: section size, pushes entry (long write)
+#define AMI_DBG_EXIT_ADDR         0x00FC0024u // Fake debug exit register: word write 0xDEAD requests debugger exit
+#define AMI_DBG_EXIT_VALUE        0xDEADu
+#define AMI_DBG_START_ADDR         0x00FC0028u // Fake debug start-on-write register
 #define AMI_DBG_SETBASE_FIRST_ADDR AMI_DBG_SETBASE_TEXT_ADDR
 #define AMI_DBG_SETBASE_LAST_ADDR  (AMI_DBG_SETBASE_BSS_ADDR + 3u)
 #define AMI_DBG_PUSHBASE_FIRST_ADDR AMI_DBG_PUSHBASE_BASE_ADDR
@@ -1130,6 +1219,9 @@ void e9k_debug_text_write(uae_u8 byte);
 void e9k_debug_set_debug_base(uae_u32 section, uae_u32 base);
 void e9k_debug_push_debug_base(uae_u32 section, uae_u32 base, uae_u32 size);
 void e9k_debug_add_breakpoint_fromPeripheral(uae_u32 addr);
+void e9k_debug_exit_fromPeripheral(void);
+void e9k_debug_smoke_start_fromPeripheral(void);
+void e9k_debug_profile_start_fromPeripheral(void);
 #if E9K_HACK_CHECKPOINTS
 void e9k_debug_checkpoint_write(uae_u8 index);
 void e9k_debug_checkpoint_set_name_from_pointer(uae_u8 index, uae_u32 ptrValue);
@@ -1230,6 +1322,30 @@ ami_dbg_setbreak_write_byte(uaecptr addr24, uae_u8 byte)
 		e9k_debug_add_breakpoint_fromPeripheral(addr);
 		ami_dbg_setbreak_mask = 0u;
 	}
+}
+
+static int
+ami_dbg_exit_write_word(uaecptr addr24, uae_u32 value)
+{
+	if (addr24 != AMI_DBG_EXIT_ADDR) {
+		return 0;
+	}
+	if ((value & 0xffffu) != AMI_DBG_EXIT_VALUE) {
+		return 0;
+	}
+	e9k_debug_exit_fromPeripheral();
+	return 1;
+}
+
+static int
+ami_dbg_start_write(uaecptr addr24)
+{
+	if (addr24 < AMI_DBG_START_ADDR || addr24 > (AMI_DBG_START_ADDR + 3u)) {
+		return 0;
+	}
+	e9k_debug_smoke_start_fromPeripheral();
+	e9k_debug_profile_start_fromPeripheral();
+	return 1;
 }
 
 #if E9K_HACK_CHECKPOINTS
@@ -1342,6 +1458,15 @@ static void REGPARAM2 kickmem_lput (uaecptr addr, uae_u32 b)
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
 		return;
 	}
+	if (ami_dbg_exit_write_word(addr24, b >> 16)) {
+		return;
+	}
+	if (addr24 >= AMI_DBG_EXIT_ADDR && addr24 <= (AMI_DBG_EXIT_ADDR + 3u)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
+		return;
+	}
 	if (addr24 == AMI_DBG_SETBASE_TEXT_ADDR) {
 		ami_dbg_setbase_mask &= (uae_u16)~0x000Fu;
 		e9k_debug_set_debug_base(AMI_DBG_SETBASE_SECTION_TEXT, b);
@@ -1417,6 +1542,12 @@ static void REGPARAM2 kickmem_wput (uaecptr addr, uae_u32 b)
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
 		return;
 	}
+	if (ami_dbg_exit_write_word(addr24, b)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
+		return;
+	}
 #if E9K_HACK_CHECKPOINTS
 	if (addr24 == AMI_DBG_CHECKPOINT_ADDR) {
 		e9k_debug_checkpoint_write((uae_u8)(b & 0xffu));
@@ -1456,6 +1587,12 @@ static void REGPARAM2 kickmem_bput (uaecptr addr, uae_u32 b)
 	uaecptr addr24 = addr & 0x00ffffffu;
 	if (addr24 == AMI_DBG_TEXT_ADDR) {
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
+		return;
+	}
+	if (addr24 >= AMI_DBG_EXIT_ADDR && addr24 <= (AMI_DBG_EXIT_ADDR + 3u)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
 		return;
 	}
 #if E9K_HACK_CHECKPOINTS
@@ -1537,6 +1674,15 @@ static void REGPARAM2 extendedkickmem_lput (uaecptr addr, uae_u32 b)
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
 		return;
 	}
+	if (ami_dbg_exit_write_word(addr24, b >> 16)) {
+		return;
+	}
+	if (addr24 >= AMI_DBG_EXIT_ADDR && addr24 <= (AMI_DBG_EXIT_ADDR + 3u)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
+		return;
+	}
 	if (addr24 == AMI_DBG_SETBREAK_ADDR) {
 		ami_dbg_setbreak_mask = 0u;
 		e9k_debug_add_breakpoint_fromPeripheral(b);
@@ -1576,6 +1722,12 @@ static void REGPARAM2 extendedkickmem_wput (uaecptr addr, uae_u32 b)
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
 		return;
 	}
+	if (ami_dbg_exit_write_word(addr24, b)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
+		return;
+	}
 #if E9K_HACK_CHECKPOINTS
 	if (addr24 == AMI_DBG_CHECKPOINT_ADDR) {
 		e9k_debug_checkpoint_write((uae_u8)(b & 0xffu));
@@ -1600,6 +1752,12 @@ static void REGPARAM2 extendedkickmem_bput (uaecptr addr, uae_u32 b)
 	uaecptr addr24 = addr & 0x00ffffffu;
 	if (addr24 == AMI_DBG_TEXT_ADDR) {
 		e9k_debug_text_write((uae_u8)(b & 0xffu));
+		return;
+	}
+	if (addr24 >= AMI_DBG_EXIT_ADDR && addr24 <= (AMI_DBG_EXIT_ADDR + 3u)) {
+		return;
+	}
+	if (ami_dbg_start_write(addr24)) {
 		return;
 	}
 #if E9K_HACK_CHECKPOINTS
@@ -1738,6 +1896,23 @@ addrbank dummy_bank = {
 	dummy_lgeti, dummy_wgeti,
 	ABFLAG_NONE, S_READ, S_WRITE
 };
+
+#if E9K_HACK_DEBUGGER_RUNTIME
+static addrbank memory_e9kDebugArgBank = {
+	memory_e9kDebugArgLget, memory_e9kDebugArgWget, memory_e9kDebugArgBget,
+	dummy_lput, dummy_wput, dummy_bput,
+	default_xlate, dummy_check, NULL, NULL, _T("e9k debug args"),
+	dummy_lgeti, dummy_wgeti,
+	ABFLAG_NONE, S_READ, S_WRITE
+};
+
+static void
+memory_e9kDebugArgMap(void)
+{
+	/* Keep the e9k debug peripheral mapped after AGA/autoconfig/custom banks. */
+	map_banks (&memory_e9kDebugArgBank, E9K_DBG_ARG_BASE_ADDR >> 16, 1, 0);
+}
+#endif
 
 addrbank ones_bank = {
 	ones_get, ones_get, ones_get,
@@ -3381,6 +3556,9 @@ void memory_restore(void)
 	last_address_space_24 = currprefs.address_space_24;
 	cpuboard_map();
 	map_banks_set(&kickmem_bank, 0xF8, 8, 0);
+#if E9K_HACK_DEBUGGER_RUNTIME
+	memory_e9kDebugArgMap();
+#endif
 }
 
 static void kickmem_init(void)
@@ -3652,6 +3830,10 @@ void memory_reset (void)
 			}
 		}
 	}
+
+#if E9K_HACK_DEBUGGER_RUNTIME
+	memory_e9kDebugArgMap();
+#endif
 
 	if (mem_hardreset) {
 		memory_clear ();

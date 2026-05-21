@@ -66,6 +66,16 @@ libretro_host_megadrive_getAudioFrame(e9k_debug_mega_audio_frame_t *out)
 }
 
 bool
+libretro_host_megadrive_getVdpBandwidthFrame(e9k_debug_mega_vdp_bandwidth_frame_t *out)
+{
+    if (!out || !libretro_host.debugMegadriveGetVdpBandwidthFrame) {
+        return false;
+    }
+    size_t n = libretro_host.debugMegadriveGetVdpBandwidthFrame(out, sizeof(*out));
+    return n == sizeof(*out);
+}
+
+bool
 libretro_host_megadrive_setAudioVisEnabled(int enabled)
 {
     if (!libretro_host.debugMegadriveSetAudioVisEnabled) {
@@ -102,6 +112,8 @@ libretro_host_megadrive_bindApis(void)
         (e9k_debug_megadrive_set_audio_vis_enabled_fn_t)libretro_host_loadSymbol("e9k_debug_megadrive_set_audio_vis_enabled");
     libretro_host.debugMegadriveSetAudioMuteMask =
         (e9k_debug_megadrive_set_audio_mute_mask_fn_t)libretro_host_loadSymbol("e9k_debug_megadrive_set_audio_mute_mask");
+    libretro_host.debugMegadriveGetVdpBandwidthFrame =
+        (e9k_debug_megadrive_get_vdp_bandwidth_frame_fn_t)libretro_host_loadSymbol("e9k_debug_megadrive_get_vdp_bandwidth_frame");
 }
 
 void
@@ -114,4 +126,5 @@ libretro_host_megadrive_unbindApis(void)
     libretro_host.debugMegadriveGetAudioFrame = NULL;
     libretro_host.debugMegadriveSetAudioVisEnabled = NULL;
     libretro_host.debugMegadriveSetAudioMuteMask = NULL;
+    libretro_host.debugMegadriveGetVdpBandwidthFrame = NULL;
 }

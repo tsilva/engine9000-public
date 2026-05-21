@@ -135,6 +135,62 @@ libretro_host_amiga_setDebugBreakpointCallback(void (*cb)(uint32_t addr))
 }
 
 bool
+libretro_host_amiga_setDebugExitCallback(void (*cb)(void))
+{
+    if (!libretro_host.setAmigaDebugExitCallback) {
+        libretro_host.setAmigaDebugExitCallback = (e9k_debug_set_exit_callback_fn_t)
+            libretro_host_loadSymbol("e9k_debug_set_debug_exit_callback");
+    }
+    if (!libretro_host.setAmigaDebugExitCallback) {
+        return false;
+    }
+    libretro_host.setAmigaDebugExitCallback(cb);
+    return true;
+}
+
+bool
+libretro_host_amiga_setDebugSmokeStartCallback(void (*cb)(void))
+{
+    if (!libretro_host.setAmigaDebugSmokeStartCallback) {
+        libretro_host.setAmigaDebugSmokeStartCallback = (e9k_debug_set_smoke_start_callback_fn_t)
+            libretro_host_loadSymbol("e9k_debug_set_debug_smoke_start_callback");
+    }
+    if (!libretro_host.setAmigaDebugSmokeStartCallback) {
+        return false;
+    }
+    libretro_host.setAmigaDebugSmokeStartCallback(cb);
+    return true;
+}
+
+bool
+libretro_host_amiga_setDebugProfileStartCallback(void (*cb)(void))
+{
+    if (!libretro_host.setAmigaDebugProfileStartCallback) {
+        libretro_host.setAmigaDebugProfileStartCallback = (e9k_debug_set_profile_start_callback_fn_t)
+            libretro_host_loadSymbol("e9k_debug_set_debug_profile_start_callback");
+    }
+    if (!libretro_host.setAmigaDebugProfileStartCallback) {
+        return false;
+    }
+    libretro_host.setAmigaDebugProfileStartCallback(cb);
+    return true;
+}
+
+bool
+libretro_host_amiga_setDebugArgs(const uint32_t *args, size_t count)
+{
+    if (!libretro_host.setAmigaDebugArgs) {
+        libretro_host.setAmigaDebugArgs = (e9k_debug_set_args_fn_t)
+            libretro_host_loadSymbol("e9k_debug_set_debug_args");
+    }
+    if (!libretro_host.setAmigaDebugArgs) {
+        return false;
+    }
+    libretro_host.setAmigaDebugArgs(args, count);
+    return true;
+}
+
+bool
 libretro_host_amiga_setDeterministic(int enabled)
 {
     if (!libretro_host.setAmigaDeterministic) {

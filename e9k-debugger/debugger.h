@@ -126,6 +126,11 @@ typedef struct e9k_debugger {
     int smokeTestFailed;
     int smokeTestExitCode;
     int smokeTestOpenOnFail;
+    int smokeTestStartOnWrite;
+    int smokeTestThreshold;
+    int profileStartOnWrite;
+    uint32_t debugArgs[10];
+    int debugArgCount;
     int cliWindowOverride;
     int cliWindowW;
     int cliWindowH;
@@ -142,6 +147,7 @@ typedef struct e9k_debugger {
     int elfValid;
     int symbolValid;
     debugger_symbol_file_kind_t symbolFileKind;
+    int exitRequested;
     int restartRequested;
     e9k_debug_options_t opts;
     int coreOptionsShowHelp;
