@@ -10,7 +10,7 @@ Firstly configure the debugger:
      `/Users/user/e9k-debugger/docs/vasm-example/DH0/`
  - **EXE** - must point to the Amiga hunk executable with debug info - for this example this is:
 
-     `/Users/user/e9k-debugger/docs/vasm-example/example.exe`
+     `/Users/user/e9k-debugger/docs/vasm-example/example_syms.exe`
  - **Toolchain Prefex** - select `vasm`
  - **Source Folder** - in our example this is:
 
@@ -32,7 +32,7 @@ Currently load9000 which we will use to launch our exe requires 2.04 so select a
  
  We launch our example exe on the Amiga HD via the `Startup-sequence` in `docs/vasm-example/DH0/S`
  
- `load9000 --break example.exe`
+ `load9000 --break example_run.exe`
  
  If we don't want to break on startup, we can remove `--break`
  

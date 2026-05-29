@@ -636,22 +636,26 @@ Note: Amiga debugging is complicated by relocation. If your target application i
 
 - The `base` command - see "base" command documentation
 - Makeing your custom loader use the Amiga fake perphierals - see "Amiga Debug Peripherals" section
-- Use `load9000` amiga program to load your hunk based exectuable - see "load9000" section
+- Use `load9000` or `load9013` amiga programs to load your hunk based exectuable - see "load9000" section
 
 - An ELF image with dwarf information running on Amiga should technically work but is untested
 
-### load9000
+### load9000 / load9013
 
 A simple Amiga program is available in:
 
 `tools/amiga/load9000`
 
-This program is run on the emulated Amiga and parses the hunk section table before calling `LoadSeg`.
+These programs are run on the emulated Amiga and parse the hunk section table before loading the target and informing the debugger of the section base addresses.
 
-`load9000` will load your application, inform the debugger of your section base addresses and then optionally set a breakpoint at the entry point.
+`load9000` targets Kickstart 2.0+ `load9013` targets Kickstart 1.3.
 
 `load9000 <hunk>`
 `load9000 --break <hunk>`
+`load9000 --stack <bytes> <hunk>`
+`load9013 <hunk>`
+`load9013 --break <hunk>`
+`load9013 --stack <bytes> <hunk>`
 
 ### Config file + environment variables
 
