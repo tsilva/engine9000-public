@@ -2244,6 +2244,7 @@ libretro_host_debugResume(void)
     if (!libretro_host.debugResume) {
         return false;
     }
+    debugger.suppressVblankFrameCounter = 0;
     libretro_host.debugResume();
     return true;
 }
@@ -2269,6 +2270,7 @@ libretro_host_debugStepInstr(void)
     if (!libretro_host.debugStepInstr) {
         return false;
     }
+    debugger.suppressVblankFrameCounter = 1;
     libretro_host.debugStepInstr();
     return true;
 }
