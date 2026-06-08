@@ -148,6 +148,7 @@ debugger_platform_pathJoin(char *out, size_t cap, const char *dir, const char *n
     }
     memcpy(out + pos, name, nlen);
     out[pos + nlen] = '\0';
+    debugger_platform_normalizePathSeparators(out);
     return 1;
 }
 
@@ -193,6 +194,19 @@ char
 debugger_platform_preferredPathSeparator(void)
 {
     return '\\';
+}
+
+void
+debugger_platform_normalizePathSeparators(char *path)
+{
+    if (!path) {
+        return;
+    }
+    for (size_t i = 0; path[i]; ++i) {
+        if (path[i] == '/') {
+            path[i] = '\\';
+        }
+    }
 }
 
 int

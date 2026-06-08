@@ -14,6 +14,7 @@
 #include "neogeo_palette_debug.h"
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
+#include "neogeo_sprite_list.h"
 #include "profile_checkpoints.h"
 #include "libretro.h"
 #include "alloc.h"
@@ -119,6 +120,14 @@ emu_geo_toggleSpriteDebug(e9ui_context_t *ctx, void *user)
 }
 
 static void
+emu_geo_toggleSpriteList(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    neogeo_sprite_list_toggle();
+}
+
+static void
 emu_geo_toggleRegisterLog(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
@@ -181,6 +190,14 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_setFocusTarget(btn_debug, comp);
     void* spriteDebugBtnMeta = alloc_strdup("sprite_debug");
     e9ui_child_add(button_stack, btn_debug, spriteDebugBtnMeta);
+  }
+
+  e9ui_component_t *btn_sprite_list = e9ui_button_make("Sprite List", emu_geo_toggleSpriteList, comp);
+  if (btn_sprite_list) {
+    e9ui_button_setMini(btn_sprite_list, 1);
+    e9ui_setFocusTarget(btn_sprite_list, comp);
+    void *spriteListBtnMeta = alloc_strdup("sprite_list");
+    e9ui_child_add(button_stack, btn_sprite_list, spriteListBtnMeta);
   }
 
   e9ui_component_t *btn_palette_debug = e9ui_button_make("Palette", emu_geo_togglePaletteDebug, comp);
@@ -736,7 +753,10 @@ emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst)
   
   if (neogeo_sprite_debug_is_open() && emu_geo_spriteShadowReady) {
     neogeo_sprite_debug_render(&emu_geo_spriteShadow);
-  }  
+  }
+  if (neogeo_sprite_list_isOpen() && emu_geo_spriteShadowReady) {
+    neogeo_sprite_list_render(&emu_geo_spriteShadow);
+  }
   if (neogeo_audio_vis_isOpen() && emu_geo_audioFrameReady) {
     neogeo_audio_vis_render(&emu_geo_audioFrame);
   }

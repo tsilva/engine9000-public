@@ -235,6 +235,14 @@ cli_parseArgs(int argc, char **argv)
             cli_setNeogeoSystemType("mvs");
             continue;
         }
+        if (strcmp(argv[i], "--uni") == 0) {
+            if (targetSystem != target_neogeo()) {
+                cli_setError("uni: only supported for Neo Geo (use --neogeo)");
+                return;
+            }
+            cli_setNeogeoSystemType("uni");
+            continue;
+        }
         if (strcmp(argv[i], "--elf") == 0) {
             if (targetSystem == target_amiga()) {
                 cli_setError("elf: only supported for Neo Geo or Mega Drive (use --neogeo or --megadrive)");
@@ -836,6 +844,7 @@ cli_printUsage(const char *argv0)
     printf("  --rom-folder PATH            ROM folder (generates a .neo)\n");
     printf("  --aes                        Use Neo Geo AES system type\n");
     printf("  --mvs                        Use Neo Geo MVS system type\n");
+    printf("  --uni                        Use Neo Geo Universe BIOS system type\n");
     printf("\n");
 #endif
 #if E9K_ENABLE_MEGADRIVE

@@ -207,6 +207,9 @@ debugger_platform_caseInsensitivePaths(void);
 char
 debugger_platform_preferredPathSeparator(void);
 
+void
+debugger_platform_normalizePathSeparators(char *path);
+
 int
 debugger_platform_getExeDir(char *out, size_t cap);
 

@@ -189,6 +189,12 @@ debugger_platform_preferredPathSeparator(void)
     return '/';
 }
 
+void
+debugger_platform_normalizePathSeparators(char *path)
+{
+    (void)path;
+}
+
 int
 debugger_platform_formatToolCommand(char *out,
                                     size_t cap,

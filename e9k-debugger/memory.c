@@ -1705,6 +1705,7 @@ memory_drawRowLine(e9ui_context_t *ctx,
 {
     SDL_Color baseColor = {200, 220, 200, 255};
     SDL_Color addressColor = {160, 160, 200, 255};
+    char displayLine[256];
     char addressText[9];
     int lineW = 0;
     int lineH = 0;
@@ -1715,7 +1716,24 @@ memory_drawRowLine(e9ui_context_t *ctx,
         return 0;
     }
 
-    SDL_Texture *lineTexture = e9ui_text_cache_getText(ctx->renderer, font, line, baseColor, &lineW, &lineH);
+    size_t displayLen = strlen(line);
+    if (displayLen >= sizeof(displayLine)) {
+        displayLen = sizeof(displayLine) - 1;
+    }
+    memcpy(displayLine, line, displayLen);
+    displayLine[displayLen] = '\0';
+
+    if (hex_byte_color_isEnabled()) {
+        for (unsigned int i = 0; i < MEMORY_BYTES_PER_ROW; ++i) {
+            int hexCol = MEMORY_ROW_HEX_START_COL + (int)i * 3;
+            if (hexCol + 1 < (int)displayLen) {
+                displayLine[hexCol] = ' ';
+                displayLine[hexCol + 1] = ' ';
+            }
+        }
+    }
+
+    SDL_Texture *lineTexture = e9ui_text_cache_getText(ctx->renderer, font, displayLine, baseColor, &lineW, &lineH);
     if (lineTexture) {
         SDL_Rect dst = { baseX, y, lineW, lineH };
         SDL_RenderCopy(ctx->renderer, lineTexture, NULL, &dst);
