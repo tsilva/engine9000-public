@@ -1771,18 +1771,23 @@ memory_drawHexColorRow(e9ui_context_t *ctx,
         return;
     }
 
-    int hexX = baseX + MEMORY_ROW_HEX_START_COL * columnWidth;
-    if (!hex_byte_color_drawHexByteRow(ctx->renderer,
-                                       font,
-                                       rowData,
-                                       (int)MEMORY_BYTES_PER_ROW,
-                                       hexX,
-                                       y,
-                                       columnWidth)) {
-        for (unsigned int i = 0; i < MEMORY_BYTES_PER_ROW; ++i) {
-            int hexCol = MEMORY_ROW_HEX_START_COL + (int)i * 3;
-            hex_byte_color_drawHexByte(ctx->renderer, font, rowData[i], baseX + hexCol * columnWidth, y);
-        }
+    static const char hexChars[] = "0123456789ABCDEF";
+    for (unsigned int i = 0; i < MEMORY_BYTES_PER_ROW; ++i) {
+        int hexCol = MEMORY_ROW_HEX_START_COL + (int)i * 3;
+        uint8_t byte = rowData[i];
+        SDL_Color color = hex_byte_color_get(byte);
+        memory_drawColumnChar(ctx,
+                              font,
+                              hexChars[(byte >> 4) & 0x0fu],
+                              color,
+                              baseX + hexCol * columnWidth,
+                              y);
+        memory_drawColumnChar(ctx,
+                              font,
+                              hexChars[byte & 0x0fu],
+                              color,
+                              baseX + (hexCol + 1) * columnWidth,
+                              y);
     }
 }
 
@@ -2218,8 +2223,12 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
                                memory_stepButtonsOnAction);
     }
     SDL_Rect r = { self->bounds.x, self->bounds.y, self->bounds.w, self->bounds.h };
+    SDL_BlendMode prevBlend = SDL_BLENDMODE_BLEND;
+    SDL_GetRenderDrawBlendMode(ctx->renderer, &prevBlend);
+    SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_NONE);
     SDL_SetRenderDrawColor(ctx->renderer, 20, 22, 20, 255);
     SDL_RenderFillRect(ctx->renderer, &r);
+    SDL_SetRenderDrawBlendMode(ctx->renderer, prevBlend);
     TTF_Font *font = e9ui->theme.text.source ? e9ui->theme.text.source : ctx->font;
     if (!font) {
         return;
