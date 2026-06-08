@@ -187,7 +187,7 @@ geo_debug_checkpoint_setNameFromPointer(uint8_t index, uint32_t ptrValue)
 
 #ifdef E9K_HACK_REGISTER_LOG
 static inline void geo_m68k_logRegisterWrite(uint32_t reg, uint16_t value) {
-    uint32_t pc = (uint32_t)m68k_get_reg(NULL, M68K_REG_PC);
+    uint32_t pc = (uint32_t)m68k_get_reg(NULL, M68K_REG_PPC);
     e9k_debugger_writeRegisterLog((uint16_t)(geo_lspc_getScanline() & 0xffffu),
         reg,
         value,
