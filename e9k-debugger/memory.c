@@ -1696,63 +1696,67 @@ memory_fontColumnWidth(TTF_Font *font)
     return w;
 }
 
+static void
+memory_drawColumnChar(e9ui_context_t *ctx,
+                      TTF_Font *font,
+                      char c,
+                      SDL_Color color,
+                      int x,
+                      int y)
+{
+    char text[2];
+    int w = 0;
+    int h = 0;
+
+    text[0] = c;
+    text[1] = '\0';
+    SDL_Texture *texture = e9ui_text_cache_getText(ctx->renderer, font, text, color, &w, &h);
+    if (!texture) {
+        return;
+    }
+
+    SDL_Rect dst = { x, y, w, h };
+    SDL_RenderCopy(ctx->renderer, texture, NULL, &dst);
+}
+
 static int
 memory_drawRowLine(e9ui_context_t *ctx,
                    TTF_Font *font,
                    const char *line,
                    int baseX,
-                   int y)
+                   int y,
+                   int columnWidth)
 {
     SDL_Color baseColor = {200, 220, 200, 255};
     SDL_Color addressColor = {160, 160, 200, 255};
-    char displayLine[256];
-    char addressText[9];
-    int lineW = 0;
-    int lineH = 0;
-    int addressW = 0;
-    int addressH = 0;
+    int lineLen = 0;
 
     if (!ctx || !ctx->renderer || !font || !line) {
         return 0;
     }
-
-    size_t displayLen = strlen(line);
-    if (displayLen >= sizeof(displayLine)) {
-        displayLen = sizeof(displayLine) - 1;
+    if (columnWidth <= 0) {
+        return 0;
     }
-    memcpy(displayLine, line, displayLen);
-    displayLine[displayLen] = '\0';
 
-    if (hex_byte_color_isEnabled()) {
-        for (unsigned int i = 0; i < MEMORY_BYTES_PER_ROW; ++i) {
-            int hexCol = MEMORY_ROW_HEX_START_COL + (int)i * 3;
-            if (hexCol + 1 < (int)displayLen) {
-                displayLine[hexCol] = ' ';
-                displayLine[hexCol + 1] = ' ';
+    lineLen = (int)strlen(line);
+    for (int col = 0; col < lineLen; ++col) {
+        if (hex_byte_color_isEnabled() &&
+            col >= MEMORY_ROW_HEX_START_COL &&
+            col < MEMORY_ROW_HEX_START_COL + (int)MEMORY_BYTES_PER_ROW * 3) {
+            int rel = col - MEMORY_ROW_HEX_START_COL;
+            if ((rel % 3) < 2) {
+                continue;
             }
         }
+        memory_drawColumnChar(ctx,
+                              font,
+                              line[col],
+                              col < 8 ? addressColor : baseColor,
+                              baseX + col * columnWidth,
+                              y);
     }
 
-    SDL_Texture *lineTexture = e9ui_text_cache_getText(ctx->renderer, font, displayLine, baseColor, &lineW, &lineH);
-    if (lineTexture) {
-        SDL_Rect dst = { baseX, y, lineW, lineH };
-        SDL_RenderCopy(ctx->renderer, lineTexture, NULL, &dst);
-    }
-
-    memcpy(addressText, line, 8);
-    addressText[8] = '\0';
-    SDL_Texture *addressTexture = e9ui_text_cache_getText(ctx->renderer,
-                                                          font,
-                                                          addressText,
-                                                          addressColor,
-                                                          &addressW,
-                                                          &addressH);
-    if (addressTexture) {
-        SDL_Rect dst = { baseX, y, addressW, addressH };
-        SDL_RenderCopy(ctx->renderer, addressTexture, NULL, &dst);
-    }
-
-    return lineW;
+    return lineLen * columnWidth;
 }
 
 static void
@@ -2334,10 +2338,10 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
             }
             int hexCol = MEMORY_ROW_HEX_START_COL + (int)i * 3;
             int asciiCol = MEMORY_ROW_ASCII_START_COL + (int)i;
-            int hexX = baseX + memory_measureSegment(font, line, 0, hexCol);
-            int asciiX = baseX + memory_measureSegment(font, line, 0, asciiCol);
-            int hexW = memory_measureSegment(font, line, hexCol, 2);
-            int asciiW = memory_measureSegment(font, line, asciiCol, 1);
+            int hexX = baseX + hexCol * columnWidth;
+            int asciiX = baseX + asciiCol * columnWidth;
+            int hexW = columnWidth * 2;
+            int asciiW = columnWidth;
             SDL_Color hl = currentMask[idx] ? (SDL_Color){64, 112, 188, 220}
                                             : (SDL_Color){120, 100, 48, 170};
             SDL_SetRenderDrawColor(ctx->renderer, hl.r, hl.g, hl.b, hl.a);
@@ -2346,7 +2350,7 @@ memory_render(e9ui_component_t *self, e9ui_context_t *ctx)
             SDL_RenderFillRect(ctx->renderer, &hexRect);
             SDL_RenderFillRect(ctx->renderer, &asciiRect);
         }
-        int lineW = memory_drawRowLine(ctx, font, line, r.x + pad - st->scrollX, y);
+        int lineW = memory_drawRowLine(ctx, font, line, r.x + pad - st->scrollX, y, columnWidth);
         memory_drawHexColorRow(ctx, font, rowData, r.x + pad - st->scrollX, y, columnWidth);
         if (lineW + pad * 2 > st->contentPixelWidth) {
             st->contentPixelWidth = lineW + pad * 2;
