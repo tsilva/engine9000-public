@@ -110,7 +110,7 @@ profile_checkpoints_entryHasData(const e9k_debug_checkpoint_t *entries, size_t e
     if (!entries || index >= entryCount) {
         return 0;
     }
-    return entries[index].count != 0 || entries[index].scanlineCount != 0;
+    return entries[index].count != 0;
 }
 
 static int

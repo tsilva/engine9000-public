@@ -17,6 +17,26 @@ e9k_checkpoint_publishData(void)
     e9k_checkpoint_hasPublishedData = 1;
 }
 
+static void
+e9k_checkpoint_recordScanline(e9k_debug_checkpoint_t *entry, uint64_t scanline)
+{
+    if (entry->scanlineCount == 0) {
+        entry->scanlineMinimum = scanline;
+        entry->scanlineMaximum = scanline;
+    } else {
+        if (scanline < entry->scanlineMinimum) {
+            entry->scanlineMinimum = scanline;
+        }
+        if (scanline > entry->scanlineMaximum) {
+            entry->scanlineMaximum = scanline;
+        }
+    }
+    entry->scanlineCount += 1;
+    entry->scanlineLast = scanline;
+    entry->scanlineAccumulator += scanline;
+    entry->scanlineAverage = entry->scanlineAccumulator / entry->scanlineCount;
+}
+
 void
 e9k_checkpoint_reset(void)
 {
@@ -142,14 +162,17 @@ e9k_checkpoint_setName(uint8_t index, const char *name)
 void
 e9k_checkpoint_write(uint8_t index, uint32_t scanline)
 {
+    int previousIndex = e9k_checkpoint_active;
+    uint64_t scanlineSample = (uint64_t)scanline;
+
     if (!e9k_checkpoint_enabled) {
         return;
     }
     if (index >= E9K_CHECKPOINT_COUNT) {
         return;
     }
-    if (e9k_checkpoint_active >= 0) {
-        e9k_debug_checkpoint_t *prev = &e9k_checkpoint_data[e9k_checkpoint_active];
+    if (previousIndex >= 0) {
+        e9k_debug_checkpoint_t *prev = &e9k_checkpoint_data[previousIndex];
         uint64_t sample = prev->current;
         if (prev->count == 0) {
             prev->minimum = sample;
@@ -168,27 +191,16 @@ e9k_checkpoint_write(uint8_t index, uint32_t scanline)
         prev->current = 0;
     }
 
-    if (index == 0 && e9k_checkpoint_active >= 0) {
+    if (index == 0 && previousIndex >= 0) {
+        size_t syntheticIndex = (size_t)previousIndex + 1u;
+        if (syntheticIndex < E9K_CHECKPOINT_COUNT) {
+            e9k_checkpoint_recordScanline(&e9k_checkpoint_data[syntheticIndex], scanlineSample);
+        }
         e9k_checkpoint_publishData();
     }
 
     e9k_debug_checkpoint_t *cur = &e9k_checkpoint_data[index];
-    uint64_t scanlineSample = (uint64_t)scanline;
-    if (cur->scanlineCount == 0) {
-        cur->scanlineMinimum = scanlineSample;
-        cur->scanlineMaximum = scanlineSample;
-    } else {
-        if (scanlineSample < cur->scanlineMinimum) {
-            cur->scanlineMinimum = scanlineSample;
-        }
-        if (scanlineSample > cur->scanlineMaximum) {
-            cur->scanlineMaximum = scanlineSample;
-        }
-    }
-    cur->scanlineCount += 1;
-    cur->scanlineLast = scanlineSample;
-    cur->scanlineAccumulator += scanlineSample;
-    cur->scanlineAverage = cur->scanlineAccumulator / cur->scanlineCount;
+    e9k_checkpoint_recordScanline(cur, scanlineSample);
 
     e9k_checkpoint_active = (int)index;
     cur->current = 0;

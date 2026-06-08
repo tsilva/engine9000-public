@@ -159,6 +159,26 @@ e9k_debug_publish_checkpoints(void)
 	e9k_debug_hasPublishedCheckpoints = 1;
 }
 
+static void
+e9k_debug_recordCheckpointScanline(e9k_debug_checkpoint_t *entry, uint64_t scanline)
+{
+	if (entry->scanlineCount == 0) {
+		entry->scanlineMinimum = scanline;
+		entry->scanlineMaximum = scanline;
+	} else {
+		if (scanline < entry->scanlineMinimum) {
+			entry->scanlineMinimum = scanline;
+		}
+		if (scanline > entry->scanlineMaximum) {
+			entry->scanlineMaximum = scanline;
+		}
+	}
+	entry->scanlineCount += 1;
+	entry->scanlineLast = scanline;
+	entry->scanlineAccumulator += scanline;
+	entry->scanlineAverage = entry->scanlineAccumulator / entry->scanlineCount;
+}
+
 // Minimal PC-sampling profiler used by e9k-debugger. The debugger resolves PCs to symbols/lines.
 // We stream aggregated PC hits as JSON in e9k_debug_profiler_stream_next(), matching geo9000.
 #define E9K_DEBUG_PROF_EMPTY_PC 0xffffffffu
@@ -2985,6 +3005,7 @@ e9k_debug_get_checkpoint_enabled(void)
 void
 e9k_debug_checkpoint_write(uint8_t index)
 {
+	int previousIndex = e9k_debug_checkpointActive;
 	uint64_t sample = 0;
 	uint64_t now = 0;
 	uint64_t scanline = 0;
@@ -2999,8 +3020,8 @@ e9k_debug_checkpoint_write(uint8_t index)
 	now = e9k_debug_read_cycle_count();
 	scanline = (uint64_t)(vpos & 0xffff);
 
-	if (e9k_debug_checkpointActive >= 0) {
-		e9k_debug_checkpoint_t *prev = &e9k_debug_checkpoints[e9k_debug_checkpointActive];
+	if (previousIndex >= 0) {
+		e9k_debug_checkpoint_t *prev = &e9k_debug_checkpoints[previousIndex];
 		if (now >= e9k_debug_checkpointLastCycle) {
 			sample = now - e9k_debug_checkpointLastCycle;
 		}
@@ -3021,27 +3042,17 @@ e9k_debug_checkpoint_write(uint8_t index)
 		prev->average = prev->count ? (prev->accumulator / prev->count) : 0;
 	}
 
-	if (index == 0 && e9k_debug_checkpointActive >= 0) {
+	if (index == 0 && previousIndex >= 0) {
+		size_t syntheticIndex = (size_t)previousIndex + 1u;
+		if (syntheticIndex < E9K_CHECKPOINT_COUNT) {
+			e9k_debug_recordCheckpointScanline(&e9k_debug_checkpoints[syntheticIndex], scanline);
+		}
 		e9k_debug_publish_checkpoints();
 	}
 
 	{
 		e9k_debug_checkpoint_t *cur = &e9k_debug_checkpoints[index];
-		if (cur->scanlineCount == 0) {
-			cur->scanlineMinimum = scanline;
-			cur->scanlineMaximum = scanline;
-		} else {
-			if (scanline < cur->scanlineMinimum) {
-				cur->scanlineMinimum = scanline;
-			}
-			if (scanline > cur->scanlineMaximum) {
-				cur->scanlineMaximum = scanline;
-			}
-		}
-		cur->scanlineCount += 1;
-		cur->scanlineLast = scanline;
-		cur->scanlineAccumulator += scanline;
-		cur->scanlineAverage = cur->scanlineAccumulator / cur->scanlineCount;
+		e9k_debug_recordCheckpointScanline(cur, scanline);
 		cur->current = 0;
 	}
 
