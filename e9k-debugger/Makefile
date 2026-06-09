@@ -122,7 +122,7 @@ PLATFORM_LINUX_SRCS = platform/posix/clipboard.c
 PLATFORM_W64_SRCS = platform/w64/addr2line.c platform/w64/analyse.c platform/w64/profile_view.c platform/w64/signal.c platform/w64/debugger_platform.c platform/w64/clipboard.c
 PLATFORM_MACOS_SRCS = platform/macos/clipboard.m platform/macos/tinyfiledialogs.m
 
-SRCS = main.c source_pane.c source_pane_symbols.c source_pane_fileline.c source_pane_source_view.c source_pane_asm_view.c source_z80.c source.c hunk_fileline_cache.c dasm.c dasm_geo.c dasm_ami.c elfutil.c symbol_text_map.c console_cmd.c console_cmd_base.c console_cmd_break.c console_cmd_cls.c console_cmd_continue.c console_cmd_diff.c console_cmd_finish.c console_cmd_loop.c console_cmd_next.c console_cmd_print.c console_cmd_protect.c console_cmd_step.c console_cmd_stepi.c console_cmd_symbols.c console_cmd_train.c console_cmd_transition.c console_cmd_watch.c console_cmd_write.c print_eval.c print_debuginfo_readelf.c print_debuginfo_readelf_frames.c print_debuginfo_objdump_stabs.c prompt.c console.c registers.c memory.c stack.c breakpoints.c trainer.c linebuf.c debug_font.c debug.c machine.c base_map.c profile.c profile_list.c profile_hotspot.c profile_checkpoints.c input_record.c hotkeys.c smoke_test.c ui_test.c snapshot.c rom_config.c romset.c romset_crypto.c settings.c target.c core_options.c core_config.c debugger_input_bindings.c cli.c runtime.c config.c ui.c debugger.c help.c emu.c system_badge.c libretro_host.c libretro_host_amiga.c libretro_host_neogeo.c libretro_host_megadrive.c clipboard.c state_wrap.c state_buffer.c tinyfiledialogs.c transition.c transition_doom.c transition_slide.c transition_explode.c transition_flip.c transition_rbar.c crt.c shader_ui.c memory_track_ui.c aux_window.c shader_base.c shader_advanced.c shader_bloom.c train.c protect.c status_bar.c hex_convert.c hex_byte_color.c inline_edit_pause.c
+SRCS = main.c source_pane.c source_pane_symbols.c source_pane_fileline.c source_pane_source_view.c source_pane_asm_view.c source_z80.c source.c hunk_fileline_cache.c dasm.c dasm_geo.c dasm_ami.c elfutil.c symbol_text_map.c analyse.c console_cmd.c console_cmd_base.c console_cmd_break.c console_cmd_cls.c console_cmd_continue.c console_cmd_diff.c console_cmd_finish.c console_cmd_loop.c console_cmd_next.c console_cmd_print.c console_cmd_protect.c console_cmd_step.c console_cmd_stepi.c console_cmd_symbols.c console_cmd_train.c console_cmd_transition.c console_cmd_watch.c console_cmd_write.c print_eval.c print_debuginfo_readelf.c print_debuginfo_readelf_frames.c print_debuginfo_objdump_stabs.c prompt.c console.c registers.c memory.c stack.c breakpoints.c trainer.c linebuf.c debug_font.c debug.c machine.c base_map.c profile.c profile_list.c profile_hotspot.c profile_checkpoints.c input_record.c hotkeys.c smoke_test.c ui_test.c snapshot.c rom_config.c romset.c romset_crypto.c settings.c target.c core_options.c core_config.c debugger_input_bindings.c cli.c runtime.c config.c ui.c debugger.c help.c emu.c system_badge.c libretro_host.c libretro_host_amiga.c libretro_host_neogeo.c libretro_host_megadrive.c clipboard.c state_wrap.c state_buffer.c tinyfiledialogs.c transition.c transition_doom.c transition_slide.c transition_explode.c transition_flip.c transition_rbar.c crt.c shader_ui.c memory_track_ui.c aux_window.c shader_base.c shader_advanced.c shader_bloom.c train.c protect.c status_bar.c hex_convert.c hex_byte_color.c inline_edit_pause.c
 ifeq ($(E9K_ENABLE_AMIGA),1)
 SRCS += source_cpr.c settings_amiga.c amiga_uae_options.c amiga_custom_regs.c amiga_custom_regs_tooltip.c emu_ami.c amiga_blittervis.c amiga_custom_ui.c amiga_custom_ui_common.c amiga_custom_ui_blitter.c amiga_custom_ui_copper.c amiga_custom_ui_dma.c amiga_custom_ui_sprite.c amiga_custom_ui_bitplane.c amiga_custom_ui_bplptr.c amiga_custom_ui_audio.c amiga_custom_log.c amiga_custom.c amiga_memview.c amiga_memsave.c amiga_blit_info.c target_amiga.c
 else
@@ -185,6 +185,9 @@ $(W64_TARGET): $(W64_OBJS)
 	@mkdir -p $(dir $@)
 	$(W64_CC) $(W64_CFLAGS) $(W64_LDFLAGS) -o $@ $(W64_OBJS) $(W64_LIBS)
 	@cp $(W64_TARGET) $(W64_ADDITIONAL_TARGET)
+	@rm -rf dist/e9kd/tools/profileui
+	@mkdir -p dist/e9kd/tools
+	@cp -R tools/profileui dist/e9kd/tools/profileui
 
 w64: $(W64_TARGET)
 
@@ -221,6 +224,12 @@ release-w64-package:
 	fi; \
 	cp -R assets "$$package_dir/assets"; \
 	find "$$package_dir/assets" -type f ! \( -iname '*.png' -o -iname '*.ttf' -o -iname '*.ico' -o -name 'release_minor.txt' \) -delete; \
+	if [ ! -d tools/profileui ]; then \
+		echo "Missing directory: e9k-debugger/tools/profileui"; \
+		exit 1; \
+	fi; \
+	mkdir -p "$$package_dir/tools"; \
+	cp -R tools/profileui "$$package_dir/tools/profileui"; \
 	for file in $(RELEASE_SYSTEM_FILES); do \
 		if [ ! -f "system/$$file" ]; then \
 			echo "Missing file: e9k-debugger/system/$$file"; \

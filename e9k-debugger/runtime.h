@@ -17,4 +17,7 @@ void
 runtime_onVblank(void *user);
 
 void
+runtime_resetFrameTiming(void);
+
+void
 runtime_runLoop(void);

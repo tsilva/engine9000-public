@@ -14,15 +14,16 @@
 #include <string.h>
 
 #include "neogeo_sprite_debug.h"
+#include "neogeo_sprite_list.h"
 #include "alloc.h"
 #include "config.h"
 #include "e9ui.h"
+#include "e9ui_box.h"
 #include "e9ui_button.h"
 #include "e9ui_hstack.h"
 #include "e9ui_spacer.h"
 #include "e9ui_stack.h"
 #include "e9ui_theme.h"
-#include "e9ui_vspacer.h"
 #include "libretro_host.h"
 
 #define NG_COORD_SIZE 512
@@ -71,7 +72,6 @@
 #define NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_SHIFT 4u
 #define NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_MASK 0x00ffu
 #define NEOGEO_SPRITE_DEBUG_CONTROL_GAP 8
-#define NEOGEO_SPRITE_DEBUG_CONTROL_VGAP 6
 #define NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT 4
 #define NEOGEO_SPRITE_DEBUG_LINE_COUNT NG_COORD_SIZE
 
@@ -407,6 +407,14 @@ neogeo_sprite_debug_setMode(e9ui_context_t *ctx, void *user)
 }
 
 static void
+neogeo_sprite_debug_toggleSpriteList(e9ui_context_t *ctx, void *user)
+{
+    (void)ctx;
+    (void)user;
+    neogeo_sprite_list_toggle();
+}
+
+static void
 neogeo_sprite_debug_updateModeButtons(void)
 {
     const e9k_theme_button_t *activeTheme = e9ui_theme_button_preset_profile_active();
@@ -460,6 +468,18 @@ neogeo_sprite_debug_makeControlsRow(void)
     }
 
     e9ui_hstack_addFlex(row, e9ui_spacer_make(1));
+
+    e9ui_component_t *spriteListButton = e9ui_button_make("Sprite List",
+                                                          neogeo_sprite_debug_toggleSpriteList,
+                                                          NULL);
+    if (spriteListButton) {
+        int buttonW = 0;
+        e9ui_button_setMini(spriteListButton, 1);
+        e9ui_button_setLargestLabel(spriteListButton, "Sprite List");
+        e9ui_button_measure(spriteListButton, &e9ui->ctx, &buttonW, NULL);
+        e9ui_hstack_addFixed(row, spriteListButton, buttonW);
+    }
+
     neogeo_sprite_debug_updateModeButtons();
     return row;
 }
@@ -1075,8 +1095,10 @@ neogeo_sprite_debug_toggle(void)
         controlsRow = neogeo_sprite_debug_makeControlsRow();
         if (neogeo_sprite_debugState.root && neogeo_sprite_debugState.overlayBodyHost) {
             if (controlsRow) {
-                e9ui_stack_addFixed(neogeo_sprite_debugState.root, controlsRow);
-                e9ui_stack_addFixed(neogeo_sprite_debugState.root, e9ui_vspacer_make(NEOGEO_SPRITE_DEBUG_CONTROL_VGAP));
+                e9ui_component_t *controlsBox = e9ui_box_make(controlsRow);
+                e9ui_box_setPadding(controlsBox, 8);
+                e9ui_box_setBorder(controlsBox, E9UI_BORDER_BOTTOM, (SDL_Color){ 70, 70, 70, 255 }, 1);
+                e9ui_stack_addFixed(neogeo_sprite_debugState.root, controlsBox);
             }
             e9ui_stack_addFlex(neogeo_sprite_debugState.root, neogeo_sprite_debugState.overlayBodyHost);
         }

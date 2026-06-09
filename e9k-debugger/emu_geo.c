@@ -120,14 +120,6 @@ emu_geo_toggleSpriteDebug(e9ui_context_t *ctx, void *user)
 }
 
 static void
-emu_geo_toggleSpriteList(e9ui_context_t *ctx, void *user)
-{
-    (void)ctx;
-    (void)user;
-    neogeo_sprite_list_toggle();
-}
-
-static void
 emu_geo_toggleRegisterLog(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
@@ -190,14 +182,6 @@ emu_geo_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
     e9ui_setFocusTarget(btn_debug, comp);
     void* spriteDebugBtnMeta = alloc_strdup("sprite_debug");
     e9ui_child_add(button_stack, btn_debug, spriteDebugBtnMeta);
-  }
-
-  e9ui_component_t *btn_sprite_list = e9ui_button_make("Sprite List", emu_geo_toggleSpriteList, comp);
-  if (btn_sprite_list) {
-    e9ui_button_setMini(btn_sprite_list, 1);
-    e9ui_setFocusTarget(btn_sprite_list, comp);
-    void *spriteListBtnMeta = alloc_strdup("sprite_list");
-    e9ui_child_add(button_stack, btn_sprite_list, spriteListBtnMeta);
   }
 
   e9ui_component_t *btn_palette_debug = e9ui_button_make("Palette", emu_geo_togglePaletteDebug, comp);

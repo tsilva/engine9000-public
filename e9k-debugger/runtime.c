@@ -147,6 +147,13 @@ runtime_isBreakpointHit(void)
     return bp->enabled ? 1 : 0;
 }
 
+void
+runtime_resetFrameTiming(void)
+{
+    debugger.frameTimeCounter = SDL_GetPerformanceCounter();
+    debugger.frameTimeAccum = 0.0;
+}
+
 static void
 runtime_executeNextFrame(void)
 {
@@ -294,6 +301,10 @@ runtime_runLoop(void)
                         } else {
                             double fps = libretro_host_getTimingFps();
                             double frameTime = (fps > 1e-3) ? (1.0 / fps) : (1.0 / 60.0);
+                            if (dt > frameTime * 4.0) {
+                                debugger.frameTimeAccum = 0.0;
+                                dt = 0.0;
+                            }
                             debugger.frameTimeAccum += dt;
                             if (debugger.frameTimeAccum >= frameTime) {
                                 runtime_executeNextFrame();
