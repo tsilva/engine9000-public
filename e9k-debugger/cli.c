@@ -724,6 +724,10 @@ cli_parseArgs(int argc, char **argv)
             debugger.smokeTestOpenOnFail = 1;
             continue;
         }
+        if (strcmp(argv[i], "--test-auto-open-fail") == 0) {
+            ui_test_setOpenOnFail(1);
+            continue;
+        }
         if (strcmp(argv[i], "--amiga") == 0) {
 #if E9K_ENABLE_AMIGA
             debugger.cliCoreSystemOverride = 1;
@@ -829,6 +833,7 @@ cli_printUsage(const char *argv0)
     printf("  --make-test PATH             Record inputs + UI test frame captures\n");
     printf("  --remake-test PATH           Replay events and regenerate UI test frames\n");
     printf("  --test PATH                  Replay inputs and compare UI test frames\n");
+    printf("  --test-auto-open-fail        Open montage on UI test failure\n");
     printf("  --headless                   Hide main window (useful for --smoke-test/--test)\n");
     printf("  --warp                       Start in speed multiplier mode\n");
     printf("  --fullscreen                 Start in UI fullscreen mode (ESC toggle)\n");

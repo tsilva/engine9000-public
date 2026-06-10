@@ -203,6 +203,10 @@ ui_prepareMainWindow(e9ui_context_t *ctx,
     (void)ctx;
     (void)startHidden;
 #ifdef _WIN32
+    (void)wantX;
+    (void)wantY;
+    (void)wantW;
+    (void)wantH;
     ui_windowsDefaultUsableBounds = (SDL_Rect){0, 0, 0, 0};
     ui_windowsApplyDefaultUsableBounds = 0;
 #endif

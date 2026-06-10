@@ -97,6 +97,12 @@ typedef struct e9k_debug_checkpoint {
     uint64_t scanlineAverage;
     uint64_t scanlineMinimum;
     uint64_t scanlineMaximum;
+    uint64_t scanlineSpanLast;
+    uint64_t scanlineSpanCount;
+    uint64_t scanlineSpanAccumulator;
+    uint64_t scanlineSpanAverage;
+    uint64_t scanlineSpanMinimum;
+    uint64_t scanlineSpanMaximum;
 } e9k_debug_checkpoint_t;
 
 typedef struct e9k_debug_ami_blitter_vis_span {

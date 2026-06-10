@@ -140,7 +140,7 @@ static inline void geo_debug_print_byte(uint8_t byte) {
 }
 
 static inline void geo_debug_checkpoint_write(uint8_t index) {
-    e9k_checkpoint_write(index, (uint32_t)geo_lspc_getScanline());
+    e9k_checkpoint_write(index, (uint32_t)geo_lspc_getScanline(), LSPC_SCANLINES);
 }
 
 static inline int

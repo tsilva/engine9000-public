@@ -106,67 +106,67 @@ remake-test-neogeofolder: all
 
 test-neogeosound: all
 	@printf "NEO GEO SOUND ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/sound >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/sound/st.neo --test-auto-open-fail --test tests/results/neogeo/sound >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeosavestate: all
 	@printf "NEO GEO SAVE STATE ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/savestate >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test-auto-open-fail --test tests/results/neogeo/savestate >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeosprite: all
 	@printf "NEO GEO SPRITE DEBUG ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/sprite >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test-auto-open-fail --test tests/results/neogeo/sprite >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeolog: all
 	@printf "NEO GEO LOG ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/log >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test-auto-open-fail --test tests/results/neogeo/log >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeotracker: all
 	@printf "NEO GEO MEMORY TRACKER ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test tests/results/neogeo/tracker >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --rom=./tests/neogeo/basic/basic.neo --test-auto-open-fail --test tests/results/neogeo/tracker >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeomemview: all
 	@printf "NEO GEO MEMORY VIEW ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/memview >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test-auto-open-fail --test tests/results/neogeo/memview >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeopalette: all
 	@printf "NEO GEO PALETTE ($@) ..."
-	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/palette >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test-auto-open-fail --test tests/results/neogeo/palette >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeoaudiovis: all
 	@printf "NEO GEO AUDIOVIS ($@) ..."
-	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test tests/results/neogeo/audiovis >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --volume=0 --neogeo --rom=./tests/neogeo/sound/st.neo --test-auto-open-fail --test tests/results/neogeo/audiovis >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeostepping: tests/neogeo/stepping/build/rom.elf
 	@printf "NEO GEO STEPPING ($@) ..." 
-	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test tests/results/neogeo/stepping  >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test-auto-open-fail --test tests/results/neogeo/stepping  >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeoprint: tests/neogeo/stepping/build/rom.elf
 	@printf "NEO GEO PRINT ($@) ..."
-	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test tests/results/neogeo/print  >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --source-dir=./tests/neogeo/stepping --elf=./tests/neogeo/stepping/build/rom.elf --rom=./tests/neogeo/stepping/build/stepping.neo --test-auto-open-fail --test tests/results/neogeo/print  >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeoz80: tests/neogeo/neogeoz80/neogeoz80.neo tests/neogeo/neogeoz80/rom.elf tests/neogeo/neogeoz80/demo_driver.z80srcmap
 	@printf "NEO GEO Z80 DEBUG ($@) ..."
-	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --source-dir=./tests/neogeo/neogeoz80 --elf=./tests/neogeo/neogeoz80/rom.elf --rom=./tests/neogeo/neogeoz80/neogeoz80.neo --test tests/results/neogeo/neogeoz80  >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --source-dir=./tests/neogeo/neogeoz80 --elf=./tests/neogeo/neogeoz80/rom.elf --rom=./tests/neogeo/neogeoz80/neogeoz80.neo --test-auto-open-fail --test tests/results/neogeo/neogeoz80  >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeozip: all
 	@printf "NEO GEO ZIP ROM ($@) ..."
-	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --rom=./tests/neogeo/zip/test.zip --test tests/results/neogeo/zip >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --rom=./tests/neogeo/zip/test.zip --test-auto-open-fail --test tests/results/neogeo/zip >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeofolder: all
 	@printf "NEO GEO FOLDER ROM ($@) ..."
-	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --rom-folder=./tests/neogeo/folder/test --test tests/results/neogeo/folder >> test.log 2>&1
+	@./e9k-debugger $(HEADLESS) --neogeo --volume=0 --rom-folder=./tests/neogeo/folder/test --test-auto-open-fail --test tests/results/neogeo/folder >> test.log 2>&1
 	@echo "PASSED ✅"
 
 test-neogeosmoke: all

@@ -184,6 +184,9 @@ int
 e9k_debug_amiga_get_video_line_count(void);
 
 int
+e9k_debug_amiga_get_raster_line_count(void);
+
+int
 e9k_debug_amiga_video_line_to_core_line(int videoLine);
 
 int

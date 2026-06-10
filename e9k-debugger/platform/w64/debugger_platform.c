@@ -19,6 +19,7 @@
 
 #include "platform/w64/debugger_platform.h"
 #include "debugger.h"
+#include "strutil.h"
 #include "tinyfiledialogs.h"
 #include "ui_test.h"
 
@@ -413,8 +414,7 @@ debugger_platform_makeTempFilePath(char *out, size_t cap, const char *prefix, co
     char filePath[MAX_PATH];
     const char *filePrefix = (prefix && *prefix) ? prefix : "e9k";
     char shortPrefix[4] = "e9k";
-    strncpy(shortPrefix, filePrefix, sizeof(shortPrefix) - 1);
-    shortPrefix[sizeof(shortPrefix) - 1] = '\0';
+    strutil_strlcpy(shortPrefix, sizeof(shortPrefix), filePrefix);
     if (GetTempFileNameA(tempDir, shortPrefix, 0, filePath) == 0) {
         return 0;
     }

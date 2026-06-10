@@ -20,6 +20,7 @@
 #include "drawing.h"
 #include "debug.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #define E9K_DEBUG_CALLSTACK_MAX 256
@@ -177,6 +178,48 @@ e9k_debug_recordCheckpointScanline(e9k_debug_checkpoint_t *entry, uint64_t scanl
 	entry->scanlineLast = scanline;
 	entry->scanlineAccumulator += scanline;
 	entry->scanlineAverage = entry->scanlineAccumulator / entry->scanlineCount;
+}
+
+static void
+e9k_debug_recordCheckpointScanlineSpan(e9k_debug_checkpoint_t *entry, uint64_t scanlineSpan)
+{
+	if (entry->scanlineSpanCount == 0) {
+		entry->scanlineSpanMinimum = scanlineSpan;
+		entry->scanlineSpanMaximum = scanlineSpan;
+	} else {
+		if (scanlineSpan < entry->scanlineSpanMinimum) {
+			entry->scanlineSpanMinimum = scanlineSpan;
+		}
+		if (scanlineSpan > entry->scanlineSpanMaximum) {
+			entry->scanlineSpanMaximum = scanlineSpan;
+		}
+	}
+	entry->scanlineSpanCount += 1;
+	entry->scanlineSpanLast = scanlineSpan;
+	entry->scanlineSpanAccumulator += scanlineSpan;
+	entry->scanlineSpanAverage = entry->scanlineSpanAccumulator / entry->scanlineSpanCount;
+}
+
+static uint64_t
+e9k_debug_checkpointScanlineSpan(uint64_t startScanline, uint64_t endScanline, uint64_t scanlineCount)
+{
+	if (scanlineCount == 0) {
+		return 0;
+	}
+	if (endScanline >= startScanline) {
+		return endScanline - startScanline;
+	}
+	return (scanlineCount - startScanline) + endScanline;
+}
+
+static uint64_t
+e9k_debug_checkpointScanlineCount(void)
+{
+	int count = current_maxvpos();
+	if (count <= 0) {
+		return 0;
+	}
+	return (uint64_t)count;
 }
 
 // Minimal PC-sampling profiler used by e9k-debugger. The debugger resolves PCs to symbols/lines.
@@ -2080,6 +2123,16 @@ e9k_debug_amiga_get_video_line_count(void)
 }
 
 E9K_DEBUG_EXPORT int
+e9k_debug_amiga_get_raster_line_count(void)
+{
+	uint64_t count = e9k_debug_checkpointScanlineCount();
+	if (count > (uint64_t)INT_MAX) {
+		return INT_MAX;
+	}
+	return (int)count;
+}
+
+E9K_DEBUG_EXPORT int
 e9k_debug_amiga_video_line_to_core_line(int videoLine)
 {
 	int lineCount = e9k_debug_amiga_get_video_line_count();
@@ -3020,8 +3073,11 @@ e9k_debug_checkpoint_write(uint8_t index)
 	now = e9k_debug_read_cycle_count();
 	scanline = (uint64_t)(vpos & 0xffff);
 
-	if (previousIndex >= 0) {
+	if (previousIndex >= 0 && index != 0) {
 		e9k_debug_checkpoint_t *prev = &e9k_debug_checkpoints[previousIndex];
+		uint64_t scanlineCount = e9k_debug_checkpointScanlineCount();
+		uint64_t span = e9k_debug_checkpointScanlineSpan(prev->scanlineLast, scanline, scanlineCount);
+		e9k_debug_recordCheckpointScanlineSpan(prev, span);
 		if (now >= e9k_debug_checkpointLastCycle) {
 			sample = now - e9k_debug_checkpointLastCycle;
 		}
@@ -3043,10 +3099,6 @@ e9k_debug_checkpoint_write(uint8_t index)
 	}
 
 	if (index == 0 && previousIndex >= 0) {
-		size_t syntheticIndex = (size_t)previousIndex + 1u;
-		if (syntheticIndex < E9K_CHECKPOINT_COUNT) {
-			e9k_debug_recordCheckpointScanline(&e9k_debug_checkpoints[syntheticIndex], scanline);
-		}
 		e9k_debug_publish_checkpoints();
 	}
 

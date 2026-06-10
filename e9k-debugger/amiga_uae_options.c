@@ -17,6 +17,7 @@
 #include "alloc.h"
 #include "debugger.h"
 #include "libretro_host.h"
+#include "strutil.h"
 
 typedef struct amiga_uae_kv {
     char *key;
@@ -626,8 +627,7 @@ amiga_uaeLoadUaeOptions(const char *uaePath)
             for (int unit = 0; unit < 2; ++unit) {
                 if (amiga_uaeFilesystem2IsManagedDhLine(value, unit) &&
                     amiga_uaeParseFilesystem2DhFolder(value, unit, folder, sizeof(folder))) {
-                    strncpy(amiga_uae_hdFolder[unit], folder, sizeof(amiga_uae_hdFolder[unit]) - 1);
-                    amiga_uae_hdFolder[unit][sizeof(amiga_uae_hdFolder[unit]) - 1] = '\0';
+                    strutil_strlcpy(amiga_uae_hdFolder[unit], sizeof(amiga_uae_hdFolder[unit]), folder);
                     amiga_uae_hdHdf[unit][0] = '\0';
                     break;
                 }
@@ -640,12 +640,10 @@ amiga_uaeLoadUaeOptions(const char *uaePath)
                 if (amiga_uaeHardfile2IsManagedDhLine(value, unit) &&
                     amiga_uaeParseHardfile2DhPath(value, unit, hdf, sizeof(hdf))) {
                     if (amiga_uaePathIsDirectory(hdf)) {
-                        strncpy(amiga_uae_hdFolder[unit], hdf, sizeof(amiga_uae_hdFolder[unit]) - 1);
-                        amiga_uae_hdFolder[unit][sizeof(amiga_uae_hdFolder[unit]) - 1] = '\0';
+                        strutil_strlcpy(amiga_uae_hdFolder[unit], sizeof(amiga_uae_hdFolder[unit]), hdf);
                         amiga_uae_hdHdf[unit][0] = '\0';
                     } else {
-                        strncpy(amiga_uae_hdHdf[unit], hdf, sizeof(amiga_uae_hdHdf[unit]) - 1);
-                        amiga_uae_hdHdf[unit][sizeof(amiga_uae_hdHdf[unit]) - 1] = '\0';
+                        strutil_strlcpy(amiga_uae_hdHdf[unit], sizeof(amiga_uae_hdHdf[unit]), hdf);
                         amiga_uae_hdFolder[unit][0] = '\0';
                     }
                     break;

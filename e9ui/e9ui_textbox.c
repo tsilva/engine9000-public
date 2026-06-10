@@ -1096,14 +1096,22 @@ textbox_expandTilde(const char *in, char *out, size_t cap)
         return 0;
     }
     if (in[0] != '~' || (in[1] != '\0' && in[1] != '/' && in[1] != '\\')) {
-        strncpy(out, in, cap - 1);
-        out[cap - 1] = '\0';
+        size_t len = strlen(in);
+        if (len >= cap) {
+            len = cap - 1;
+        }
+        memcpy(out, in, len);
+        out[len] = '\0';
         return 1;
     }
     char home[PATH_MAX];
     if (!platform_getHomeDir(home, sizeof(home))) {
-        strncpy(out, in, cap - 1);
-        out[cap - 1] = '\0';
+        size_t len = strlen(in);
+        if (len >= cap) {
+            len = cap - 1;
+        }
+        memcpy(out, in, len);
+        out[len] = '\0';
         return 1;
     }
     size_t hlen = strlen(home);

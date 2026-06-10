@@ -325,6 +325,9 @@ bool
 libretro_host_amiga_getVideoLineCount(int *outLineCount);
 
 bool
+libretro_host_amiga_getRasterLineCount(int *outLineCount);
+
+bool
 libretro_host_amiga_videoLineToCoreLine(int videoLine, int *outCoreLine);
 
 bool
@@ -460,6 +463,9 @@ libretro_host_megadrive_getAudioFrame(e9k_debug_mega_audio_frame_t *out);
 
 bool
 libretro_host_megadrive_getVdpBandwidthFrame(e9k_debug_mega_vdp_bandwidth_frame_t *out);
+
+bool
+libretro_host_megadrive_getRasterLineCount(int *outLineCount);
 
 bool
 libretro_host_megadrive_setAudioVisEnabled(int enabled);

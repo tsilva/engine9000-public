@@ -94,6 +94,12 @@ NOTE: Testing on Linux/Windows builds has been minimal at this stage.
 - `0xFFE00` - checkpoint description array base (`uint32_t[64]`), write `description_ptr` to `0xFFE00 + index*4`
 - These overlay with ROM addresses - other emulators or real neo geo might crash if you use these
 
+### Mega Drive Debug Peripherals
+
+- `0xFFFEC` - write checkpoint slot index (`0-63`) for checkpoint profiling
+- `0xFFE00` - checkpoint description array base (`uint32_t[64]`), write `description_ptr` to `0xFFE00 + index*4`
+- These overlay with ROM addresses - other emulators or real mega drive might crash if you use these
+
 ### Amiga Debug Peripherals
 
 - `0xFC0000` - characters written to this address will be output in the console and terminal

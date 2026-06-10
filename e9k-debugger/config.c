@@ -24,6 +24,7 @@
 #include "neogeo_register_log.h"
 #include "neogeo_sprite_debug.h"
 #include "neogeo_sprite_list.h"
+#include "profile_checkpoints.h"
 #include "mega_audio_vis.h"
 #include "mega_vdp.h"
 #include "mega_memview.h"
@@ -196,6 +197,7 @@ config_persistConfig(FILE *f)
     amiga_custom_persistConfig(f);
     amiga_memview_persistConfig(f);
     amiga_blit_info_persistConfig(f);
+    profile_checkpoints_persistConfig(f);
     shader_ui_persistConfig(f);
     hex_convert_persistConfig(f);
     settings_persistConfig(f);
@@ -438,6 +440,11 @@ config_loadConfigFile(const char *path)
         if (strncmp(key, "comp.shader_ui.", 15) == 0) {
             const char *prop = key + 15;
             shader_ui_loadConfigProperty(prop, value);
+            continue;
+        }
+        if (strncmp(key, "comp.profile_checkpoints.", 25) == 0) {
+            const char *prop = key + 25;
+            profile_checkpoints_loadConfigProperty(prop, value);
             continue;
         }
         if (strncmp(key, "comp.hex_convert.", 17) == 0) {

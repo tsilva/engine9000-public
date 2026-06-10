@@ -415,6 +415,29 @@ libretro_host_amiga_getVideoLineCount(int *outLineCount)
 }
 
 bool
+libretro_host_amiga_getRasterLineCount(int *outLineCount)
+{
+    if (outLineCount) {
+        *outLineCount = 0;
+    }
+    if (!libretro_host.debugAmigaGetRasterLineCount) {
+        libretro_host.debugAmigaGetRasterLineCount = (e9k_debug_amiga_get_raster_line_count_fn_t)
+            libretro_host_loadSymbol("e9k_debug_amiga_get_raster_line_count");
+    }
+    if (!libretro_host.debugAmigaGetRasterLineCount) {
+        return false;
+    }
+    int lineCount = libretro_host.debugAmigaGetRasterLineCount();
+    if (lineCount <= 0) {
+        return false;
+    }
+    if (outLineCount) {
+        *outLineCount = lineCount;
+    }
+    return true;
+}
+
+bool
 libretro_host_amiga_videoLineToCoreLine(int videoLine, int *outCoreLine)
 {
     if (outCoreLine) {

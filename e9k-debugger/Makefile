@@ -31,7 +31,7 @@ endif
 
 DEBUG_FLAGS=-g -fno-omit-frame-pointer
 SANITIZER_LIBS=
-LTO_FLAGS := -flto
+#LTO_FLAGS := -flto
 ifeq ($(UNAME_S),Darwin)
 DEBUG_FLAGS += -fsanitize=address,undefined
 SANITIZER_LIBS += -fsanitize=address,undefined
@@ -297,7 +297,7 @@ $(W64_BUILD_DIR)/e9ui/%.o: $(E9UI_DIR)/%.c
 
 $(W64_MINIZ_OBJ): $(MINIZ_SRC)
 	@mkdir -p $(dir $@)
-	$(W64_CC) $(W64_CFLAGS) -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -c -o $@ $<
+	$(W64_CC) $(W64_CFLAGS) -Wno-type-limits -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -c -o $@ $<
 
 clean:
 	rm -f $(TARGET) $(W64_TARGET) $(OBJS) $(DEPS) $(W64_OBJS) $(W64_DEPS)
