@@ -309,6 +309,31 @@ profile_list_render(e9ui_component_t *self, e9ui_context_t *ctx)
     profile_list_state_t *st = (profile_list_state_t*)self->state;
     if (!st) return;
 
+    e9ui_component_t *entries = profile_list_findEntries(self);
+    if (entries && st->dirty) {
+        profile_list_rebuild(st, ctx, entries);
+        st->contentHeight = entries->preferredHeight ? entries->preferredHeight(entries, ctx, self->bounds.w) : self->bounds.h;
+        if (st->contentHeight < self->bounds.h) {
+            st->contentHeight = self->bounds.h;
+        }
+        if (st->entryCount > 0) {
+            st->rowHeight = st->contentHeight / st->entryCount;
+        }
+        if (st->rowHeight <= 0) {
+            st->rowHeight = 1;
+        }
+        profile_list_clampScroll(st, self->bounds);
+        if (entries->layout) {
+            e9ui_rect_t contentBounds = {
+                self->bounds.x,
+                self->bounds.y - st->topIndex * st->rowHeight,
+                self->bounds.w,
+                st->contentHeight
+            };
+            entries->layout(entries, ctx, contentBounds);
+        }
+    }
+
     SDL_Rect r = { self->bounds.x, self->bounds.y, self->bounds.w, self->bounds.h };
     SDL_SetRenderDrawColor(ctx->renderer, 16, 16, 20, 255);
     SDL_RenderFillRect(ctx->renderer, &r);
@@ -327,7 +352,6 @@ profile_list_render(e9ui_component_t *self, e9ui_context_t *ctx)
         SDL_RenderSetClipRect(ctx->renderer, &r);
     }
 
-    e9ui_component_t *entries = profile_list_findEntries(self);
     if (entries && entries->render) {
         entries->render(entries, ctx);
     }
@@ -482,12 +506,21 @@ profile_list_rebuild(profile_list_state_t *st, e9ui_context_t *ctx, e9ui_compone
         qsort(aggregates, aggregateCount, sizeof(*aggregates), profile_list_aggregateCompare);
 
         size_t limit = aggregateCount > PROFILE_LIST_MAX_ENTRIES ? PROFILE_LIST_MAX_ENTRIES : aggregateCount;
+        unsigned long long totalSamples = 0;
+        unsigned long long totalCycles = 0;
+        for (size_t i = 0; i < aggregateCount; ++i) {
+            totalSamples += aggregates[i].samples;
+            totalCycles += aggregates[i].cycles;
+        }
+        unsigned long long total = s_profile_list_showSamples ? totalSamples : totalCycles;
+
         st->entryCount = (int)limit;
         for (size_t i = 0; i < limit; ++i) {
             e9ui_component_t *entry =
                 profile_hotspot_make(aggregates[i].pc,
                                      aggregates[i].samples,
                                      aggregates[i].cycles,
+                                     total,
                                      s_profile_list_showSamples,
                                      aggregates[i].location,
                                      aggregates[i].source,
@@ -500,11 +533,19 @@ profile_list_rebuild(profile_list_state_t *st, e9ui_context_t *ctx, e9ui_compone
         alloc_free(aggregates);
     } else {
         size_t limit = count > PROFILE_LIST_MAX_ENTRIES ? PROFILE_LIST_MAX_ENTRIES : count;
+        unsigned long long totalSamples = 0;
+        unsigned long long totalCycles = 0;
+        for (size_t i = 0; i < count; ++i) {
+            totalSamples += samples[i].samples;
+            totalCycles += samples[i].cycles;
+        }
+        unsigned long long total = s_profile_list_showSamples ? totalSamples : totalCycles;
         st->entryCount = (int)limit;
         for (size_t i = 0; i < limit; ++i) {
             e9ui_component_t *entry = profile_hotspot_make(samples[i].pc,
                                                            samples[i].samples,
                                                            samples[i].cycles,
+                                                           total,
                                                            s_profile_list_showSamples,
                                                            samples[i].location,
                                                            samples[i].source,

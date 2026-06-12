@@ -14,6 +14,7 @@ e9ui_component_t *
 profile_hotspot_make(unsigned int pc,
                      unsigned long long samples,
                      unsigned long long cycles,
+                     unsigned long long total,
                      int showSamples,
                      const char *location,
                      const char *source,

@@ -22,6 +22,7 @@ typedef struct {
     unsigned int pc;
     unsigned long long samples;
     unsigned long long cycles;
+    unsigned long long total;
     char sampleText[80];
     char locationText[ANALYSE_LOCATION_TEXT_CAP];
     char sourceText[ANALYSE_SOURCE_TEXT_CAP];
@@ -50,6 +51,7 @@ static void profile_hotspot_render(e9ui_component_t *self, e9ui_context_t *ctx);
 static void profile_hotspot_dtor(e9ui_component_t *self, e9ui_context_t *ctx);
 static void profile_hotspot_onClick(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_mouse_event_t *mouse_ev);
 static void profile_hotspot_linkClicked(e9ui_context_t *ctx, void *user);
+static void profile_hotspot_renderBar(e9ui_component_t *self, e9ui_context_t *ctx, const profile_hotspot_state_t *st);
 
 static void
 profile_hotspot_destroyTextures(profile_hotspot_state_t *st)
@@ -227,6 +229,7 @@ profile_hotspot_render(e9ui_component_t *self, e9ui_context_t *ctx)
     SDL_Rect bg = { self->bounds.x, self->bounds.y, self->bounds.w, self->bounds.h };
     SDL_SetRenderDrawColor(ctx->renderer, 18, 18, 24, 255);
     SDL_RenderFillRect(ctx->renderer, &bg);
+    profile_hotspot_renderBar(self, ctx, st);
 
     profile_hotspot_updateTextures(st, ctx->renderer, font);
 
@@ -257,6 +260,43 @@ profile_hotspot_render(e9ui_component_t *self, e9ui_context_t *ctx)
         SDL_Rect samplesRect = { st->sampleRect.x, st->sampleRect.y, st->sampleTextWidth, st->sampleTextHeight };
         SDL_RenderCopy(ctx->renderer, st->sampleTexture, NULL, &samplesRect);
     }
+}
+
+static void
+profile_hotspot_renderBar(e9ui_component_t *self, e9ui_context_t *ctx, const profile_hotspot_state_t *st)
+{
+    unsigned long long value;
+    int barWidth;
+
+    if (!self || !ctx || !ctx->renderer || !st || st->total == 0) {
+        return;
+    }
+
+    value = profile_list_showSamples() ? st->samples : st->cycles;
+    if (value == 0) {
+        return;
+    }
+
+    if (value >= st->total) {
+        barWidth = self->bounds.w;
+    } else {
+        long double fraction = (long double)value / (long double)st->total;
+        barWidth = (int)(fraction * (long double)self->bounds.w);
+        if (barWidth < 1) {
+            barWidth = 1;
+        }
+        if (barWidth > self->bounds.w) {
+            barWidth = self->bounds.w;
+        }
+    }
+
+    SDL_Rect bar = { self->bounds.x, self->bounds.y, barWidth, self->bounds.h };
+    SDL_BlendMode prevBlend = SDL_BLENDMODE_NONE;
+    SDL_GetRenderDrawBlendMode(ctx->renderer, &prevBlend);
+    SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(ctx->renderer, 52, 132, 190, 70);
+    SDL_RenderFillRect(ctx->renderer, &bar);
+    SDL_SetRenderDrawBlendMode(ctx->renderer, prevBlend);
 }
 
 static void
@@ -292,6 +332,7 @@ e9ui_component_t *
 profile_hotspot_make(unsigned int pc,
                      unsigned long long samples,
                      unsigned long long cycles,
+                     unsigned long long total,
                      int showSamples,
                      const char *location,
                      const char *source,
@@ -310,6 +351,7 @@ profile_hotspot_make(unsigned int pc,
     st->pc = pc;
     st->samples = samples;
     st->cycles = cycles;
+    st->total = total;
 
     if (showSamples) {
         snprintf(st->sampleText, sizeof(st->sampleText), "%llu samples", samples);

@@ -29,4 +29,3 @@ profile_list_showSamples(void);
 
 void
 profile_list_freeChildMeta(e9ui_component_t *self);
-
