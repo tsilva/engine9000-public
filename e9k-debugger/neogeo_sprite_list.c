@@ -18,6 +18,7 @@
 #include "neogeo_sprite_debug.h"
 #include "alloc.h"
 #include "config.h"
+#include "debugger.h"
 #include "e9ui.h"
 #include "e9ui_button.h"
 #include "e9ui_checkbox.h"
@@ -28,6 +29,8 @@
 #include "e9ui_text_cache.h"
 #include "e9ui_textbox.h"
 #include "e9ui_vspacer.h"
+#include "libretro_host.h"
+#include "runtime.h"
 
 #define NEOGEO_SPRITE_LIST_MAX_SPRITES 382
 #define NEOGEO_SPRITE_LIST_SCB2_WORD_OFFSET 0x8000u
@@ -55,6 +58,7 @@
 #define NEOGEO_SPRITE_LIST_GAP 8
 #define NEOGEO_SPRITE_LIST_FILTER_GAP_Y 6
 #define NEOGEO_SPRITE_LIST_COL_GAP 14
+#define NEOGEO_SPRITE_LIST_COL_SELECT_W 34
 #define NEOGEO_SPRITE_LIST_COL_INDEX_W 54
 #define NEOGEO_SPRITE_LIST_COL_ROOT_W 132
 #define NEOGEO_SPRITE_LIST_COL_STATUS_W 112
@@ -94,6 +98,8 @@ typedef struct neogeo_sprite_list_row {
 typedef struct neogeo_sprite_list_layout {
     int lineHeight;
     int contentWidth;
+    int colSelectX;
+    int colSelectW;
     int colIndexX;
     int colIndexW;
     int colRootX;
@@ -158,6 +164,10 @@ typedef struct neogeo_sprite_list_canvas_state {
     int unused;
 } neogeo_sprite_list_canvas_state_t;
 
+typedef struct neogeo_sprite_list_checkbox_cb {
+    int rowIndex;
+} neogeo_sprite_list_checkbox_cb_t;
+
 typedef struct neogeo_sprite_list_state {
     e9ui_window_state_t windowState;
     SDL_Window *window;
@@ -170,6 +180,11 @@ typedef struct neogeo_sprite_list_state {
     e9ui_component_t *filterTextboxes[NEOGEO_SPRITE_LIST_FILTER_COUNT];
     e9ui_component_t *activeOnlyCheckbox;
     e9ui_component_t *highlightChainCheckbox;
+    e9ui_component_t *grayscaleCheckbox;
+    e9ui_component_t *invertCheckbox;
+    e9ui_component_t *hideCheckbox;
+    e9ui_component_t *rowCheckboxes[NEOGEO_SPRITE_LIST_MAX_SPRITES];
+    neogeo_sprite_list_checkbox_cb_t rowCheckboxCbs[NEOGEO_SPRITE_LIST_MAX_SPRITES];
     neogeo_sprite_list_filter_cb_t filterCbs[NEOGEO_SPRITE_LIST_FILTER_COUNT];
     e9k_debug_sprite_state_t lastState;
     int hasLastState;
@@ -191,12 +206,15 @@ typedef struct neogeo_sprite_list_state {
     int colPaletteW;
     int colScb1W;
     int colScbW;
-    uint32_t lastSpriteHash;
-    int hasLastSpriteHash;
     char filters[NEOGEO_SPRITE_LIST_FILTER_COUNT][NEOGEO_SPRITE_LIST_FILTER_TEXT_MAX];
+    uint32_t selectedMask[E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS];
     int activeOnly;
     int highlightChain;
+    int grayscaleSelection;
+    int invertSelection;
+    int hideSelection;
     int selectedIndex;
+    int suppressCheckboxCallback;
 } neogeo_sprite_list_state_t;
 
 static neogeo_sprite_list_state_t neogeo_sprite_list_state = {
@@ -208,14 +226,48 @@ static neogeo_sprite_list_state_t neogeo_sprite_list_state = {
     .filterCacheDirty = 1,
     .activeOnly = 1,
     .highlightChain = 1,
+    .grayscaleSelection = 0,
+    .invertSelection = 0,
+    .hideSelection = 0,
     .selectedIndex = -1,
 };
 
 static void
 neogeo_sprite_list_refreshDisplayMeasurements(neogeo_sprite_list_state_t *ui, TTF_Font *font);
 
+static void
+neogeo_sprite_list_makeRowCheckboxes(neogeo_sprite_list_state_t *ui, e9ui_component_t *canvas);
+
+static void
+neogeo_sprite_list_centerSelectedRow(neogeo_sprite_list_state_t *ui);
+
 static const char *
 neogeo_sprite_list_filterTextForDisplayRow(const neogeo_sprite_list_display_row_t *display, int index);
+
+static void
+neogeo_sprite_list_formatDisplayRows(neogeo_sprite_list_state_t *ui);
+
+static int
+neogeo_sprite_list_pointInRowContent(neogeo_sprite_list_state_t *ui,
+                                     e9ui_context_t *ctx,
+                                     const neogeo_sprite_list_layout_t *layout,
+                                     int mouseX,
+                                     int mouseY);
+
+static int
+neogeo_sprite_list_pointInCheckbox(neogeo_sprite_list_state_t *ui, int mouseX, int mouseY);
+
+static void
+neogeo_sprite_list_refreshPausedSelectionFrame(void);
+
+static void
+neogeo_sprite_list_checkboxChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user);
+
+static int
+neogeo_sprite_list_rowCheckboxVisible(const neogeo_sprite_list_state_t *ui, int rowIndex);
+
+static void
+neogeo_sprite_list_applySelection(neogeo_sprite_list_state_t *ui);
 
 static const uint8_t neogeo_sprite_list_lutHshrink[0x10][0x10] = {
     { 0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0 },
@@ -240,6 +292,163 @@ static e9ui_window_backend_t
 neogeo_sprite_list_windowBackend(void)
 {
     return e9ui_window_backend_overlay;
+}
+
+static int
+neogeo_sprite_list_maskHasSprite(const uint32_t *mask, unsigned spriteIndex)
+{
+    unsigned wordIndex = spriteIndex >> 5;
+    unsigned bitIndex = spriteIndex & 31u;
+
+    if (wordIndex >= E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS) {
+        return 0;
+    }
+    return (mask[wordIndex] & (1u << bitIndex)) ? 1 : 0;
+}
+
+static void
+neogeo_sprite_list_maskSetSprite(uint32_t *mask, unsigned spriteIndex, int selected)
+{
+    unsigned wordIndex = spriteIndex >> 5;
+    unsigned bitIndex = spriteIndex & 31u;
+
+    if (wordIndex >= E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS) {
+        return;
+    }
+    if (selected) {
+        mask[wordIndex] |= 1u << bitIndex;
+    } else {
+        mask[wordIndex] &= ~(1u << bitIndex);
+    }
+}
+
+static int
+neogeo_sprite_list_maskHasBits(const uint32_t *mask)
+{
+    for (int i = 0; i < E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS; ++i) {
+        if (mask[i]) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+neogeo_sprite_list_rowEffectIndex(const neogeo_sprite_list_state_t *ui, int rowIndex)
+{
+    if (!ui || rowIndex < 0 || rowIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES) {
+        return -1;
+    }
+    if (ui->highlightChain) {
+        return (int)ui->rows[rowIndex].rootIndex;
+    }
+    return rowIndex;
+}
+
+static int
+neogeo_sprite_list_rowCheckboxVisible(const neogeo_sprite_list_state_t *ui, int rowIndex)
+{
+    if (!ui || rowIndex < 0 || rowIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES) {
+        return 0;
+    }
+    if (ui->highlightChain && ui->rows[rowIndex].chainOffset != 0u) {
+        return 0;
+    }
+    return 1;
+}
+
+static void
+neogeo_sprite_list_clearHiddenChainSelections(neogeo_sprite_list_state_t *ui)
+{
+    if (!ui || !ui->highlightChain) {
+        return;
+    }
+    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+        if (ui->rows[i].chainOffset != 0u &&
+            neogeo_sprite_list_maskHasSprite(ui->selectedMask, (unsigned)i)) {
+            neogeo_sprite_list_maskSetSprite(ui->selectedMask, ui->rows[i].rootIndex, 1);
+            neogeo_sprite_list_maskSetSprite(ui->selectedMask, (unsigned)i, 0);
+        }
+    }
+}
+
+static void
+neogeo_sprite_list_syncRowCheckbox(neogeo_sprite_list_state_t *ui,
+                                   e9ui_context_t *ctx,
+                                   int rowIndex)
+{
+    if (!ui || rowIndex < 0 || rowIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES ||
+        !ui->rowCheckboxes[rowIndex]) {
+        return;
+    }
+    int effectIndex = neogeo_sprite_list_rowEffectIndex(ui, rowIndex);
+    int selected = effectIndex >= 0 ?
+        neogeo_sprite_list_maskHasSprite(ui->selectedMask, (unsigned)effectIndex) : 0;
+
+    ui->suppressCheckboxCallback = 1;
+    e9ui_checkbox_setSelected(ui->rowCheckboxes[rowIndex], selected, ctx);
+    ui->suppressCheckboxCallback = 0;
+}
+
+static void
+neogeo_sprite_list_checkboxChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user)
+{
+    (void)self;
+    neogeo_sprite_list_checkbox_cb_t *cb = (neogeo_sprite_list_checkbox_cb_t *)user;
+    neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
+
+    if (!cb || ui->suppressCheckboxCallback) {
+        return;
+    }
+    int effectIndex = neogeo_sprite_list_rowEffectIndex(ui, cb->rowIndex);
+    if (effectIndex < 0) {
+        return;
+    }
+    neogeo_sprite_list_maskSetSprite(ui->selectedMask, (unsigned)effectIndex, selected ? 1 : 0);
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
+    (void)ctx;
+}
+
+static void
+neogeo_sprite_list_makeRowCheckboxes(neogeo_sprite_list_state_t *ui, e9ui_component_t *canvas)
+{
+    if (!ui || !canvas) {
+        return;
+    }
+    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+        ui->rowCheckboxCbs[i].rowIndex = i;
+        ui->rowCheckboxes[i] = e9ui_checkbox_make(NULL,
+                                                  0,
+                                                  neogeo_sprite_list_checkboxChanged,
+                                                  &ui->rowCheckboxCbs[i]);
+        if (ui->rowCheckboxes[i]) {
+            e9ui_checkbox_setLeftMargin(ui->rowCheckboxes[i], 0);
+            ui->rowCheckboxes[i]->focusable = 0;
+            e9ui_child_add(canvas, ui->rowCheckboxes[i], 0);
+        }
+    }
+}
+
+static int
+neogeo_sprite_list_pointInCheckbox(neogeo_sprite_list_state_t *ui, int mouseX, int mouseY)
+{
+    if (!ui) {
+        return 0;
+    }
+    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+        e9ui_component_t *checkbox = ui->rowCheckboxes[i];
+        if (!checkbox || checkbox->bounds.w <= 0 || checkbox->bounds.h <= 0) {
+            continue;
+        }
+        if (mouseX >= checkbox->bounds.x &&
+            mouseX < checkbox->bounds.x + checkbox->bounds.w &&
+            mouseY >= checkbox->bounds.y &&
+            mouseY < checkbox->bounds.y + checkbox->bounds.h) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int
@@ -312,46 +521,6 @@ neogeo_sprite_list_spriteIsVisible(const neogeo_sprite_list_row_t *row)
     return 0;
 }
 
-static uint32_t
-neogeo_sprite_list_hashWord(uint32_t hash, uint16_t word)
-{
-    hash ^= (uint32_t)(word & 0xffu);
-    hash *= 16777619u;
-    hash ^= (uint32_t)((word >> 8) & 0xffu);
-    hash *= 16777619u;
-    return hash;
-}
-
-static uint32_t
-neogeo_sprite_list_hashState(const e9k_debug_sprite_state_t *st)
-{
-    if (!st || !st->vram ||
-        st->vram_words <= NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET + NEOGEO_SPRITE_LIST_MAX_SPRITES) {
-        return 0u;
-    }
-    const uint16_t *vram = st->vram;
-    const uint16_t *scb2 = vram + NEOGEO_SPRITE_LIST_SCB2_WORD_OFFSET;
-    const uint16_t *scb3 = vram + NEOGEO_SPRITE_LIST_SCB3_WORD_OFFSET;
-    const uint16_t *scb4 = vram + NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET;
-    uint32_t hash = 2166136261u;
-    hash = neogeo_sprite_list_hashWord(hash, (uint16_t)(st->sprlimit & 0xffffu));
-    hash = neogeo_sprite_list_hashWord(hash, (uint16_t)(st->screen_h & 0xffff));
-    for (unsigned i = 0u; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
-        size_t scb1Base = (size_t)i * NEOGEO_SPRITE_LIST_SPRITE_VRAM_WORDS_PER_SPRITE;
-        for (size_t word = 0u; word < NEOGEO_SPRITE_LIST_SPRITE_VRAM_WORDS_PER_SPRITE; ++word) {
-            size_t offset = scb1Base + word;
-            if (offset >= st->vram_words) {
-                break;
-            }
-            hash = neogeo_sprite_list_hashWord(hash, vram[offset]);
-        }
-        hash = neogeo_sprite_list_hashWord(hash, scb2[i]);
-        hash = neogeo_sprite_list_hashWord(hash, scb3[i]);
-        hash = neogeo_sprite_list_hashWord(hash, scb4[i]);
-    }
-    return hash ? hash : 1u;
-}
-
 static int
 neogeo_sprite_list_decodeRows(neogeo_sprite_list_state_t *ui, const e9k_debug_sprite_state_t *st)
 {
@@ -362,12 +531,6 @@ neogeo_sprite_list_decodeRows(neogeo_sprite_list_state_t *ui, const e9k_debug_sp
     if (st->vram_words <= NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET + NEOGEO_SPRITE_LIST_MAX_SPRITES) {
         return 0;
     }
-    uint32_t hash = neogeo_sprite_list_hashState(st);
-    if (ui->hasLastSpriteHash && ui->lastSpriteHash == hash) {
-        return 0;
-    }
-    ui->lastSpriteHash = hash;
-    ui->hasLastSpriteHash = 1;
 
     const uint16_t *scb2 = vram + NEOGEO_SPRITE_LIST_SCB2_WORD_OFFSET;
     const uint16_t *scb3 = vram + NEOGEO_SPRITE_LIST_SCB3_WORD_OFFSET;
@@ -443,8 +606,8 @@ neogeo_sprite_list_decodeRows(neogeo_sprite_list_state_t *ui, const e9k_debug_sp
             ui->rows[i].chainLength = ui->rows[root].chainLength;
         }
     }
+    neogeo_sprite_list_formatDisplayRows(ui);
     ui->filterCacheDirty = 1;
-    ui->measurementsValid = 0;
     return 1;
 }
 
@@ -524,6 +687,17 @@ neogeo_sprite_list_formatDisplayRow(const neogeo_sprite_list_row_t *row,
     snprintf(out->scb, sizeof(out->scb), "%04x %04x %04x", row->scb2, row->scb3, row->scb4);
 }
 
+static void
+neogeo_sprite_list_formatDisplayRows(neogeo_sprite_list_state_t *ui)
+{
+    if (!ui) {
+        return;
+    }
+    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+        neogeo_sprite_list_formatDisplayRow(&ui->rows[i], &ui->displayRows[i]);
+    }
+}
+
 static int
 neogeo_sprite_list_rowMatchesFilter(const neogeo_sprite_list_state_t *ui, int rowIndex)
 {
@@ -550,12 +724,47 @@ neogeo_sprite_list_rowMatchesFilter(const neogeo_sprite_list_state_t *ui, int ro
 static void
 neogeo_sprite_list_applySelection(neogeo_sprite_list_state_t *ui)
 {
-    if (!ui || ui->selectedIndex < 0 || ui->selectedIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES) {
+    int activeSelectedIndex = ui ? ui->selectedIndex : -1;
+
+    if (!ui || activeSelectedIndex < 0 || activeSelectedIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES) {
         neogeo_sprite_debug_setSelection(-1, -1, 0);
+    } else {
+        const neogeo_sprite_list_row_t *activeRow = &ui->rows[activeSelectedIndex];
+        neogeo_sprite_debug_setSelection((int)activeRow->index, (int)activeRow->rootIndex, ui->highlightChain);
+    }
+    neogeo_sprite_list_clearHiddenChainSelections(ui);
+    if (!ui || !neogeo_sprite_list_maskHasBits(ui->selectedMask)) {
+        e9k_debug_sprite_grayscale_selection_t selection = {0};
+        (void)libretro_host_neogeo_setSpriteGrayscaleSelection(&selection);
         return;
     }
-    const neogeo_sprite_list_row_t *row = &ui->rows[ui->selectedIndex];
-    neogeo_sprite_debug_setSelection((int)row->index, (int)row->rootIndex, ui->highlightChain);
+
+    e9k_debug_sprite_grayscale_selection_t selection = {
+        .enabled = (ui->grayscaleSelection || ui->hideSelection) ? 1 : 0,
+        .highlightChain = ui->highlightChain ? 1 : 0,
+        .invert = ui->invertSelection ? 1 : 0,
+        .hide = ui->hideSelection ? 1 : 0,
+    };
+    memcpy(selection.spriteMask, ui->selectedMask, sizeof(selection.spriteMask));
+    (void)libretro_host_neogeo_setSpriteGrayscaleSelection(&selection);
+}
+
+static void
+neogeo_sprite_list_refreshPausedSelectionFrame(void)
+{
+    (void)runtime_refreshCurrentFrameFromPrevious();
+}
+
+static int
+neogeo_sprite_list_pointInRowContent(neogeo_sprite_list_state_t *ui,
+                                     e9ui_context_t *ctx,
+                                     const neogeo_sprite_list_layout_t *layout,
+                                     int mouseX,
+                                     int mouseY)
+{
+    int contentW = layout->contentWidth + 12;
+    int contentH = (ui->filteredCount + 1) * layout->lineHeight;
+    return e9ui_scroll_pointInContentPx(ui->listScroll, ctx, contentW, contentH, mouseX, mouseY);
 }
 
 static const char *
@@ -726,20 +935,17 @@ neogeo_sprite_list_refreshDisplayMeasurements(neogeo_sprite_list_state_t *ui, TT
     neogeo_sprite_list_measureColumn(font, &ui->colScb1W, "SCB1");
     neogeo_sprite_list_measureColumn(font, &ui->colScbW, "SCB2 SCB3 SCB4");
 
-    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
-        neogeo_sprite_list_formatDisplayRow(&ui->rows[i], &ui->displayRows[i]);
-        neogeo_sprite_list_measureColumn(font, &ui->colIndexW, ui->displayRows[i].index);
-        neogeo_sprite_list_measureColumn(font, &ui->colRootW, ui->displayRows[i].root);
-        neogeo_sprite_list_measureColumn(font, &ui->colStatusW, ui->displayRows[i].status);
-        neogeo_sprite_list_measureColumn(font, &ui->colXposW, ui->displayRows[i].xpos);
-        neogeo_sprite_list_measureColumn(font, &ui->colYposW, ui->displayRows[i].ypos);
-        neogeo_sprite_list_measureColumn(font, &ui->colRowsW, ui->displayRows[i].rows);
-        neogeo_sprite_list_measureColumn(font, &ui->colWidthW, ui->displayRows[i].width);
-        neogeo_sprite_list_measureColumn(font, &ui->colShrinkW, ui->displayRows[i].shrink);
-        neogeo_sprite_list_measureColumn(font, &ui->colPaletteW, ui->displayRows[i].palette);
-        neogeo_sprite_list_measureColumn(font, &ui->colScb1W, ui->displayRows[i].scb1);
-        neogeo_sprite_list_measureColumn(font, &ui->colScbW, ui->displayRows[i].scb);
-    }
+    neogeo_sprite_list_measureColumn(font, &ui->colIndexW, "381");
+    neogeo_sprite_list_measureColumn(font, &ui->colRootW, "381+381/382");
+    neogeo_sprite_list_measureColumn(font, &ui->colStatusW, "VIS CH AN");
+    neogeo_sprite_list_measureColumn(font, &ui->colXposW, "511");
+    neogeo_sprite_list_measureColumn(font, &ui->colYposW, "511");
+    neogeo_sprite_list_measureColumn(font, &ui->colRowsW, "63/1008");
+    neogeo_sprite_list_measureColumn(font, &ui->colWidthW, "16");
+    neogeo_sprite_list_measureColumn(font, &ui->colShrinkW, "f/ff");
+    neogeo_sprite_list_measureColumn(font, &ui->colPaletteW, "ff");
+    neogeo_sprite_list_measureColumn(font, &ui->colScb1W, "ffff ffff");
+    neogeo_sprite_list_measureColumn(font, &ui->colScbW, "ffff ffff ffff");
 
     ui->colIndexW += pad;
     ui->colRootW += pad;
@@ -775,6 +981,10 @@ neogeo_sprite_list_computeLayout(const e9ui_context_t *ctx, int originX, neogeo_
         neogeo_sprite_list_refreshDisplayMeasurements(ui, font);
     }
     out->colIndexW = ui->colIndexW;
+    out->colSelectW = e9ui_scale_px(ctx, NEOGEO_SPRITE_LIST_COL_SELECT_W);
+    if (out->colSelectW <= 0) {
+        out->colSelectW = NEOGEO_SPRITE_LIST_COL_SELECT_W;
+    }
     out->colRootW = ui->colRootW;
     out->colStatusW = ui->colStatusW;
     out->colXposW = ui->colXposW;
@@ -786,7 +996,8 @@ neogeo_sprite_list_computeLayout(const e9ui_context_t *ctx, int originX, neogeo_
     out->colScb1W = ui->colScb1W;
     out->colScbW = ui->colScbW;
 
-    out->colIndexX = originX;
+    out->colSelectX = originX;
+    out->colIndexX = out->colSelectX + out->colSelectW + gap;
     out->colRootX = out->colIndexX + out->colIndexW + gap;
     out->colStatusX = out->colRootX + out->colRootW + gap;
     out->colXposX = out->colStatusX + out->colStatusW + gap;
@@ -869,7 +1080,6 @@ neogeo_sprite_list_canvasLayout(e9ui_component_t *self, e9ui_context_t *ctx, e9u
 static int
 neogeo_sprite_list_canvasHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx, const e9ui_event_t *ev)
 {
-    (void)ctx;
     if (!self || !ev) {
         return 0;
     }
@@ -880,11 +1090,23 @@ neogeo_sprite_list_canvasHandleEvent(e9ui_component_t *self, e9ui_context_t *ctx
         if (layout.lineHeight <= 0) {
             return 0;
         }
-        int rowIndex = (ev->button.y - self->bounds.y) / layout.lineHeight - 1;
         neogeo_sprite_list_rebuildFilterCache(ui);
+        if (!neogeo_sprite_list_pointInRowContent(ui, ctx, &layout, ev->button.x, ev->button.y)) {
+            return 0;
+        }
+        if (neogeo_sprite_list_pointInCheckbox(ui, ev->button.x, ev->button.y)) {
+            return 1;
+        }
+        int rowIndex = (ev->button.y - self->bounds.y) / layout.lineHeight - 1;
         if (rowIndex >= 0 && rowIndex < ui->filteredCount) {
-            ui->selectedIndex = ui->filteredIndexes[rowIndex];
+            int clickedIndex = ui->filteredIndexes[rowIndex];
+            if (ui->selectedIndex == clickedIndex) {
+                ui->selectedIndex = -1;
+            } else {
+                ui->selectedIndex = clickedIndex;
+            }
             neogeo_sprite_list_applySelection(ui);
+            neogeo_sprite_list_refreshPausedSelectionFrame();
             return 1;
         }
     }
@@ -941,6 +1163,7 @@ neogeo_sprite_list_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
     SDL_Color animColor = { 255, 198, 92, 255 };
 
     int headerY = self->bounds.y;
+    neogeo_sprite_list_drawTextClipped(ui, font, layout.colSelectX, headerY, layout.colSelectW, "", headerColor);
     neogeo_sprite_list_drawTextClipped(ui, font, layout.colIndexX, headerY, layout.colIndexW, "#", headerColor);
     neogeo_sprite_list_drawTextClipped(ui, font, layout.colRootX, headerY, layout.colRootW, "ROOT", headerColor);
     neogeo_sprite_list_drawTextClipped(ui, font, layout.colStatusX, headerY, layout.colStatusW, "STATUS", headerColor);
@@ -960,6 +1183,12 @@ neogeo_sprite_list_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
     if (topRow < 0) {
         topRow = 0;
     }
+    for (int rowIndex = 0; rowIndex < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++rowIndex) {
+        e9ui_component_t *checkbox = ui->rowCheckboxes[rowIndex];
+        if (checkbox && checkbox->layout) {
+            checkbox->layout(checkbox, ctx, (e9ui_rect_t){ 0, 0, 0, 0 });
+        }
+    }
     int visibleRows = viewRect.h / layout.lineHeight + 2;
     for (int filteredRow = topRow; filteredRow < ui->filteredCount; ++filteredRow) {
         int y = self->bounds.y + (filteredRow + 1) * layout.lineHeight;
@@ -971,7 +1200,7 @@ neogeo_sprite_list_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
         }
         int rowIndex = ui->filteredIndexes[filteredRow];
         const neogeo_sprite_list_row_t *row = &ui->rows[rowIndex];
-        if (rowIndex == ui->selectedIndex) {
+        if (ui->selectedIndex == rowIndex) {
             SDL_SetRenderDrawColor(ctx->renderer, 46, 55, 68, 255);
             SDL_Rect rowBg = { self->bounds.x, y, self->bounds.w, layout.lineHeight };
             SDL_RenderFillRect(ctx->renderer, &rowBg);
@@ -982,6 +1211,24 @@ neogeo_sprite_list_canvasRender(e9ui_component_t *self, e9ui_context_t *ctx)
         }
 
         const neogeo_sprite_list_display_row_t *display = &ui->displayRows[rowIndex];
+        e9ui_component_t *checkbox = ui->rowCheckboxes[rowIndex];
+        if (checkbox && checkbox->layout) {
+            if (neogeo_sprite_list_rowCheckboxVisible(ui, rowIndex)) {
+                e9ui_rect_t checkboxBounds = {
+                    layout.colSelectX,
+                    y,
+                    layout.colSelectW,
+                    layout.lineHeight
+                };
+                checkbox->layout(checkbox, ctx, checkboxBounds);
+                neogeo_sprite_list_syncRowCheckbox(ui, ctx, rowIndex);
+                if (checkbox->render) {
+                    checkbox->render(checkbox, ctx);
+                }
+            } else {
+                checkbox->layout(checkbox, ctx, (e9ui_rect_t){ 0, 0, 0, 0 });
+            }
+        }
 
         SDL_Color statusColor = row->active ? (row->visible ? visibleColor : rowColor) : inactiveColor;
         if (row->hasAnimBits) {
@@ -1038,7 +1285,43 @@ neogeo_sprite_list_makeCanvas(void)
     canvas->render = neogeo_sprite_list_canvasRender;
     canvas->handleEvent = neogeo_sprite_list_canvasHandleEvent;
     canvas->dtor = neogeo_sprite_list_canvasDtor;
+    neogeo_sprite_list_makeRowCheckboxes(&neogeo_sprite_list_state, canvas);
     return canvas;
+}
+
+static void
+neogeo_sprite_list_centerSelectedRow(neogeo_sprite_list_state_t *ui)
+{
+    int selectedIndex = ui ? ui->selectedIndex : -1;
+    if (!ui || !ui->windowState.open || !ui->listScroll || selectedIndex < 0) {
+        return;
+    }
+
+    neogeo_sprite_list_rebuildFilterCache(ui);
+    int displayIndex = -1;
+    for (int i = 0; i < ui->filteredCount; ++i) {
+        if (ui->filteredIndexes[i] == selectedIndex) {
+            displayIndex = i;
+            break;
+        }
+    }
+    if (displayIndex < 0) {
+        return;
+    }
+
+    int lineHeight = neogeo_sprite_list_measureLineHeight();
+    if (lineHeight <= 0) {
+        return;
+    }
+
+    int scrollX = 0;
+    int scrollY = 0;
+    e9ui_scroll_getScrollPx(ui->listScroll, &scrollX, &scrollY);
+
+    int rowCenterY = (displayIndex + 1) * lineHeight + lineHeight / 2;
+    int viewH = ui->listScroll->bounds.h;
+    int targetScrollY = rowCenterY - viewH / 2;
+    e9ui_scroll_setScrollPx(ui->listScroll, scrollX, targetScrollY);
 }
 
 static void
@@ -1087,6 +1370,46 @@ neogeo_sprite_list_highlightChainChanged(e9ui_component_t *self, e9ui_context_t 
     neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
     ui->highlightChain = selected ? 1 : 0;
     neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
+    config_saveConfig();
+}
+
+static void
+neogeo_sprite_list_grayscaleSelectionChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user)
+{
+    (void)self;
+    (void)ctx;
+    (void)user;
+    neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
+    ui->grayscaleSelection = selected ? 1 : 0;
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
+    config_saveConfig();
+}
+
+static void
+neogeo_sprite_list_invertSelectionChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user)
+{
+    (void)self;
+    (void)ctx;
+    (void)user;
+    neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
+    ui->invertSelection = selected ? 1 : 0;
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
+    config_saveConfig();
+}
+
+static void
+neogeo_sprite_list_hideSelectionChanged(e9ui_component_t *self, e9ui_context_t *ctx, int selected, void *user)
+{
+    (void)self;
+    (void)ctx;
+    (void)user;
+    neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
+    ui->hideSelection = selected ? 1 : 0;
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
     config_saveConfig();
 }
 
@@ -1102,6 +1425,16 @@ neogeo_sprite_list_clearFilterClicked(e9ui_context_t *ctx, void *user)
             e9ui_textbox_setText(ui->filterTextboxes[i], "");
         }
     }
+    memset(ui->selectedMask, 0, sizeof(ui->selectedMask));
+    ui->suppressCheckboxCallback = 1;
+    for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+        if (ui->rowCheckboxes[i]) {
+            e9ui_checkbox_setSelected(ui->rowCheckboxes[i], 0, ctx);
+        }
+    }
+    ui->suppressCheckboxCallback = 0;
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
     ui->filterCacheDirty = 1;
 }
 
@@ -1120,6 +1453,18 @@ neogeo_sprite_list_buildFilterRoot(void)
                                                           ui->highlightChain,
                                                           neogeo_sprite_list_highlightChainChanged,
                                                           NULL);
+    e9ui_component_t *grayscaleSelection = e9ui_checkbox_make("Identify",
+                                                              ui->grayscaleSelection,
+                                                              neogeo_sprite_list_grayscaleSelectionChanged,
+                                                              NULL);
+    e9ui_component_t *invertSelection = e9ui_checkbox_make("Invert",
+                                                           ui->invertSelection,
+                                                           neogeo_sprite_list_invertSelectionChanged,
+                                                           NULL);
+    e9ui_component_t *hideSelection = e9ui_checkbox_make("Hide",
+                                                         ui->hideSelection,
+                                                         neogeo_sprite_list_hideSelectionChanged,
+                                                         NULL);
     e9ui_component_t *clearButton = e9ui_button_make("Clear", neogeo_sprite_list_clearFilterClicked, NULL);
     if (!root || !controlsRow || !filterRow) {
         return NULL;
@@ -1129,9 +1474,15 @@ neogeo_sprite_list_buildFilterRoot(void)
     }
     ui->activeOnlyCheckbox = activeOnly;
     ui->highlightChainCheckbox = highlightChain;
+    ui->grayscaleCheckbox = grayscaleSelection;
+    ui->invertCheckbox = invertSelection;
+    ui->hideCheckbox = hideSelection;
 
     int activeW = 74;
     int chainW = 74;
+    int grayW = 74;
+    int invertW = 74;
+    int hideW = 74;
     int clearW = 60;
     if (activeOnly) {
         e9ui_checkbox_measure(activeOnly, &ui->ctx, &activeW, NULL);
@@ -1139,18 +1490,38 @@ neogeo_sprite_list_buildFilterRoot(void)
     if (highlightChain) {
         e9ui_checkbox_measure(highlightChain, &ui->ctx, &chainW, NULL);
     }
+    if (grayscaleSelection) {
+        e9ui_checkbox_measure(grayscaleSelection, &ui->ctx, &grayW, NULL);
+    }
+    if (invertSelection) {
+        e9ui_checkbox_measure(invertSelection, &ui->ctx, &invertW, NULL);
+    }
+    if (hideSelection) {
+        e9ui_checkbox_measure(hideSelection, &ui->ctx, &hideW, NULL);
+    }
     if (clearButton) {
         e9ui_button_measure(clearButton, &ui->ctx, &clearW, NULL);
     }
     e9ui_hstack_addFixed(controlsRow, activeOnly, activeW);
     e9ui_hstack_addFixed(controlsRow, e9ui_spacer_make(NEOGEO_SPRITE_LIST_GAP), NEOGEO_SPRITE_LIST_GAP);
     e9ui_hstack_addFixed(controlsRow, highlightChain, chainW);
+    e9ui_hstack_addFixed(controlsRow, e9ui_spacer_make(NEOGEO_SPRITE_LIST_GAP), NEOGEO_SPRITE_LIST_GAP);
+    e9ui_hstack_addFixed(controlsRow, grayscaleSelection, grayW);
+    e9ui_hstack_addFixed(controlsRow, e9ui_spacer_make(NEOGEO_SPRITE_LIST_GAP), NEOGEO_SPRITE_LIST_GAP);
+    e9ui_hstack_addFixed(controlsRow, invertSelection, invertW);
+    e9ui_hstack_addFixed(controlsRow, e9ui_spacer_make(NEOGEO_SPRITE_LIST_GAP), NEOGEO_SPRITE_LIST_GAP);
+    e9ui_hstack_addFixed(controlsRow, hideSelection, hideW);
     e9ui_hstack_addFlex(controlsRow, e9ui_spacer_make(1));
     e9ui_hstack_addFixed(controlsRow, clearButton, clearW);
 
     TTF_Font *font = ui->ctx.font ? ui->ctx.font : e9ui->ctx.font;
     if (!ui->measurementsValid || ui->measuredFont != font) {
         neogeo_sprite_list_refreshDisplayMeasurements(ui, font);
+    }
+    neogeo_sprite_list_layout_t layout;
+    neogeo_sprite_list_computeLayout(&ui->ctx, 0, &layout);
+    if (layout.colIndexX > 0) {
+        e9ui_hstack_addFixed(filterRow, e9ui_spacer_make(layout.colIndexX), layout.colIndexX);
     }
     for (int i = 0; i < NEOGEO_SPRITE_LIST_FILTER_COUNT; ++i) {
         ui->filterCbs[i].filterIndex = i;
@@ -1395,10 +1766,18 @@ neogeo_sprite_list_toggle(void)
         }
         ui->activeOnlyCheckbox = NULL;
         ui->highlightChainCheckbox = NULL;
+        ui->grayscaleCheckbox = NULL;
+        ui->invertCheckbox = NULL;
+        ui->hideCheckbox = NULL;
+        for (int i = 0; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
+            ui->rowCheckboxes[i] = NULL;
+        }
         ui->window = NULL;
         ui->renderer = NULL;
         ui->windowState.open = 0;
         neogeo_sprite_debug_setSelection(-1, -1, 0);
+        e9k_debug_sprite_grayscale_selection_t selection = {0};
+        (void)libretro_host_neogeo_setSpriteGrayscaleSelection(&selection);
     }
 }
 
@@ -1408,6 +1787,29 @@ neogeo_sprite_list_isOpen(void)
     return neogeo_sprite_list_state.windowState.open ? 1 : 0;
 }
 
+int
+neogeo_sprite_list_getSelectedSprite(void)
+{
+    return neogeo_sprite_list_state.selectedIndex;
+}
+
+void
+neogeo_sprite_list_selectSprite(int spriteIndex)
+{
+    neogeo_sprite_list_state_t *ui = &neogeo_sprite_list_state;
+    if (ui->hasLastState) {
+        (void)neogeo_sprite_list_decodeRows(ui, &ui->lastState);
+    }
+    if (spriteIndex < 0 || spriteIndex >= NEOGEO_SPRITE_LIST_MAX_SPRITES) {
+        ui->selectedIndex = -1;
+    } else {
+        ui->selectedIndex = spriteIndex;
+    }
+    neogeo_sprite_list_applySelection(ui);
+    neogeo_sprite_list_refreshPausedSelectionFrame();
+    neogeo_sprite_list_centerSelectedRow(ui);
+}
+
 void
 neogeo_sprite_list_render(const e9k_debug_sprite_state_t *st)
 {
@@ -1415,7 +1817,9 @@ neogeo_sprite_list_render(const e9k_debug_sprite_state_t *st)
     if (st) {
         ui->lastState = *st;
         ui->hasLastState = 1;
-        if (neogeo_sprite_list_decodeRows(ui, st) && ui->selectedIndex >= 0) {
+        int rowsChanged = neogeo_sprite_list_decodeRows(ui, st);
+        if (rowsChanged && (ui->selectedIndex >= 0 ||
+                            neogeo_sprite_list_maskHasBits(ui->selectedMask))) {
             neogeo_sprite_list_applySelection(ui);
         }
     }
@@ -1437,6 +1841,9 @@ neogeo_sprite_list_persistConfig(FILE *file)
     e9ui_windowPersistStateRect(file, "comp.sprite_list", &ui->windowState, &e9ui->ctx);
     fprintf(file, "comp.sprite_list.active_only=%d\n", ui->activeOnly ? 1 : 0);
     fprintf(file, "comp.sprite_list.highlight_chain=%d\n", ui->highlightChain ? 1 : 0);
+    fprintf(file, "comp.sprite_list.grayscale_selection=%d\n", ui->grayscaleSelection ? 1 : 0);
+    fprintf(file, "comp.sprite_list.invert_selection=%d\n", ui->invertSelection ? 1 : 0);
+    fprintf(file, "comp.sprite_list.hide_selection=%d\n", ui->hideSelection ? 1 : 0);
 }
 
 int
@@ -1478,6 +1885,21 @@ neogeo_sprite_list_loadConfigProperty(const char *prop, const char *value)
             return 0;
         }
         ui->highlightChain = intValue ? 1 : 0;
+    } else if (strcmp(prop, "grayscale_selection") == 0) {
+        if (!neogeo_sprite_list_parseInt(value, &intValue)) {
+            return 0;
+        }
+        ui->grayscaleSelection = intValue ? 1 : 0;
+    } else if (strcmp(prop, "invert_selection") == 0) {
+        if (!neogeo_sprite_list_parseInt(value, &intValue)) {
+            return 0;
+        }
+        ui->invertSelection = intValue ? 1 : 0;
+    } else if (strcmp(prop, "hide_selection") == 0) {
+        if (!neogeo_sprite_list_parseInt(value, &intValue)) {
+            return 0;
+        }
+        ui->hideSelection = intValue ? 1 : 0;
     } else {
         return 0;
     }

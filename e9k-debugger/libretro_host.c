@@ -1798,6 +1798,10 @@ libretro_host_start(const char *corePath, const char *romPath,
     libretro_host.debugNeogeoGetRoms = NULL;
     libretro_host.debugNeogeoGetPaletteState = NULL;
     libretro_host.debugNeogeoGetAudioFrame = NULL;
+    libretro_host.debugNeogeoSetSpriteGrayscaleSelection = NULL;
+    libretro_host.debugNeogeoSetPaletteGrayscaleMask = NULL;
+    libretro_host.debugNeogeoGetPaletteGrayscaleMask = NULL;
+    libretro_host.debugNeogeoSetFixLayerMode = NULL;
     libretro_host.debugNeogeoSetAudioVisEnabled = NULL;
     libretro_host.debugNeogeoSetAudioMuteMask = NULL;
     libretro_host.debugNeogeoSetRegisterLogFrameCallback = NULL;

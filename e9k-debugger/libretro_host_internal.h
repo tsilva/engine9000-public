@@ -86,6 +86,10 @@ typedef size_t (*e9k_debug_neogeo_get_fix_rom_fn_t)(e9k_debug_rom_region_t *out,
 typedef size_t (*e9k_debug_neogeo_get_roms_fn_t)(e9k_debug_rom_entry_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_palette_state_fn_t)(e9k_debug_palette_state_t *out, size_t cap);
 typedef size_t (*e9k_debug_neogeo_get_audio_frame_fn_t)(e9k_debug_audio_frame_t *out, size_t cap);
+typedef void (*e9k_debug_neogeo_set_sprite_grayscale_selection_fn_t)(const e9k_debug_sprite_grayscale_selection_t *selection);
+typedef void (*e9k_debug_neogeo_set_palette_grayscale_mask_fn_t)(const e9k_debug_palette_grayscale_mask_t *mask);
+typedef size_t (*e9k_debug_neogeo_get_palette_grayscale_mask_fn_t)(e9k_debug_palette_grayscale_mask_t *out, size_t cap);
+typedef void (*e9k_debug_neogeo_set_fix_layer_mode_fn_t)(int mode);
 typedef void (*e9k_debug_neogeo_set_audio_vis_enabled_fn_t)(int enabled);
 typedef void (*e9k_debug_neogeo_set_audio_mute_mask_fn_t)(uint32_t mask);
 typedef size_t (*e9k_debug_megadrive_get_sprite_state_fn_t)(e9k_debug_mega_sprite_state_t *out, size_t cap);
@@ -266,6 +270,10 @@ typedef struct {
     e9k_debug_neogeo_get_roms_fn_t debugNeogeoGetRoms;
     e9k_debug_neogeo_get_palette_state_fn_t debugNeogeoGetPaletteState;
     e9k_debug_neogeo_get_audio_frame_fn_t debugNeogeoGetAudioFrame;
+    e9k_debug_neogeo_set_sprite_grayscale_selection_fn_t debugNeogeoSetSpriteGrayscaleSelection;
+    e9k_debug_neogeo_set_palette_grayscale_mask_fn_t debugNeogeoSetPaletteGrayscaleMask;
+    e9k_debug_neogeo_get_palette_grayscale_mask_fn_t debugNeogeoGetPaletteGrayscaleMask;
+    e9k_debug_neogeo_set_fix_layer_mode_fn_t debugNeogeoSetFixLayerMode;
     e9k_debug_neogeo_set_audio_vis_enabled_fn_t debugNeogeoSetAudioVisEnabled;
     e9k_debug_neogeo_set_audio_mute_mask_fn_t debugNeogeoSetAudioMuteMask;
     e9k_debug_set_neogeo_register_log_frame_callback_fn_t debugNeogeoSetRegisterLogFrameCallback;

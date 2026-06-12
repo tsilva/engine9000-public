@@ -18,6 +18,12 @@ neogeo_sprite_list_toggle(void);
 int
 neogeo_sprite_list_isOpen(void);
 
+int
+neogeo_sprite_list_getSelectedSprite(void);
+
+void
+neogeo_sprite_list_selectSprite(int spriteIndex);
+
 void
 neogeo_sprite_list_render(const e9k_debug_sprite_state_t *st);
 

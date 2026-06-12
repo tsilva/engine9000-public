@@ -571,6 +571,30 @@ E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_sprite_state(e9k_debug_sprite_state
     return sizeof(*out);
 }
 
+E9K_DEBUG_EXPORT void
+e9k_debug_neogeo_set_sprite_grayscale_selection(const e9k_debug_sprite_grayscale_selection_t *selection)
+{
+    geo_lspc_setSpriteGrayscaleSelection(selection);
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_neogeo_set_palette_grayscale_mask(const e9k_debug_palette_grayscale_mask_t *mask)
+{
+    geo_lspc_setPaletteGrayscaleMask(mask);
+}
+
+E9K_DEBUG_EXPORT size_t
+e9k_debug_neogeo_get_palette_grayscale_mask(e9k_debug_palette_grayscale_mask_t *out, size_t cap)
+{
+    return geo_lspc_getPaletteGrayscaleMask(out, cap);
+}
+
+E9K_DEBUG_EXPORT void
+e9k_debug_neogeo_set_fix_layer_mode(int mode)
+{
+    geo_lspc_setFixLayerMode((e9k_debug_geo_fix_layer_mode_t)mode);
+}
+
 E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_palette_state(e9k_debug_palette_state_t *out, size_t cap) {
     if (!out || cap < sizeof(*out)) {
         return 0;

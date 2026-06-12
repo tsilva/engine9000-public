@@ -29,6 +29,9 @@
 #include "settings.h"
 #include "debugger.h"
 
+static void
+runtime_executeNextFrame(void);
+
 static const char *
 runtime_watchAccessSourceName(uint32_t accessSource)
 {
@@ -104,6 +107,29 @@ runtime_executeFrame(debugger_run_mode_t mode, int restoreFrame)
         state_buffer_restoreFrameNo(restoreFrame);
     }
     _libretro_host_runOnce();
+}
+
+int
+runtime_refreshCurrentFrameFromPrevious(void)
+{
+    uint64_t currentFrame = debugger.frameCounter;
+    uint64_t restoreFrame;
+
+    if (machine_getRunning(debugger.machine) && !debugger.frameStepMode) {
+        return 0;
+    }
+    if (currentFrame < 2 || state_buffer_isRollingPaused()) {
+        return 0;
+    }
+    restoreFrame = currentFrame - 2;
+    if (!state_buffer_hasFrameNo(restoreFrame)) {
+        return 0;
+    }
+    runtime_executeFrame(DEBUGGER_RUNMODE_RESTORE, (int)restoreFrame);
+    debugger.frameCounter -= 2;
+    runtime_executeNextFrame();
+    ui_refreshOnPause();
+    return 1;
 }
 
 static void

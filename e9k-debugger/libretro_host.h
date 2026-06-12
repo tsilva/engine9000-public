@@ -431,6 +431,18 @@ bool
 libretro_host_neogeo_getAudioFrame(e9k_debug_audio_frame_t *out);
 
 bool
+libretro_host_neogeo_setSpriteGrayscaleSelection(const e9k_debug_sprite_grayscale_selection_t *selection);
+
+bool
+libretro_host_neogeo_setPaletteGrayscaleMask(const e9k_debug_palette_grayscale_mask_t *mask);
+
+bool
+libretro_host_neogeo_getPaletteGrayscaleMask(e9k_debug_palette_grayscale_mask_t *outMask);
+
+bool
+libretro_host_neogeo_setFixLayerMode(e9k_debug_geo_fix_layer_mode_t mode);
+
+bool
 libretro_host_neogeo_setAudioVisEnabled(int enabled);
 
 bool

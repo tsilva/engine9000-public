@@ -22,6 +22,7 @@
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A4 (1u << 6)
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A5 (1u << 7)
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_B (1u << 8)
+#define E9K_DEBUG_GEO_PALETTE_GRAYSCALE_MASK_WORDS 16
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A_MASK \
     (E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A0 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A1 | \
      E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A2 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A3 | \
@@ -54,11 +55,31 @@ typedef struct geo_debug_sprite_state {
     int crop_r;
 } e9k_debug_sprite_state_t;
 
+#define E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS 12
+
+typedef struct geo_debug_sprite_grayscale_selection {
+    int enabled;
+    int highlightChain;
+    int invert;
+    int hide;
+    uint32_t spriteMask[E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS];
+} e9k_debug_sprite_grayscale_selection_t;
+
 typedef struct geo_debug_palette_state {
     const uint32_t *colors;
     size_t color_count;
     unsigned active_bank;
 } e9k_debug_palette_state_t;
+
+typedef struct geo_debug_palette_grayscale_mask {
+    uint32_t words[E9K_DEBUG_GEO_PALETTE_GRAYSCALE_MASK_WORDS];
+} e9k_debug_palette_grayscale_mask_t;
+
+typedef enum geo_debug_fix_layer_mode {
+    e9k_debug_geo_fix_layer_mode_normal = 0,
+    e9k_debug_geo_fix_layer_mode_grayscale = 1,
+    e9k_debug_geo_fix_layer_mode_hidden = 2
+} e9k_debug_geo_fix_layer_mode_t;
 
 typedef struct geo_debug_audio_source {
     int32_t peakL;
