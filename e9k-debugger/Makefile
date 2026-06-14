@@ -78,7 +78,10 @@ RELEASE_MINOR_FILE = assets/release_minor.txt
 RELEASE_PACKAGE_NAME = e9k-debugger
 RELEASE_MEGA9000_PACKAGE_NAME = mega9000
 RELEASE_W64_DLLS = libfreetype-6.dll libpng16-16.dll libreadline8.dll libssp-0.dll libtermcap-0.dll libwinpthread-1.dll SDL2_image.dll SDL2_ttf.dll SDL2.dll zlib1.dll
-RELEASE_SYSTEM_FILES = v-hunk-addr2line.exe v-hunk-objdump.exe load9000 load9013 z80_srcmap.exe ami9000.dll geo9000.dll
+RELEASE_SYSTEM_FILES = v-hunk-addr2line.exe v-hunk-objdump.exe z80_srcmap.exe ami9000.dll geo9000.dll
+RELEASE_LOAD9000_DIR = ../tools/amiga/load9000
+RELEASE_LOAD9000_SRCS = $(RELEASE_LOAD9000_DIR)/main.c $(RELEASE_LOAD9000_DIR)/main13.c $(RELEASE_LOAD9000_DIR)/lib9000.c $(RELEASE_LOAD9000_DIR)/lib9000.h $(RELEASE_LOAD9000_DIR)/hunk.c $(RELEASE_LOAD9000_DIR)/hunk.h $(RELEASE_LOAD9000_DIR)/debug9000.c $(RELEASE_LOAD9000_DIR)/debug9000.h $(RELEASE_LOAD9000_DIR)/startup.c $(RELEASE_LOAD9000_DIR)/Makefile
+RELEASE_LOAD9000_FILES = $(RELEASE_LOAD9000_DIR)/load9000 $(RELEASE_LOAD9000_DIR)/load9013
 W64_CFLAGS = $(LTO_FLAGS) -O2 -Wall -Wextra -std=c99 -MMD -MP
 W64_CFLAGS += $(BASE_INCLUDES)
 W64_CFLAGS +=  -D_THREAD_SAFE
@@ -196,7 +199,10 @@ release: release-w64
 release-w64: w64
 	@$(MAKE) release-w64-package
 
-release-w64-package:
+$(RELEASE_LOAD9000_FILES): $(RELEASE_LOAD9000_SRCS)
+	@$(MAKE) -C $(RELEASE_LOAD9000_DIR)
+
+release-w64-package: $(RELEASE_LOAD9000_FILES)
 	@mkdir -p $(RELEASE_DIR)
 	@temp_dir=`mktemp -d "$(RELEASE_DIR)/tmp.release.XXXXXX"`; \
 	if [ ! -d "$$temp_dir" ]; then \
@@ -236,6 +242,13 @@ release-w64-package:
 			exit 1; \
 		fi; \
 		cp "system/$$file" "$$package_dir/system/$$file"; \
+	done; \
+	for file in $(RELEASE_LOAD9000_FILES); do \
+		if [ ! -f "$$file" ]; then \
+			echo "Missing file: $$file"; \
+			exit 1; \
+		fi; \
+		cp "$$file" "$$package_dir/system/"; \
 	done; \
 	if [ ! -f "../README.md" ]; then \
 		echo "Missing file: ../README.md"; \
