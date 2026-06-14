@@ -2596,12 +2596,17 @@ emu_ami_createOverlays(e9ui_component_t* comp, e9ui_component_t* button_stack)
 }
 
 static void
-emu_ami_render(e9ui_context_t *ctx, SDL_Rect* dst)
+emu_ami_render(e9ui_context_t *ctx, SDL_Rect* dst, const SDL_Rect *clipRect)
 {
     int rasterLineCount = 0;
     emu_ami_tryBindCustomLogFrameCallback();
     if (libretro_host_amiga_getRasterLineCount(&rasterLineCount)) {
-        profile_checkpoints_renderScanlineOverlay(ctx, dst, (uint64_t)rasterLineCount);
+        profile_checkpoints_renderScanlineOverlay(ctx,
+                                                  dst,
+                                                  clipRect,
+                                                  (uint64_t)rasterLineCount,
+                                                  0,
+                                                  (uint64_t)rasterLineCount);
     }
     emu_ami_renderDmaDebugOverlay(ctx, dst);
     emu_ami_renderCopperDebugOverlay(ctx, dst);

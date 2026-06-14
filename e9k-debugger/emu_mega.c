@@ -629,11 +629,16 @@ emu_mega_createOverlays(e9ui_component_t *comp, e9ui_component_t *button_stack)
 }
 
 static void
-emu_mega_render(e9ui_context_t *ctx, SDL_Rect *dst)
+emu_mega_render(e9ui_context_t *ctx, SDL_Rect *dst, const SDL_Rect *clipRect)
 {
     int scanlineCount = 0;
     if (libretro_host_megadrive_getRasterLineCount(&scanlineCount) && scanlineCount > 0) {
-        profile_checkpoints_renderScanlineOverlay(ctx, dst, (uint64_t)scanlineCount);
+        profile_checkpoints_renderScanlineOverlay(ctx,
+                                                  dst,
+                                                  clipRect,
+                                                  (uint64_t)scanlineCount,
+                                                  0,
+                                                  (uint64_t)scanlineCount);
     }
 
     if (emu_mega_histogramMode != emu_mega_histogramModeOff && emu_mega_spriteShadowReady) {

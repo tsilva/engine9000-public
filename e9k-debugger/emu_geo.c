@@ -21,6 +21,9 @@
 
 #define GEO_SPRITE_COUNT 382u
 #define GEO_SPRITES_PER_LINE_MAX 96u
+#define GEO_SCANLINE_COUNT 264u
+#define GEO_VISIBLE_SCANLINE_BASE 16u
+#define GEO_VISIBLE_SCANLINE_DEFAULT_COUNT 224u
 
 typedef struct  {
     SDL_Texture *texture;
@@ -51,6 +54,32 @@ static uint16_t *emu_geo_spriteShadowVram = NULL;
 static size_t emu_geo_spriteShadowWords = 0;
 static int emu_geo_audioFrameReady = 0;
 static e9k_debug_audio_frame_t emu_geo_audioFrame;
+
+static void
+emu_geo_renderCheckpointOverlay(e9ui_context_t *ctx, SDL_Rect *dst, const SDL_Rect *clipRect)
+{
+    uint64_t videoStartScanline = GEO_VISIBLE_SCANLINE_BASE;
+    uint64_t videoScanlineCount = GEO_VISIBLE_SCANLINE_DEFAULT_COUNT;
+
+    if (emu_geo_spriteShadowReady) {
+        int cropTop = emu_geo_spriteShadow.crop_t;
+        int visibleHeight = emu_geo_spriteShadow.visible_h;
+        if (cropTop < 0) {
+            cropTop = 0;
+        }
+        if (visibleHeight > 0) {
+            videoStartScanline = GEO_VISIBLE_SCANLINE_BASE + (uint64_t)cropTop;
+            videoScanlineCount = (uint64_t)visibleHeight;
+        }
+    }
+
+    profile_checkpoints_renderScanlineOverlay(ctx,
+                                              dst,
+                                              clipRect,
+                                              GEO_SCANLINE_COUNT,
+                                              videoStartScanline,
+                                              videoScanlineCount);
+}
 
 void
 emu_geo_setSpriteState(const e9k_debug_sprite_state_t *state, int ready)
@@ -725,9 +754,9 @@ emu_geo_translateKey(SDL_Keycode key)
 }
 
 void
-emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst)    
+emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst, const SDL_Rect *clipRect)    
 {
-  profile_checkpoints_renderScanlineOverlay(ctx, dst, 264u);
+  emu_geo_renderCheckpointOverlay(ctx, dst, clipRect);
 
   if (emu_geo_histogramEnabled && emu_geo_spriteShadowReady) {
     emu_e9k_spriteOverlayRender(ctx->renderer, dst, &emu_geo_spriteShadow);
@@ -753,6 +782,3 @@ const emu_system_iface_t emu_geo_iface = {
   .render = emu_geo_render,
   .destroy = NULL,
 };
-
-void
-emu_geo_render(e9ui_context_t *ctx, SDL_Rect* dst);
