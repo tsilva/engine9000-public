@@ -564,6 +564,7 @@ E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_sprite_state(e9k_debug_sprite_state
     out->sprlimit = geo_lspc_get_sprlimit();
     out->screen_w = LSPC_WIDTH;
     out->screen_h = LSPC_HEIGHT_VISIBLE;
+    out->visible_h = video_height_visible;
     out->crop_t = video_crop_t;
     out->crop_b = video_crop_b;
     out->crop_l = video_crop_l;

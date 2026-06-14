@@ -1060,8 +1060,10 @@ uint8_t geo_m68k_debug_peek_8(uint32_t address) {
 unsigned m68k_read_memory_16(unsigned address) {
     unsigned result = 0xffff;
     uint32_t addr24 = (uint32_t)(address & 0x00ffffffu);
-    if (address & 0x01)
-        geo_log(GEO_LOG_WRN, "Unaligned 16-bit Read: %06x\n", address);
+    if (address & 0x01) {
+        geo_log(GEO_LOG_WRN, "Unaligned 16-bit Read: %06x PC: %06x\n",
+            address, m68k_get_reg(NULL, M68K_REG_PPC) & 0x00ffffffu);
+    }
 
     if (address < 0x000080) { // Vector Table
         m68k_modify_timeslice(1);

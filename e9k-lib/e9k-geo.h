@@ -23,6 +23,9 @@
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A5 (1u << 7)
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_B (1u << 8)
 #define E9K_DEBUG_GEO_PALETTE_GRAYSCALE_MASK_WORDS 16
+#define E9K_DEBUG_GEO_DEFAULT_TOP_CROP 8
+#define E9K_DEBUG_GEO_VIDEO_TOP_BORDER 16
+#define E9K_DEBUG_GEO_SPRITE_DISPLAY_SCANLINES 8
 #define E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A_MASK \
     (E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A0 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A1 | \
      E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A2 | E9K_DEBUG_GEO_AUDIO_MUTE_ADPCM_A3 | \
@@ -49,6 +52,7 @@ typedef struct geo_debug_sprite_state {
     unsigned sprlimit;
     int screen_w;
     int screen_h;
+    int visible_h;
     int crop_t;
     int crop_b;
     int crop_l;
@@ -56,6 +60,13 @@ typedef struct geo_debug_sprite_state {
 } e9k_debug_sprite_state_t;
 
 #define E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS 12
+
+static inline int
+e9k_debug_geo_spriteVisibleLineOffset(const e9k_debug_sprite_state_t *state)
+{
+    int cropT = (state && state->crop_t >= 0) ? state->crop_t : E9K_DEBUG_GEO_DEFAULT_TOP_CROP;
+    return cropT + E9K_DEBUG_GEO_VIDEO_TOP_BORDER - E9K_DEBUG_GEO_SPRITE_DISPLAY_SCANLINES;
+}
 
 typedef struct geo_debug_sprite_grayscale_selection {
     int enabled;

@@ -25,6 +25,9 @@ void
 neogeo_sprite_list_selectSprite(int spriteIndex);
 
 void
+neogeo_sprite_list_selectSpriteSingleCheckbox(int spriteIndex);
+
+void
 neogeo_sprite_list_render(const e9k_debug_sprite_state_t *st);
 
 void

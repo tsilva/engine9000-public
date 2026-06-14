@@ -34,7 +34,6 @@
 #define NG_VISIBLE_Y0 0
 #define NG_VISIBLE_W 320
 #define NG_VISIBLE_H 224
-#define NG_LINE_OFFSET 16
 #define NG_COORD_MIN_X (-192)
 #define NG_COORD_MIN_Y (-272)
 #define NG_COORD_MAX_X 511
@@ -210,7 +209,8 @@ neogeo_sprite_debug_texturePointForMouse(const e9ui_rect_t *bounds, int mouseX, 
 
 static int
 neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int coordX, int coordY,
-                                      int currentSpriteIndex, int *outSpriteIndex);
+                                      int currentSpriteIndex, int cycleFromCurrentSprite,
+                                      int *outSpriteIndex);
 
 static int
 neogeo_sprite_debug_fixMiniMapPointForMouse(const e9ui_rect_t *bounds, int mouseX, int mouseY);
@@ -588,7 +588,8 @@ neogeo_sprite_debug_texturePointForMouse(const e9ui_rect_t *bounds, int mouseX, 
 
 static int
 neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int coordX, int coordY,
-                                      int currentSpriteIndex, int *outSpriteIndex)
+                                      int currentSpriteIndex, int cycleFromCurrentSprite,
+                                      int *outSpriteIndex)
 {
     if (!st || !st->vram || !outSpriteIndex) {
         return 0;
@@ -609,6 +610,7 @@ neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int co
     unsigned vshrink = NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK;
     unsigned chainRootIndex = 0;
     unsigned sprlimit = st->sprlimit ? st->sprlimit : NG_SPRITES_PER_LINE_MAX;
+    int lineOffset = e9k_debug_geo_spriteVisibleLineOffset(st);
 
     memset(decodedSprites, 0, sizeof(decodedSprites));
     memset(lineSprites, 0, sizeof(lineSprites));
@@ -643,7 +645,7 @@ neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int co
             continue;
         }
         for (unsigned row = 0; row < totalH && row < (unsigned)NEOGEO_SPRITE_DEBUG_LINE_COUNT; ++row) {
-            unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - NG_LINE_OFFSET) & NG_WRAP_MASK);
+            unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - lineOffset) & NG_WRAP_MASK);
             neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
 
             if (lineList->count >= sprlimit || lineList->count >= NG_SPRITES_PER_LINE_MAX) {
@@ -680,7 +682,12 @@ neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int co
             return 1;
         }
         if ((int)spriteIndex == currentSpriteIndex) {
-            selectNextHit = 1;
+            if (cycleFromCurrentSprite) {
+                selectNextHit = 1;
+            } else {
+                *outSpriteIndex = (int)spriteIndex;
+                return 1;
+            }
         }
     }
 
@@ -739,12 +746,18 @@ neogeo_sprite_debug_overlayBodyClick(e9ui_component_t *self, e9ui_context_t *ctx
     }
 
     int selectedSpriteIndex = -1;
+    int doubleClick = mouseEv->clicks >= 2 ? 1 : 0;
     if (neogeo_sprite_debug_findSpriteAtPoint(&neogeo_sprite_debugState.lastState,
                                               coordX,
                                               coordY,
                                               neogeo_sprite_list_getSelectedSprite(),
+                                              doubleClick ? 0 : 1,
                                               &selectedSpriteIndex)) {
-        neogeo_sprite_list_selectSprite(selectedSpriteIndex);
+        if (doubleClick) {
+            neogeo_sprite_list_selectSpriteSingleCheckbox(selectedSpriteIndex);
+        } else {
+            neogeo_sprite_list_selectSprite(selectedSpriteIndex);
+        }
     }
 }
 
@@ -1828,6 +1841,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     neogeo_sprite_debug_decoded_sprite_t decodedSprites[NG_MAX_SPRITES];
     uint8_t chainHasAnimBits[NG_MAX_SPRITES];
     neogeo_sprite_debug_line_sprites_t lineSprites[NEOGEO_SPRITE_DEBUG_LINE_COUNT];
+    int lineOffset = e9k_debug_geo_spriteVisibleLineOffset(st);
     memset(lineSprites, 0, sizeof(lineSprites));
     {
         unsigned xpos = 0;
@@ -1882,7 +1896,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
                 continue;
             }
             for (unsigned row = 0; row < totalH && row < (unsigned)NEOGEO_SPRITE_DEBUG_LINE_COUNT; ++row) {
-                unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - NG_LINE_OFFSET) & NG_WRAP_MASK);
+                unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - lineOffset) & NG_WRAP_MASK);
                 neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
 
                 if (lineList->count >= NG_SPRITES_PER_LINE_MAX) {
@@ -1903,7 +1917,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         for (unsigned lineSpriteIndex = 0; lineSpriteIndex < lineList->count; ++lineSpriteIndex) {
             unsigned i = (unsigned)lineList->indices[lineSpriteIndex];
             const neogeo_sprite_debug_decoded_sprite_t *sprite = &decodedSprites[i];
-            unsigned srow = (unsigned)(((line + NG_LINE_OFFSET) - (int)(NG_COORD_SIZE - (int)sprite->ypos)) & NG_WRAP_MASK);
+            unsigned srow = (unsigned)(((line + lineOffset) - (int)(NG_COORD_SIZE - (int)sprite->ypos)) & NG_WRAP_MASK);
 
             int w = sprite->width;
             if (w <= 0) {
@@ -1992,7 +2006,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         }
         for (int line = 0; line < NG_VISIBLE_H; ++line) {
             int viscount = (int)viscountLine[line];
-            int barLen = (int)((viscount * (unsigned)histW) / NG_SPRITES_PER_LINE_MAX);
+            int barLen = (int)((viscount * (unsigned)histW) / sprlimit);
             if (barLen > histW) {
                 barLen = histW;
             }

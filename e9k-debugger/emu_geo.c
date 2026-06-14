@@ -21,7 +21,6 @@
 
 #define GEO_SPRITE_COUNT 382u
 #define GEO_SPRITES_PER_LINE_MAX 96u
-#define GEO_SPRITE_LINE_OFFSET 32
 
 typedef struct  {
     SDL_Texture *texture;
@@ -36,8 +35,8 @@ typedef struct  {
     int grad_w;
     int last_screen_w;
     int last_screen_h;
+    int last_visible_h;
     int last_crop_t;
-    int last_crop_b;
     int last_crop_l;
     int last_crop_r;
     unsigned last_sprlimit;
@@ -339,11 +338,10 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
     int screen_w = (st->screen_w > 0) ? st->screen_w : 320;
     int screen_h = (st->screen_h > 0) ? st->screen_h : 224;
     int crop_t = st->crop_t;
-    int crop_b = st->crop_b;
     int crop_l = st->crop_l;
     int crop_r = st->crop_r;
     int vis_w = screen_w - crop_l - crop_r;
-    int vis_h = screen_h - crop_t - crop_b;
+    int vis_h = (st->visible_h > 0) ? st->visible_h : screen_h;
     if (vis_w <= 0 || vis_h <= 0) {
         return;
     }
@@ -357,7 +355,7 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
     }
 
     unsigned sprcount_line[256];
-    int lines = screen_h;
+    int lines = vis_h;
     if (lines > (int)(sizeof(sprcount_line) / sizeof(sprcount_line[0]))) {
         lines = (int)(sizeof(sprcount_line) / sizeof(sprcount_line[0]));
     }
@@ -379,8 +377,8 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
     }
     if (emu_geo_overlayCache.last_screen_w != screen_w ||
         emu_geo_overlayCache.last_screen_h != screen_h ||
+        emu_geo_overlayCache.last_visible_h != vis_h ||
         emu_geo_overlayCache.last_crop_t != crop_t ||
-        emu_geo_overlayCache.last_crop_b != crop_b ||
         emu_geo_overlayCache.last_crop_l != crop_l ||
         emu_geo_overlayCache.last_crop_r != crop_r ||
         emu_geo_overlayCache.last_sprlimit != sprlimit) {
@@ -482,7 +480,7 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
                 sprsize = (unsigned)(scb3w & 0x3f);
             }
             hshrink = (unsigned)((scb2w >> 8) & 0x0f);
-            int vline = line + GEO_SPRITE_LINE_OFFSET;
+            int vline = line + e9k_debug_geo_spriteVisibleLineOffset(st);
             unsigned srow = (unsigned)(((vline - (int)(0x200 - (int)ypos))) & 0x1ff);
             if ((sprsize == 0) || (srow >= (sprsize << 4))) {
                 continue;
@@ -504,7 +502,7 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
         if (bar_len <= 0) {
             continue;
         }
-        int vy = line - crop_t;
+        int vy = line;
         if (vy < 0 || vy >= vis_h) {
             continue;
         }
@@ -588,8 +586,8 @@ emu_e9k_spriteOverlayRender(SDL_Renderer *renderer, const SDL_Rect *dst, const e
     emu_geo_overlayCache.valid = 1;
     emu_geo_overlayCache.last_screen_w = screen_w;
     emu_geo_overlayCache.last_screen_h = screen_h;
+    emu_geo_overlayCache.last_visible_h = vis_h;
     emu_geo_overlayCache.last_crop_t = crop_t;
-    emu_geo_overlayCache.last_crop_b = crop_b;
     emu_geo_overlayCache.last_crop_l = crop_l;
     emu_geo_overlayCache.last_crop_r = crop_r;
     emu_geo_overlayCache.last_sprlimit = sprlimit;

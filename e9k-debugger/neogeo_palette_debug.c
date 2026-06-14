@@ -18,6 +18,7 @@
 #include "e9ui.h"
 #include "e9ui_scroll.h"
 #include "libretro_host.h"
+#include "runtime.h"
 
 #define NEOGEO_PALETTE_DEBUG_BANK_COUNT 2
 #define NEOGEO_PALETTE_DEBUG_PALETTES_PER_BANK 256
@@ -470,6 +471,7 @@ neogeo_palette_debug_setGrayscaleMask(const e9k_debug_palette_grayscale_mask_t *
     }
     neogeo_palette_debugState.cachedValid = 0;
     (void)libretro_host_neogeo_setPaletteGrayscaleMask(&neogeo_palette_debugState.grayscaleMask);
+    (void)runtime_refreshCurrentFrameFromPrevious();
 }
 
 static void

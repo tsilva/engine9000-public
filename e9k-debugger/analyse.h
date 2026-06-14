@@ -41,6 +41,8 @@ typedef struct {
     char *source;
     const char *topFile;
     int topLine;
+    char fallbackFile[PATH_MAX];
+    int fallbackLine;
 } analyse_resolved_entry;
 
 int

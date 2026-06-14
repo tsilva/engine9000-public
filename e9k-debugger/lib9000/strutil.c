@@ -7,9 +7,35 @@
  */
 
 #include "strutil.h"
-#include "debugger.h"
 
 #include <string.h>
+
+static char
+strutil_preferredPathSeparator(void)
+{
+#ifdef _WIN32
+    return '\\';
+#else
+    return '/';
+#endif
+}
+
+static void
+strutil_normalizePathSeparators(char *path)
+{
+#ifdef _WIN32
+    char from = '/';
+    char to = '\\';
+#else
+    char from = '\\';
+    char to = '/';
+#endif
+    for (char *p = path; *p; p++) {
+        if (*p == from) {
+            *p = to;
+        }
+    }
+}
 
 void
 strutil_strlcpy(char *dst, size_t dstCap, const char *src)
@@ -107,12 +133,12 @@ strutil_pathJoinTrunc(char *out, size_t outCap, const char *dir, const char *lea
     out[0] = '\0';
     if (!dir || !dir[0]) {
         strutil_strlcpy(out, outCap, leaf);
-        debugger_platform_normalizePathSeparators(out);
+        strutil_normalizePathSeparators(out);
         return;
     }
     if (!leaf || !leaf[0]) {
         strutil_strlcpy(out, outCap, dir);
-        debugger_platform_normalizePathSeparators(out);
+        strutil_normalizePathSeparators(out);
         return;
     }
     size_t dirLen = strlen(dir);
@@ -124,10 +150,10 @@ strutil_pathJoinTrunc(char *out, size_t outCap, const char *dir, const char *lea
         }
     }
     if (needSep) {
-        char sep[2] = { debugger_platform_preferredPathSeparator(), '\0' };
+        char sep[2] = { strutil_preferredPathSeparator(), '\0' };
         strutil_join3Trunc(out, outCap, dir, sep, leaf);
     } else {
         strutil_join2Trunc(out, outCap, dir, leaf);
     }
-    debugger_platform_normalizePathSeparators(out);
+    strutil_normalizePathSeparators(out);
 }

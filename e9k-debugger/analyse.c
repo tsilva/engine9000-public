@@ -19,6 +19,7 @@
 #include "debugger.h"
 #include "base_map.h"
 #include "file.h"
+#include "source_pane_fileline.h"
 #include "strutil.h"
 
 #define ANALYSE_MAP_INITIAL_CAP 1024
@@ -74,6 +75,10 @@ static void
 analyse_locationSetFallback(analyse_location_entry *entry, unsigned int pc);
 static void
 analyse_locationSetFromResolved(analyse_location_entry *entry, const analyse_resolved_entry *resolved, unsigned int pc);
+static int
+analyse_resolvedEntryHasSourceLocation(const analyse_resolved_entry *entry);
+static int
+analyse_applyFilelineFallbacks(const char *elfPath, analyse_resolved_entry *entries, size_t count);
 
 static unsigned int
 analyse_adjustToolchainPc(unsigned int pc)
@@ -635,7 +640,45 @@ analyse_findLineEntry(analyse_line_entry *lines, size_t count, const char *file,
 static int
 analyse_resolvedEntryValid(const analyse_resolved_entry *entry)
 {
-    return entry && entry->frames && entry->frameCount > 0 && entry->topLine > 0 && entry->topFile && *entry->topFile && strcmp(entry->topFile, "??") != 0;
+    return entry && entry->topLine > 0 && entry->topFile && *entry->topFile && strcmp(entry->topFile, "??") != 0;
+}
+
+static int
+analyse_resolvedEntryHasSourceLocation(const analyse_resolved_entry *entry)
+{
+    if (!entry || !entry->frames || entry->frameCount == 0) {
+        return 0;
+    }
+    for (size_t i = 0; i < entry->frameCount; ++i) {
+        const analyse_frame *frame = &entry->frames[i];
+        if (frame->file && frame->line > 0 && strcmp(frame->file, "??") != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+analyse_applyFilelineFallbacks(const char *elfPath, analyse_resolved_entry *entries, size_t count)
+{
+    if (!elfPath || !*elfPath || !entries || count == 0) {
+        return 0;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        analyse_resolved_entry *entry = &entries[i];
+        entry->fallbackFile[0] = '\0';
+        entry->fallbackLine = 0;
+        if (analyse_resolvedEntryHasSourceLocation(entry)) {
+            continue;
+        }
+        unsigned int addr = analyse_parseHex(entry->address);
+        source_pane_fileline_resolveAddress(elfPath,
+                                            addr,
+                                            entry->fallbackFile,
+                                            sizeof(entry->fallbackFile),
+                                            &entry->fallbackLine);
+    }
+    return 1;
 }
 
 static void
@@ -728,6 +771,7 @@ analyse_resolveLocations(const unsigned int *pcs, size_t count)
                 snprintf(resolved[i].address, sizeof(resolved[i].address), "0x%06X", adjusted);
             }
             if (analyse_platformResolveFramesBatch(elfPath, resolved, count)) {
+                (void)analyse_applyFilelineFallbacks(elfPath, resolved, count);
                 didResolve = 1;
             }
         }
@@ -838,6 +882,26 @@ analyse_locationSetFromResolved(analyse_location_entry *entry, const analyse_res
             }
             return;
         }
+    }
+    if (resolved && resolved->fallbackFile[0] && resolved->fallbackLine > 0) {
+        const char *slash = strrchr(resolved->fallbackFile, '/');
+        const char *base = slash ? slash + 1 : resolved->fallbackFile;
+        if (!base || !*base) {
+            base = resolved->fallbackFile;
+        }
+        snprintf(entry->text, ANALYSE_LOCATION_TEXT_CAP, "%s:%d", base, resolved->fallbackLine);
+        strutil_strlcpy(entry->file, PATH_MAX, resolved->fallbackFile);
+        entry->line = resolved->fallbackLine;
+        char *source = analyse_readSourceLine(debugger.libretro.sourceDir,
+                                              resolved->fallbackFile,
+                                              resolved->fallbackLine);
+        if (source) {
+            strutil_strlcpy(entry->source, ANALYSE_SOURCE_TEXT_CAP, source);
+            alloc_free(source);
+        } else {
+            entry->source[0] = '\0';
+        }
+        return;
     }
     analyse_locationSetFallback(entry, pc);
 }
@@ -1053,6 +1117,7 @@ analyse_writeFinalJson(const char *jsonPath)
         ok = 0;
         goto cleanup;
     }
+    (void)analyse_applyFilelineFallbacks(elfPath, entries, resolvedCount);
     for (size_t i = 0; i < resolvedCount; ++i) {
         analyse_resolved_entry *entry = &entries[i];
         entry->chain = analyse_buildFunctionChain(entry->frames, entry->frameCount);
@@ -1078,6 +1143,12 @@ analyse_writeFinalJson(const char *jsonPath)
             }
             entry->topFile = best->file ? best->file : "";
             entry->topLine = best->line;
+        }
+        if ((!entry->topFile || !entry->topFile[0] || entry->topLine <= 0 ||
+             strcmp(entry->topFile, "??") == 0) &&
+            entry->fallbackFile[0] && entry->fallbackLine > 0) {
+            entry->topFile = entry->fallbackFile;
+            entry->topLine = entry->fallbackLine;
         }
         entry->source = analyse_readSourceLine(srcBase, entry->topFile, entry->topLine);
     }
