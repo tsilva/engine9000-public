@@ -20,6 +20,7 @@
 #include "core_options.h"
 #include "debugger.h"
 #include "config.h"
+#include "cli.h"
 #include "hotkeys.h"
 #include "list.h"
 #include "system_badge.h"
@@ -754,6 +755,7 @@ settings_save(void)
     settings_applyToolbarMode();
     settings_romRecentsAddFromSettingsSave(selectedTarget);
     config_saveConfig();
+    cli_resetConfigOverrides();
     if (needsRestart) {
         debugger.restartRequested = 1;
     }

@@ -154,6 +154,51 @@ debugger_platform_pathJoin(char *out, size_t cap, const char *dir, const char *n
 }
 
 int
+debugger_platform_pathIsAbsolute(const char *path)
+{
+    if (!path || !path[0]) {
+        return 0;
+    }
+    if (path[0] == '\\' || path[0] == '/') {
+        return 1;
+    }
+    if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+        path[1] == ':' &&
+        (path[2] == '\\' || path[2] == '/')) {
+        return 1;
+    }
+    return 0;
+}
+
+int
+debugger_platform_expandHomePath(char *out, size_t cap, const char *path)
+{
+    char home[PATH_MAX];
+
+    if (!out || cap == 0) {
+        return 0;
+    }
+    if (!path || !path[0]) {
+        out[0] = '\0';
+        return 0;
+    }
+    if (path[0] != '~' || (path[1] != '\\' && path[1] != '/' && path[1] != '\0')) {
+        strutil_strlcpy(out, cap, path);
+        debugger_platform_normalizePathSeparators(out);
+        return 1;
+    }
+    home[0] = '\0';
+    if (!debugger_platform_getHomeDir(home, sizeof(home)) || !home[0]) {
+        strutil_strlcpy(out, cap, path);
+        debugger_platform_normalizePathSeparators(out);
+        return 0;
+    }
+    strutil_join2Trunc(out, cap, home, path + 1);
+    debugger_platform_normalizePathSeparators(out);
+    return 1;
+}
+
+int
 debugger_platform_scanFolder(const char *folder, int (*cb)(const char *path, void *user), void *user)
 {
     if (!folder || !*folder || !cb) {

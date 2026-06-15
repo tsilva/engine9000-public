@@ -104,10 +104,24 @@ static profile_checkpoints_table_values_t
 profile_checkpoints_entryTableValues(const e9k_debug_checkpoint_t *entry);
 static void
 profile_checkpoints_drawSwatchCheck(e9ui_context_t *ctx, SDL_Rect swatch);
-static int
-profile_checkpoints_scanlineToOverlayY(const SDL_Rect *dst, int64_t line, uint64_t videoStartScanline, uint64_t videoScanlineCount);
 static void
-profile_checkpoints_drawScanlineSegment(e9ui_context_t *ctx, const SDL_Rect *dst, int64_t startLine, int64_t endLine, uint64_t videoStartScanline, uint64_t videoScanlineCount);
+profile_checkpoints_buildOverlayLines(const e9k_debug_checkpoint_t *entries,
+                                      size_t entryCount,
+                                      uint64_t scanlineCount,
+                                      int scanlineScale,
+                                      int64_t *checkpointLines);
+static int
+profile_checkpoints_scanlineToOverlayY(const SDL_Rect *dst,
+                                       int64_t line,
+                                       uint64_t videoStartScanline,
+                                       uint64_t videoScanlineCount);
+static void
+profile_checkpoints_drawScanlineSegment(e9ui_context_t *ctx,
+                                        const SDL_Rect *dst,
+                                        int64_t startLine,
+                                        int64_t endLine,
+                                        uint64_t videoStartScanline,
+                                        uint64_t videoScanlineCount);
 
 static const char *
 profile_checkpoints_entryDisplayName(const e9k_debug_checkpoint_t *entries, size_t entryCount, size_t index, size_t displayIndex, char *fallback, size_t fallbackCap)
@@ -223,6 +237,46 @@ profile_checkpoints_drawSwatchCheck(e9ui_context_t *ctx, SDL_Rect swatch)
     if (outline.w > 0 && outline.h > 0) {
         SDL_SetRenderDrawColor(ctx->renderer, 120, 220, 120, 255);
         SDL_RenderDrawRect(ctx->renderer, &outline);
+    }
+}
+
+static void
+profile_checkpoints_buildOverlayLines(const e9k_debug_checkpoint_t *entries,
+                                      size_t entryCount,
+                                      uint64_t scanlineCount,
+                                      int scanlineScale,
+                                      int64_t *checkpointLines)
+{
+    uint64_t backwardStepCount = 0;
+    uint64_t previousCheckpoint = 0;
+    int hasPreviousCheckpoint = 0;
+    int initialWrapPending = 0;
+    size_t firstCheckpointIndex = 0;
+    for (size_t i = 0; i < entryCount; ++i) {
+        checkpointLines[i] = 0;
+        if (entries[i].scanlineCount == 0) {
+            continue;
+        }
+        uint64_t checkpoint = entries[i].scanlineLast % scanlineCount;
+        if (!hasPreviousCheckpoint) {
+            initialWrapPending = scanlineScale > 1 && checkpoint >= ((scanlineCount * 3) / 4);
+            firstCheckpointIndex = i;
+        } else if (checkpoint < previousCheckpoint) {
+            if (initialWrapPending) {
+                int64_t initialWrapOffset = (int64_t)scanlineCount * (int64_t)(scanlineScale - 1);
+                for (size_t j = firstCheckpointIndex; j < i; ++j) {
+                    if (entries[j].scanlineCount != 0) {
+                        checkpointLines[j] += initialWrapOffset;
+                    }
+                }
+                initialWrapPending = 0;
+            } else if (scanlineScale > 1) {
+                backwardStepCount++;
+            }
+        }
+        checkpointLines[i] = ((int64_t)scanlineCount * (int64_t)backwardStepCount) + (int64_t)checkpoint;
+        previousCheckpoint = checkpoint;
+        hasPreviousCheckpoint = 1;
     }
 }
 
@@ -1012,37 +1066,11 @@ profile_checkpoints_renderScanlineOverlay(e9ui_context_t *ctx,
     }
 
     int64_t checkpointLines[E9K_CHECKPOINT_COUNT];
-    uint64_t backwardStepCount = 0;
-    uint64_t previousCheckpoint = 0;
-    int hasPreviousCheckpoint = 0;
-    int initialWrapPending = 0;
-    size_t firstCheckpointIndex = 0;
-    for (size_t i = 0; i < entryCount; ++i) {
-        checkpointLines[i] = 0;
-        if (entries[i].scanlineCount == 0) {
-            continue;
-        }
-        uint64_t checkpoint = entries[i].scanlineLast % scanlineCount;
-        if (!hasPreviousCheckpoint) {
-            initialWrapPending = profile_checkpoints_scanlineScale > 1 && checkpoint >= ((scanlineCount * 3) / 4);
-            firstCheckpointIndex = i;
-        } else if (checkpoint < previousCheckpoint) {
-            if (initialWrapPending) {
-                int64_t initialWrapOffset = (int64_t)scanlineCount * (int64_t)(profile_checkpoints_scanlineScale - 1);
-                for (size_t j = firstCheckpointIndex; j < i; ++j) {
-                    if (entries[j].scanlineCount != 0) {
-                        checkpointLines[j] += initialWrapOffset;
-                    }
-                }
-                initialWrapPending = 0;
-            } else if (profile_checkpoints_scanlineScale > 1) {
-                backwardStepCount++;
-            }
-        }
-        checkpointLines[i] = ((int64_t)scanlineCount * (int64_t)backwardStepCount) + (int64_t)checkpoint;
-        previousCheckpoint = checkpoint;
-        hasPreviousCheckpoint = 1;
-    }
+    profile_checkpoints_buildOverlayLines(entries,
+                                          entryCount,
+                                          scanlineCount,
+                                          profile_checkpoints_scanlineScale,
+                                          checkpointLines);
 
     SDL_BlendMode prevBlend = SDL_BLENDMODE_BLEND;
     SDL_GetRenderDrawBlendMode(ctx->renderer, &prevBlend);
