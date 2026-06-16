@@ -30,27 +30,15 @@
 #include "e9ui_textbox.h"
 #include "e9ui_vspacer.h"
 #include "libretro_host.h"
+#include "neogeo_sprite_decode.h"
 #include "runtime.h"
 
-#define NEOGEO_SPRITE_LIST_MAX_SPRITES 382
-#define NEOGEO_SPRITE_LIST_SCB2_WORD_OFFSET 0x8000u
-#define NEOGEO_SPRITE_LIST_SCB3_WORD_OFFSET 0x8200u
-#define NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET 0x8400u
-#define NEOGEO_SPRITE_LIST_SCB3_CHAIN_FLAG 0x40u
-#define NEOGEO_SPRITE_LIST_SCB3_ROW_MASK 0x3fu
-#define NEOGEO_SPRITE_LIST_SCB3_YPOS_MASK 0x01ffu
-#define NEOGEO_SPRITE_LIST_SCB3_YPOS_SHIFT 7u
-#define NEOGEO_SPRITE_LIST_SCB4_XPOS_SHIFT 7u
-#define NEOGEO_SPRITE_LIST_SCB2_VSHRINK_MASK 0x00ffu
-#define NEOGEO_SPRITE_LIST_SCB2_HSHRINK_MASK 0x0fu
-#define NEOGEO_SPRITE_LIST_SCB2_HSHRINK_SHIFT 8u
+#define NEOGEO_SPRITE_LIST_MAX_SPRITES NEOGEO_SPRITE_DECODE_MAX_SPRITES
 #define NEOGEO_SPRITE_LIST_SPRITE_VRAM_WORDS_PER_SPRITE 64u
 #define NEOGEO_SPRITE_LIST_SPRITE_TILE_ODD_WORD_OFFSET 1u
-#define NEOGEO_SPRITE_LIST_SPRITE_PALETTE_SHIFT 4u
-#define NEOGEO_SPRITE_LIST_SPRITE_PALETTE_MASK 0x00ffu
 #define NEOGEO_SPRITE_LIST_VISIBLE_W 320
 #define NEOGEO_SPRITE_LIST_VISIBLE_H 224
-#define NEOGEO_SPRITE_LIST_WRAP_MASK 0x1ffu
+#define NEOGEO_SPRITE_LIST_WRAP_MASK NEOGEO_SPRITE_DECODE_WRAP_MASK
 #define NEOGEO_SPRITE_LIST_FILTER_TEXT_MAX 128
 #define NEOGEO_SPRITE_LIST_FILTER_COUNT 11
 #define NEOGEO_SPRITE_LIST_PAD 10
@@ -270,25 +258,6 @@ neogeo_sprite_list_rowCheckboxVisible(const neogeo_sprite_list_state_t *ui, int 
 static void
 neogeo_sprite_list_applySelection(neogeo_sprite_list_state_t *ui);
 
-static const uint8_t neogeo_sprite_list_lutHshrink[0x10][0x10] = {
-    { 0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0 },
-    { 0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0 },
-    { 0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-    { 0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-    { 0,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0 },
-    { 0,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0 },
-    { 0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-    { 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-    { 1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0 },
-    { 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0 },
-    { 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1 },
-    { 1,0,1,1,1,0,1,1,1,1,1,0,1,0,1,1 },
-    { 1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-    { 1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-    { 1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1 },
-    { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 },
-};
-
 static e9ui_window_backend_t
 neogeo_sprite_list_windowBackend(void)
 {
@@ -500,37 +469,6 @@ neogeo_sprite_list_parseInt(const char *value, int *out)
     return 1;
 }
 
-static unsigned
-neogeo_sprite_list_countShrinkWidth(unsigned hval)
-{
-    unsigned h = hval & NEOGEO_SPRITE_LIST_SCB2_HSHRINK_MASK;
-    unsigned width = 0u;
-    for (unsigned p = 0u; p < 16u; ++p) {
-        width += (unsigned)neogeo_sprite_list_lutHshrink[h][p];
-    }
-    return width;
-}
-
-static int
-neogeo_sprite_list_spriteHasAnimBits(const uint16_t *vram, size_t vramWords, unsigned spriteIndex, unsigned rows)
-{
-    unsigned maxRows = rows;
-    if (maxRows > 32u) {
-        maxRows = 32u;
-    }
-    for (unsigned row = 0u; row < maxRows; ++row) {
-        size_t oddWordOffset = (size_t)spriteIndex * NEOGEO_SPRITE_LIST_SPRITE_VRAM_WORDS_PER_SPRITE +
-            (size_t)row * 2u + NEOGEO_SPRITE_LIST_SPRITE_TILE_ODD_WORD_OFFSET;
-        if (oddWordOffset >= vramWords) {
-            break;
-        }
-        if (vram[oddWordOffset] & 0x000cu) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static int
 neogeo_sprite_list_spriteIsVisible(const neogeo_sprite_list_row_t *row, int visibleH, int lineOffset)
 {
@@ -559,61 +497,36 @@ neogeo_sprite_list_decodeRows(neogeo_sprite_list_state_t *ui, const e9k_debug_sp
         return 0;
     }
     const uint16_t *vram = st->vram;
-    if (st->vram_words <= NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET + NEOGEO_SPRITE_LIST_MAX_SPRITES) {
-        return 0;
-    }
-
-    const uint16_t *scb2 = vram + NEOGEO_SPRITE_LIST_SCB2_WORD_OFFSET;
-    const uint16_t *scb3 = vram + NEOGEO_SPRITE_LIST_SCB3_WORD_OFFSET;
-    const uint16_t *scb4 = vram + NEOGEO_SPRITE_LIST_SCB4_WORD_OFFSET;
-
-    unsigned xpos = 0u;
-    unsigned ypos = 0u;
-    unsigned rows = 0u;
-    unsigned hshrink = NEOGEO_SPRITE_LIST_SCB2_HSHRINK_MASK;
-    unsigned vshrink = NEOGEO_SPRITE_LIST_SCB2_VSHRINK_MASK;
-    unsigned rootIndex = 0u;
-    unsigned chainOffset = 0u;
+    neogeo_sprite_decode_sprite_t decodedSprites[NEOGEO_SPRITE_LIST_MAX_SPRITES];
     int screenH = st->screen_h > 0 ? st->screen_h : NEOGEO_SPRITE_LIST_VISIBLE_H;
     int visibleH = st->visible_h > 0 ? st->visible_h : screenH;
     int lineOffset = e9k_debug_geo_spriteVisibleLineOffset(st);
 
+    if (!neogeo_sprite_decode_decodeSprites(st, decodedSprites, NULL, NULL, 0u)) {
+        return 0;
+    }
+
     memset(ui->rows, 0, sizeof(ui->rows));
     for (unsigned i = 0u; i < NEOGEO_SPRITE_LIST_MAX_SPRITES; ++i) {
-        uint16_t scb2w = scb2[i];
-        uint16_t scb3w = scb3[i];
-        uint16_t scb4w = scb4[i];
-        int sticky = (i != 0u && (scb3w & NEOGEO_SPRITE_LIST_SCB3_CHAIN_FLAG)) ? 1 : 0;
-        if (sticky) {
-            xpos = (unsigned)((xpos + (hshrink + 1u)) & NEOGEO_SPRITE_LIST_WRAP_MASK);
-            chainOffset++;
-        } else {
-            rootIndex = i;
-            chainOffset = 0u;
-            xpos = (unsigned)((scb4w >> NEOGEO_SPRITE_LIST_SCB4_XPOS_SHIFT) & NEOGEO_SPRITE_LIST_WRAP_MASK);
-            ypos = (unsigned)((scb3w >> NEOGEO_SPRITE_LIST_SCB3_YPOS_SHIFT) & NEOGEO_SPRITE_LIST_SCB3_YPOS_MASK);
-            rows = (unsigned)(scb3w & NEOGEO_SPRITE_LIST_SCB3_ROW_MASK);
-            vshrink = (unsigned)(scb2w & NEOGEO_SPRITE_LIST_SCB2_VSHRINK_MASK);
-        }
-        hshrink = (unsigned)((scb2w >> NEOGEO_SPRITE_LIST_SCB2_HSHRINK_SHIFT) &
-                             NEOGEO_SPRITE_LIST_SCB2_HSHRINK_MASK);
+        const neogeo_sprite_decode_sprite_t *decoded = &decodedSprites[i];
 
         neogeo_sprite_list_row_t *row = &ui->rows[i];
         row->index = i;
-        row->rootIndex = rootIndex;
-        row->chainOffset = chainOffset;
-        row->xpos = xpos;
-        row->ypos = ypos;
-        row->rows = rows;
-        row->pixelHeight = rows << 4;
-        row->width = neogeo_sprite_list_countShrinkWidth(hshrink);
-        row->hshrink = hshrink;
-        row->vshrink = vshrink;
-        row->scb2 = scb2w;
-        row->scb3 = scb3w;
-        row->scb4 = scb4w;
-        row->sticky = sticky;
-        row->active = (rows != 0u && ypos != (unsigned)screenH) ? 1 : 0;
+        row->rootIndex = decoded->chainRootIndex;
+        row->chainOffset = decoded->chainOffset;
+        row->xpos = decoded->xpos;
+        row->ypos = decoded->ypos;
+        row->rows = decoded->sprsize;
+        row->pixelHeight = decoded->sprsize << 4;
+        row->width = (unsigned)decoded->width;
+        row->hshrink = decoded->hshrink;
+        row->vshrink = decoded->vshrink;
+        row->paletteBank = decoded->paletteBank;
+        row->scb2 = decoded->scb2;
+        row->scb3 = decoded->scb3;
+        row->scb4 = decoded->scb4;
+        row->sticky = decoded->chainOffset != 0u ? 1 : 0;
+        row->active = (decoded->sprsize != 0u && decoded->ypos != (unsigned)screenH) ? 1 : 0;
 
         size_t evenWordOffset = (size_t)i * NEOGEO_SPRITE_LIST_SPRITE_VRAM_WORDS_PER_SPRITE;
         size_t oddWordOffset = evenWordOffset + NEOGEO_SPRITE_LIST_SPRITE_TILE_ODD_WORD_OFFSET;
@@ -622,10 +535,8 @@ neogeo_sprite_list_decodeRows(neogeo_sprite_list_state_t *ui, const e9k_debug_sp
         }
         if (oddWordOffset < st->vram_words) {
             row->scb1Attr = (unsigned)vram[oddWordOffset];
-            row->paletteBank = (unsigned)((vram[oddWordOffset] >> NEOGEO_SPRITE_LIST_SPRITE_PALETTE_SHIFT) &
-                                          NEOGEO_SPRITE_LIST_SPRITE_PALETTE_MASK);
         }
-        row->hasAnimBits = neogeo_sprite_list_spriteHasAnimBits(vram, st->vram_words, i, rows);
+        row->hasAnimBits = decoded->hasAnimBits;
         row->visible = neogeo_sprite_list_spriteIsVisible(row, visibleH, lineOffset);
     }
 

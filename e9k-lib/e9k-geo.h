@@ -57,6 +57,8 @@ typedef struct geo_debug_sprite_state {
     int crop_b;
     int crop_l;
     int crop_r;
+    unsigned autoAnimationCounter;
+    unsigned autoAnimationDisabled;
 } e9k_debug_sprite_state_t;
 
 #define E9K_DEBUG_GEO_SPRITE_SELECTION_MASK_WORDS 12

@@ -641,6 +641,18 @@ void geo_lspc_mode_wr(uint16_t data) {
     lspc.aa_disable = data & 0x08;
 }
 
+unsigned
+geo_lspc_getAutoAnimationCounter(void)
+{
+    return (unsigned)(lspc.aa_counter & 0x07u);
+}
+
+unsigned
+geo_lspc_getAutoAnimationDisabled(void)
+{
+    return lspc.aa_disable ? 1u : 0u;
+}
+
 // Write to REG_SHADOW
 void geo_lspc_shadow_wr(unsigned s) {
     lspc.shadow = s;

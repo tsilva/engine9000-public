@@ -117,6 +117,10 @@ void geo_lspc_vrammod_wr(int16_t);
 
 uint16_t geo_lspc_mode_rd(void);
 void geo_lspc_mode_wr(uint16_t);
+unsigned
+geo_lspc_getAutoAnimationCounter(void);
+unsigned
+geo_lspc_getAutoAnimationDisabled(void);
 
 void geo_lspc_init(void);
 

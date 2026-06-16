@@ -569,6 +569,8 @@ E9K_DEBUG_EXPORT size_t e9k_debug_neogeo_get_sprite_state(e9k_debug_sprite_state
     out->crop_b = video_crop_b;
     out->crop_l = video_crop_l;
     out->crop_r = video_crop_r;
+    out->autoAnimationCounter = geo_lspc_getAutoAnimationCounter();
+    out->autoAnimationDisabled = geo_lspc_getAutoAnimationDisabled();
     return sizeof(*out);
 }
 

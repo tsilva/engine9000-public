@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "neogeo_sprite_debug.h"
+#include "neogeo_sprite_3d.h"
 #include "neogeo_sprite_list.h"
 #include "alloc.h"
 #include "config.h"
@@ -26,22 +27,9 @@
 #include "e9ui_stack.h"
 #include "e9ui_theme.h"
 #include "libretro_host.h"
+#include "neogeo_sprite_decode.h"
 #include "runtime.h"
 
-#define NG_COORD_SIZE 512
-#define NG_WRAP_MASK 0x1FF
-#define NG_VISIBLE_X0 0
-#define NG_VISIBLE_Y0 0
-#define NG_VISIBLE_W 320
-#define NG_VISIBLE_H 224
-#define NG_COORD_MIN_X (-192)
-#define NG_COORD_MIN_Y (-272)
-#define NG_COORD_MAX_X 511
-#define NG_COORD_MAX_Y 511
-#define NG_COORD_W (NG_COORD_MAX_X - NG_COORD_MIN_X + 1)
-#define NG_COORD_H (NG_COORD_MAX_Y - NG_COORD_MIN_Y + 1)
-#define NG_COORD_OFFSET_X (-NG_COORD_MIN_X)
-#define NG_COORD_OFFSET_Y (-NG_COORD_MIN_Y)
 #define DBG_HIST_WIDTH 160
 #define DBG_GAP 8
 #define NG_FIX_MAP_BASE 0x7000u
@@ -52,8 +40,6 @@
 #define NG_FIX_COLS 40
 #define NG_FIX_ROWS 32
 #define NG_FIX_PANEL_PAD 8
-#define NG_SPRITES_PER_LINE_MAX 96
-#define NG_MAX_SPRITES 382
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 224
 #define NEOGEO_SPRITE_DEBUG_SCB2_WORD_OFFSET 0x8000u
@@ -63,45 +49,15 @@
 #define NEOGEO_SPRITE_DEBUG_SCB3_ROW_MASK 0x3fu
 #define NEOGEO_SPRITE_DEBUG_SCB3_YPOS_MASK 0x01ffu
 #define NEOGEO_SPRITE_DEBUG_SCB3_YPOS_SHIFT 7u
-#define NEOGEO_SPRITE_DEBUG_SCB4_XPOS_SHIFT 7u
-#define NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK 0x00ffu
-#define NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK 0x0fu
-#define NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_SHIFT 8u
-#define NEOGEO_SPRITE_DEBUG_SPRITE_VRAM_WORDS_PER_SPRITE 64u
-#define NEOGEO_SPRITE_DEBUG_SPRITE_TILE_ODD_WORD_OFFSET 1u
-#define NEOGEO_SPRITE_DEBUG_SPRITE_ANIM_MASK 0x0cu
-#define NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_SHIFT 4u
-#define NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_MASK 0x00ffu
 #define NEOGEO_SPRITE_DEBUG_CONTROL_GAP 8
-#define NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT 4
-#define NEOGEO_SPRITE_DEBUG_LINE_COUNT NG_COORD_SIZE
+#define NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT neogeo_sprite_3d_view_mode_count
+#define NEOGEO_SPRITE_DEBUG_LINE_COUNT NEOGEO_SPRITE_DECODE_LINE_COUNT
 #define NEOGEO_SPRITE_DEBUG_ZOOM_MIN_PERCENT 100
 #define NEOGEO_SPRITE_DEBUG_ZOOM_MAX_PERCENT 400
 #define NEOGEO_SPRITE_DEBUG_ZOOM_STEP_PERCENT 25
 
-typedef struct neogeo_sprite_debug_decoded_sprite {
-    unsigned xpos;
-    unsigned ypos;
-    unsigned sprsize;
-    unsigned hshrink;
-    unsigned vshrink;
-    unsigned chainRootIndex;
-    unsigned paletteBank;
-    int width;
-    int hasAnimBits;
-} neogeo_sprite_debug_decoded_sprite_t;
-
-typedef struct neogeo_sprite_debug_line_sprites {
-    uint16_t indices[NG_SPRITES_PER_LINE_MAX];
-    uint8_t count;
-} neogeo_sprite_debug_line_sprites_t;
-
-typedef enum neogeo_sprite_debug_view_mode {
-    neogeo_sprite_debug_view_mode_normal = 0,
-    neogeo_sprite_debug_view_mode_shrink = 1,
-    neogeo_sprite_debug_view_mode_palette = 2,
-    neogeo_sprite_debug_view_mode_chain = 3
-} neogeo_sprite_debug_view_mode_t;
+typedef neogeo_sprite_decode_sprite_t neogeo_sprite_debug_decoded_sprite_t;
+typedef neogeo_sprite_decode_line_sprites_t neogeo_sprite_debug_line_sprites_t;
 
 typedef struct neogeo_sprite_debug_zoom_binding {
     int deltaPercent;
@@ -128,7 +84,7 @@ typedef struct neogeo_sprite_debug_state {
     int cachedValid;
     e9k_debug_sprite_state_t lastState;
     int hasLastState;
-    neogeo_sprite_debug_view_mode_t viewMode;
+    neogeo_sprite_3d_view_mode_t viewMode;
     e9k_debug_geo_fix_layer_mode_t fixLayerMode;
     int selectedSpriteIndex;
     int selectedChainRootIndex;
@@ -154,29 +110,6 @@ static neogeo_sprite_debug_state_t neogeo_sprite_debugState = {
 };
 
 static int neogeo_sprite_debug_histogramEnabled = 1;
-
-/* neogeo_sprite_debug_lut_hshrink (translated) from Mame neogeo_spr.cpp - horizontal zoom table - verified on real hardware
-   license:BSD-3-Clause
-   copyright-holders:Bryan McPhail,Ernesto Corvi,Andrew Prime,Zsolt Vasvari */
-
-static const uint8_t neogeo_sprite_debug_lut_hshrink[0x10][0x10] = {
-    { 0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0 },
-    { 0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0 },
-    { 0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-    { 0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-    { 0,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0 },
-    { 0,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0 },
-    { 0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-    { 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-    { 1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0 },
-    { 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0 },
-    { 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1 },
-    { 1,0,1,1,1,0,1,1,1,1,1,0,1,0,1,1 },
-    { 1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-    { 1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-    { 1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1 },
-    { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 },
-};
 
 static void
 neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int presentFrame);
@@ -218,6 +151,9 @@ neogeo_sprite_debug_fixMiniMapPointForMouse(const e9ui_rect_t *bounds, int mouse
 static void
 neogeo_sprite_debug_cycleFixLayerMode(void);
 
+static e9ui_window_backend_t
+neogeo_sprite_debug_windowBackend(void);
+
 static int
 neogeo_sprite_debug_isValidFixLayerMode(e9k_debug_geo_fix_layer_mode_t mode);
 
@@ -232,9 +168,6 @@ neogeo_sprite_debug_color(Uint8 r, Uint8 g, Uint8 b);
 
 static uint32_t
 neogeo_sprite_debug_grayscaleColor(uint32_t color);
-
-static unsigned
-neogeo_sprite_debug_countShrinkWidth(unsigned hval);
 
 static uint32_t
 neogeo_sprite_debug_hashWords(const uint16_t *words, size_t count);
@@ -285,20 +218,18 @@ neogeo_sprite_debug_paletteColor(unsigned paletteBank);
 static uint32_t
 neogeo_sprite_debug_chainColor(unsigned chainRootIndex);
 
-static int
-neogeo_sprite_debug_spriteHasAnimBits(const uint16_t *vram, size_t vramWords,
-                                      unsigned spriteIndex, unsigned sprsize);
+static uint32_t
+neogeo_sprite_debug_shrinkRgbColor(unsigned hshrink, unsigned vshrink);
 
 static uint32_t
 neogeo_sprite_debug_shrinkRgbColorFromFractions(float horizontalShrink, float verticalShrink);
 
 static int
-neogeo_sprite_debug_isValidViewMode(neogeo_sprite_debug_view_mode_t mode);
+neogeo_sprite_debug_isValidViewMode(neogeo_sprite_3d_view_mode_t mode);
 
 static void
 neogeo_sprite_debug_drawShrinkLegend(uint32_t *pixels, int pitch, int extW, int extH,
                           int x, int y, int w, int h);
-
 
 static e9ui_window_backend_t
 neogeo_sprite_debug_windowBackend(void)
@@ -340,15 +271,15 @@ static int
 neogeo_sprite_debug_baseContentWidth(void)
 {
     if (neogeo_sprite_debug_histogramEnabled) {
-        return NG_COORD_W + DBG_GAP + DBG_HIST_WIDTH;
+        return NEOGEO_SPRITE_DECODE_COORD_W + DBG_GAP + DBG_HIST_WIDTH;
     }
-    return NG_COORD_W;
+    return NEOGEO_SPRITE_DECODE_COORD_W;
 }
 
 static int
 neogeo_sprite_debug_baseContentHeight(void)
 {
-    return NG_COORD_H;
+    return NEOGEO_SPRITE_DECODE_COORD_H;
 }
 
 static void
@@ -577,7 +508,7 @@ neogeo_sprite_debug_texturePointForMouse(const e9ui_rect_t *bounds, int mouseX, 
     if (!neogeo_sprite_debug_contentPointForMouse(bounds, mouseX, mouseY, &textureX, &textureY)) {
         return 0;
     }
-    if (textureX < 0 || textureY < 0 || textureX >= NG_COORD_W || textureY >= NG_COORD_H) {
+    if (textureX < 0 || textureY < 0 || textureX >= NEOGEO_SPRITE_DECODE_COORD_W || textureY >= NEOGEO_SPRITE_DECODE_COORD_H) {
         return 0;
     }
 
@@ -594,70 +525,17 @@ neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int co
     if (!st || !st->vram || !outSpriteIndex) {
         return 0;
     }
-    if (st->vram_words <= (NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET + NG_MAX_SPRITES)) {
+
+    neogeo_sprite_debug_decoded_sprite_t decodedSprites[NEOGEO_SPRITE_DECODE_MAX_SPRITES];
+    neogeo_sprite_debug_line_sprites_t lineSprites[NEOGEO_SPRITE_DEBUG_LINE_COUNT];
+    unsigned sprlimit = st->sprlimit ? st->sprlimit : NEOGEO_SPRITE_DECODE_SPRITES_PER_LINE_MAX;
+
+    if (!neogeo_sprite_decode_decodeSprites(st, decodedSprites, lineSprites, NULL, sprlimit)) {
         return 0;
     }
 
-    const uint16_t *scb2 = st->vram + NEOGEO_SPRITE_DEBUG_SCB2_WORD_OFFSET;
-    const uint16_t *scb3 = st->vram + NEOGEO_SPRITE_DEBUG_SCB3_WORD_OFFSET;
-    const uint16_t *scb4 = st->vram + NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET;
-    neogeo_sprite_debug_decoded_sprite_t decodedSprites[NG_MAX_SPRITES];
-    neogeo_sprite_debug_line_sprites_t lineSprites[NEOGEO_SPRITE_DEBUG_LINE_COUNT];
-    unsigned xpos = 0;
-    unsigned ypos = 0;
-    unsigned sprsize = 0;
-    unsigned hshrink = NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK;
-    unsigned vshrink = NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK;
-    unsigned chainRootIndex = 0;
-    unsigned sprlimit = st->sprlimit ? st->sprlimit : NG_SPRITES_PER_LINE_MAX;
-    int lineOffset = e9k_debug_geo_spriteVisibleLineOffset(st);
-
-    memset(decodedSprites, 0, sizeof(decodedSprites));
-    memset(lineSprites, 0, sizeof(lineSprites));
-
-    for (unsigned i = 0; i < (unsigned)NG_MAX_SPRITES; ++i) {
-        uint16_t scb3w = scb3[i];
-        uint16_t scb2w = scb2[i];
-        uint16_t scb4w = scb4[i];
-
-        if (i != 0u && (scb3w & NEOGEO_SPRITE_DEBUG_SCB3_CHAIN_FLAG)) {
-            xpos = (unsigned)((xpos + (hshrink + 1)) & NG_WRAP_MASK);
-        } else {
-            chainRootIndex = i;
-            xpos = (unsigned)((scb4w >> NEOGEO_SPRITE_DEBUG_SCB4_XPOS_SHIFT) & NG_WRAP_MASK);
-            ypos = (unsigned)((scb3w >> NEOGEO_SPRITE_DEBUG_SCB3_YPOS_SHIFT) & NG_WRAP_MASK);
-            sprsize = (unsigned)(scb3w & NEOGEO_SPRITE_DEBUG_SCB3_ROW_MASK);
-            vshrink = (unsigned)(scb2w & NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK);
-        }
-        hshrink = (unsigned)((scb2w >> NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_SHIFT) &
-                             NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK);
-
-        decodedSprites[i].xpos = xpos;
-        decodedSprites[i].ypos = ypos;
-        decodedSprites[i].sprsize = sprsize;
-        decodedSprites[i].hshrink = hshrink;
-        decodedSprites[i].vshrink = vshrink;
-        decodedSprites[i].chainRootIndex = chainRootIndex;
-        decodedSprites[i].width = (int)neogeo_sprite_debug_countShrinkWidth(hshrink);
-
-        unsigned totalH = sprsize << 4;
-        if (totalH == 0u) {
-            continue;
-        }
-        for (unsigned row = 0; row < totalH && row < (unsigned)NEOGEO_SPRITE_DEBUG_LINE_COUNT; ++row) {
-            unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - lineOffset) & NG_WRAP_MASK);
-            neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
-
-            if (lineList->count >= sprlimit || lineList->count >= NG_SPRITES_PER_LINE_MAX) {
-                continue;
-            }
-            lineList->indices[lineList->count] = (uint16_t)i;
-            lineList->count++;
-        }
-    }
-
-    unsigned line = (unsigned)(coordY & NG_WRAP_MASK);
-    unsigned wrappedX = (unsigned)(coordX & NG_WRAP_MASK);
+    unsigned line = (unsigned)(coordY & NEOGEO_SPRITE_DECODE_WRAP_MASK);
+    unsigned wrappedX = (unsigned)(coordX & NEOGEO_SPRITE_DECODE_WRAP_MASK);
     neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
     int firstHit = -1;
     int selectNextHit = 0;
@@ -669,8 +547,8 @@ neogeo_sprite_debug_findSpriteAtPoint(const e9k_debug_sprite_state_t *st, int co
         if (w <= 0) {
             continue;
         }
-        unsigned x0 = sprite->xpos & NG_WRAP_MASK;
-        if (((wrappedX - x0) & NG_WRAP_MASK) >= (unsigned)w) {
+        unsigned x0 = sprite->xpos & NEOGEO_SPRITE_DECODE_WRAP_MASK;
+        if (((wrappedX - x0) & NEOGEO_SPRITE_DECODE_WRAP_MASK) >= (unsigned)w) {
             continue;
         }
 
@@ -738,10 +616,10 @@ neogeo_sprite_debug_overlayBodyClick(e9ui_component_t *self, e9ui_context_t *ctx
         return;
     }
 
-    int coordX = textureX - NG_COORD_OFFSET_X;
-    int coordY = textureY - NG_COORD_OFFSET_Y;
-    if (coordX < NG_COORD_MIN_X || coordX > NG_COORD_MAX_X ||
-        coordY < NG_COORD_MIN_Y || coordY > NG_COORD_MAX_Y) {
+    int coordX = textureX - NEOGEO_SPRITE_DECODE_COORD_OFFSET_X;
+    int coordY = textureY - NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
+    if (coordX < NEOGEO_SPRITE_DECODE_COORD_MIN_X || coordX > NEOGEO_SPRITE_DECODE_COORD_MAX_X ||
+        coordY < NEOGEO_SPRITE_DECODE_COORD_MIN_Y || coordY > NEOGEO_SPRITE_DECODE_COORD_MAX_Y) {
         return;
     }
 
@@ -762,10 +640,10 @@ neogeo_sprite_debug_overlayBodyClick(e9ui_component_t *self, e9ui_context_t *ctx
 }
 
 static int
-neogeo_sprite_debug_isValidViewMode(neogeo_sprite_debug_view_mode_t mode)
+neogeo_sprite_debug_isValidViewMode(neogeo_sprite_3d_view_mode_t mode)
 {
-    return mode >= neogeo_sprite_debug_view_mode_normal &&
-        mode < (neogeo_sprite_debug_view_mode_t)NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT;
+    return mode >= neogeo_sprite_3d_view_mode_normal &&
+        mode < (neogeo_sprite_3d_view_mode_t)NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT;
 }
 
 static int
@@ -807,7 +685,7 @@ neogeo_sprite_debug_fixMiniMapPointForMouse(const e9ui_rect_t *bounds, int mouse
 {
     int textureX = 0;
     int textureY = 0;
-    int fixX = NG_COORD_OFFSET_X + NG_COORD_SIZE + DBG_GAP;
+    int fixX = NEOGEO_SPRITE_DECODE_COORD_OFFSET_X + NEOGEO_SPRITE_DECODE_COORD_SIZE + DBG_GAP;
     int fixY = NG_FIX_PANEL_PAD;
     int fixW = DBG_HIST_WIDTH;
     int fixH = (fixW * NG_FIX_ROWS) / NG_FIX_COLS;
@@ -818,8 +696,8 @@ neogeo_sprite_debug_fixMiniMapPointForMouse(const e9ui_rect_t *bounds, int mouse
     if (!neogeo_sprite_debug_contentPointForMouse(bounds, mouseX, mouseY, &textureX, &textureY)) {
         return 0;
     }
-    if (fixH > NG_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2) {
-        fixH = NG_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2;
+    if (fixH > NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2) {
+        fixH = NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2;
     }
     return fixH >= 3 &&
         textureX >= fixX && textureX < (fixX + fixW) &&
@@ -827,10 +705,10 @@ neogeo_sprite_debug_fixMiniMapPointForMouse(const e9ui_rect_t *bounds, int mouse
 }
 
 static void
-neogeo_sprite_debug_setViewMode(neogeo_sprite_debug_view_mode_t mode)
+neogeo_sprite_debug_setViewMode(neogeo_sprite_3d_view_mode_t mode)
 {
     if (!neogeo_sprite_debug_isValidViewMode(mode)) {
-        mode = neogeo_sprite_debug_view_mode_normal;
+        mode = neogeo_sprite_3d_view_mode_normal;
     }
     if (neogeo_sprite_debugState.viewMode == mode) {
         return;
@@ -845,7 +723,7 @@ static void
 neogeo_sprite_debug_setMode(e9ui_context_t *ctx, void *user)
 {
     (void)ctx;
-    neogeo_sprite_debug_setViewMode((neogeo_sprite_debug_view_mode_t)(uintptr_t)user);
+    neogeo_sprite_debug_setViewMode((neogeo_sprite_3d_view_mode_t)(uintptr_t)user);
 }
 
 static void
@@ -862,7 +740,7 @@ neogeo_sprite_debug_updateModeButtons(void)
     const e9k_theme_button_t *activeTheme = e9ui_theme_button_preset_profile_active();
     for (int i = 0; i < NEOGEO_SPRITE_DEBUG_VIEW_MODE_COUNT; ++i) {
         if (neogeo_sprite_debugState.modeButtons[i]) {
-            if (neogeo_sprite_debugState.viewMode == (neogeo_sprite_debug_view_mode_t)i) {
+            if (neogeo_sprite_debugState.viewMode == (neogeo_sprite_3d_view_mode_t)i) {
                 e9ui_button_setTheme(neogeo_sprite_debugState.modeButtons[i], activeTheme);
             } else {
                 e9ui_button_clearTheme(neogeo_sprite_debugState.modeButtons[i]);
@@ -877,12 +755,12 @@ neogeo_sprite_debug_makeControlsRow(void)
     static const struct {
         const char *label;
         const char *largestLabel;
-        neogeo_sprite_debug_view_mode_t mode;
+        neogeo_sprite_3d_view_mode_t mode;
     } modeButtons[] = {
-        { "Normal", "Normal", neogeo_sprite_debug_view_mode_normal },
-        { "Shrink", "Palette", neogeo_sprite_debug_view_mode_shrink },
-        { "Palette", "Palette", neogeo_sprite_debug_view_mode_palette },
-        { "Chain", "Palette", neogeo_sprite_debug_view_mode_chain },
+        { "Normal", "Normal", neogeo_sprite_3d_view_mode_normal },
+        { "Shrink", "Palette", neogeo_sprite_3d_view_mode_shrink },
+        { "Palette", "Palette", neogeo_sprite_3d_view_mode_palette },
+        { "Chain", "Palette", neogeo_sprite_3d_view_mode_chain },
     };
     e9ui_component_t *row = e9ui_hstack_make();
     int gapPx = NEOGEO_SPRITE_DEBUG_CONTROL_GAP;
@@ -945,6 +823,18 @@ neogeo_sprite_debug_makeControlsRow(void)
         e9ui_button_setLargestLabel(spriteListButton, "Sprite List");
         e9ui_button_measure(spriteListButton, &e9ui->ctx, &buttonW, NULL);
         e9ui_hstack_addFixed(row, spriteListButton, buttonW);
+        e9ui_hstack_addFixed(row, e9ui_spacer_make(gapPx), gapPx);
+    }
+
+    e9ui_component_t *sprite3dButton = e9ui_button_make("3D View",
+                                                      neogeo_sprite_3d_toggle,
+                                                      NULL);
+    if (sprite3dButton) {
+        int buttonW = 0;
+        e9ui_button_setMini(sprite3dButton, 1);
+        e9ui_button_setLargestLabel(sprite3dButton, "3D View");
+        e9ui_button_measure(sprite3dButton, &e9ui->ctx, &buttonW, NULL);
+        e9ui_hstack_addFixed(row, sprite3dButton, buttonW);
     }
 
     neogeo_sprite_debug_updateModeButtons();
@@ -954,7 +844,7 @@ neogeo_sprite_debug_makeControlsRow(void)
 static uint32_t
 neogeo_sprite_debug_shrinkRgbColor(unsigned hshrink, unsigned vshrink)
 {
-    float horizontalCoverage = (float)neogeo_sprite_debug_countShrinkWidth(hshrink) / 16.0f;
+    float horizontalCoverage = (float)neogeo_sprite_decode_countShrinkWidth(hshrink) / 16.0f;
     float verticalCoverage = (float)(vshrink + 1u) / 256.0f;
     float horizontalShrink = 1.0f - horizontalCoverage;
     float verticalShrink = 1.0f - verticalCoverage;
@@ -1134,22 +1024,11 @@ neogeo_sprite_debug_hueColor(float h)
     return neogeo_sprite_debug_color((Uint8)(rr * 255.0f), (Uint8)(gg * 255.0f), (Uint8)(bb * 255.0f));
 }
 
-static unsigned
-neogeo_sprite_debug_countShrinkWidth(unsigned hval)
-{
-    unsigned h = (hval & NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK);
-    unsigned w = 0;
-    for (unsigned p = 0; p < 16; ++p) {
-        w += (unsigned)neogeo_sprite_debug_lut_hshrink[h][p];
-    }
-    return w;
-}
-
 static uint32_t
 neogeo_sprite_debug_hashSprites(const uint16_t *scb2, const uint16_t *scb3, const uint16_t *scb4)
 {
     uint32_t h = 2166136261u;
-    for (unsigned i = 0; i < (unsigned)NG_MAX_SPRITES; ++i) {
+    for (unsigned i = 0; i < (unsigned)NEOGEO_SPRITE_DECODE_MAX_SPRITES; ++i) {
         h ^= scb2[i];
         h *= 16777619u;
         h ^= scb3[i];
@@ -1230,7 +1109,7 @@ neogeo_sprite_debug_drawFixMiniMap(uint32_t *pixels, int pitch, int extW, int ex
 
                     if (neogeo_sprite_debug_fixTileHasPixels(fixrom, fixromSize, tileNum)) {
                         tileCol = colGreen;
-                        if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_palette) {
+                        if (neogeo_sprite_debugState.viewMode == neogeo_sprite_3d_view_mode_palette) {
                             tileCol = neogeo_sprite_debug_paletteColor(paletteBank);
                         }
                         if (neogeo_sprite_debugState.fixLayerMode == e9k_debug_geo_fix_layer_mode_grayscale) {
@@ -1305,33 +1184,6 @@ neogeo_sprite_debug_hashWords(const uint16_t *words, size_t count)
         h *= 16777619u;
     }
     return h;
-}
-
-static int
-neogeo_sprite_debug_spriteHasAnimBits(const uint16_t *vram, size_t vramWords,
-                                      unsigned spriteIndex, unsigned sprsize)
-{
-    unsigned baseWordOffset = spriteIndex * NEOGEO_SPRITE_DEBUG_SPRITE_VRAM_WORDS_PER_SPRITE;
-    unsigned tileRows = sprsize;
-    unsigned maxTileRows = NEOGEO_SPRITE_DEBUG_SPRITE_VRAM_WORDS_PER_SPRITE / 2u;
-
-    if (!vram || baseWordOffset >= vramWords) {
-        return 0;
-    }
-    if (tileRows == 0u || tileRows > maxTileRows) {
-        tileRows = maxTileRows;
-    }
-    for (unsigned tileRow = 0; tileRow < tileRows; ++tileRow) {
-        unsigned oddWordOffset = baseWordOffset + tileRow * 2u +
-            NEOGEO_SPRITE_DEBUG_SPRITE_TILE_ODD_WORD_OFFSET;
-        if (oddWordOffset >= vramWords) {
-            break;
-        }
-        if (vram[oddWordOffset] & NEOGEO_SPRITE_DEBUG_SPRITE_ANIM_MASK) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 static int
@@ -1443,8 +1295,8 @@ neogeo_sprite_debug_fillRectCoord(uint32_t *pixels, int pitch, int extW, int ext
     if (cw <= 0 || ch <= 0) {
         return;
     }
-    int sx = cx + NG_COORD_OFFSET_X;
-    int sy = cy + NG_COORD_OFFSET_Y;
+    int sx = cx + NEOGEO_SPRITE_DECODE_COORD_OFFSET_X;
+    int sy = cy + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
     int x0 = sx;
     int y0 = sy;
     int x1 = sx + cw;
@@ -1455,11 +1307,11 @@ neogeo_sprite_debug_fillRectCoord(uint32_t *pixels, int pitch, int extW, int ext
     if (y0 < 0) {
         y0 = 0;
     }
-    if (x1 > NG_COORD_W) {
-        x1 = NG_COORD_W;
+    if (x1 > NEOGEO_SPRITE_DECODE_COORD_W) {
+        x1 = NEOGEO_SPRITE_DECODE_COORD_W;
     }
-    if (y1 > NG_COORD_H) {
-        y1 = NG_COORD_H;
+    if (y1 > NEOGEO_SPRITE_DECODE_COORD_H) {
+        y1 = NEOGEO_SPRITE_DECODE_COORD_H;
     }
     int w = x1 - x0;
     int h = y1 - y0;
@@ -1477,21 +1329,21 @@ neogeo_sprite_debug_fillHLineCoord(uint32_t *pixels, int pitch, int extW, int ex
         return;
     }
 
-    int sy = cy + NG_COORD_OFFSET_Y;
-    if (sy < 0 || sy >= NG_COORD_H || sy >= extH) {
+    int sy = cy + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
+    if (sy < 0 || sy >= NEOGEO_SPRITE_DECODE_COORD_H || sy >= extH) {
         return;
     }
 
-    int x0 = cx + NG_COORD_OFFSET_X;
+    int x0 = cx + NEOGEO_SPRITE_DECODE_COORD_OFFSET_X;
     int x1 = x0 + cw;
-    if (x1 <= 0 || x0 >= NG_COORD_W || x0 >= extW) {
+    if (x1 <= 0 || x0 >= NEOGEO_SPRITE_DECODE_COORD_W || x0 >= extW) {
         return;
     }
     if (x0 < 0) {
         x0 = 0;
     }
-    if (x1 > NG_COORD_W) {
-        x1 = NG_COORD_W;
+    if (x1 > NEOGEO_SPRITE_DECODE_COORD_W) {
+        x1 = NEOGEO_SPRITE_DECODE_COORD_W;
     }
     if (x1 > extW) {
         x1 = extW;
@@ -1530,21 +1382,21 @@ neogeo_sprite_debug_blendHLineCoord(uint32_t *pixels, int pitch, int extW, int e
         return;
     }
 
-    int sy = cy + NG_COORD_OFFSET_Y;
-    if (sy < 0 || sy >= NG_COORD_H || sy >= extH) {
+    int sy = cy + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
+    if (sy < 0 || sy >= NEOGEO_SPRITE_DECODE_COORD_H || sy >= extH) {
         return;
     }
 
-    int x0 = cx + NG_COORD_OFFSET_X;
+    int x0 = cx + NEOGEO_SPRITE_DECODE_COORD_OFFSET_X;
     int x1 = x0 + cw;
-    if (x1 <= 0 || x0 >= NG_COORD_W || x0 >= extW) {
+    if (x1 <= 0 || x0 >= NEOGEO_SPRITE_DECODE_COORD_W || x0 >= extW) {
         return;
     }
     if (x0 < 0) {
         x0 = 0;
     }
-    if (x1 > NG_COORD_W) {
-        x1 = NG_COORD_W;
+    if (x1 > NEOGEO_SPRITE_DECODE_COORD_W) {
+        x1 = NEOGEO_SPRITE_DECODE_COORD_W;
     }
     if (x1 > extW) {
         x1 = extW;
@@ -1562,9 +1414,9 @@ neogeo_sprite_debug_blendHLineCoordWrapped(uint32_t *pixels, int pitch, int extW
                                int x, int y, int w, uint32_t color, unsigned alpha)
 {
     neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x, y, w, color, alpha);
-    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y, w, color, alpha);
-    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x, y - NG_COORD_SIZE, w, color, alpha);
-    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y - NG_COORD_SIZE, w, color, alpha);
+    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x - NEOGEO_SPRITE_DECODE_COORD_SIZE, y, w, color, alpha);
+    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x, y - NEOGEO_SPRITE_DECODE_COORD_SIZE, w, color, alpha);
+    neogeo_sprite_debug_blendHLineCoord(pixels, pitch, extW, extH, x - NEOGEO_SPRITE_DECODE_COORD_SIZE, y - NEOGEO_SPRITE_DECODE_COORD_SIZE, w, color, alpha);
 }
 
 static void
@@ -1572,9 +1424,9 @@ neogeo_sprite_debug_fillHLineCoordWrapped(uint32_t *pixels, int pitch, int extW,
                                int x, int y, int w, uint32_t color)
 {
     neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x, y, w, color);
-    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y, w, color);
-    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x, y - NG_COORD_SIZE, w, color);
-    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NG_COORD_SIZE, y - NG_COORD_SIZE, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NEOGEO_SPRITE_DECODE_COORD_SIZE, y, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x, y - NEOGEO_SPRITE_DECODE_COORD_SIZE, w, color);
+    neogeo_sprite_debug_fillHLineCoord(pixels, pitch, extW, extH, x - NEOGEO_SPRITE_DECODE_COORD_SIZE, y - NEOGEO_SPRITE_DECODE_COORD_SIZE, w, color);
 }
 
 static int
@@ -1662,6 +1514,7 @@ neogeo_sprite_debug_toggle(void)
                                     &neogeo_sprite_debugState.savedScrollY);
             neogeo_sprite_debugState.hasSavedScroll = 1;
         }
+        neogeo_sprite_3d_close();
         if (neogeo_sprite_debugState.texture) {
             SDL_DestroyTexture(neogeo_sprite_debugState.texture);
             neogeo_sprite_debugState.texture = NULL;
@@ -1700,10 +1553,10 @@ neogeo_sprite_debug_is_open(void)
 void
 neogeo_sprite_debug_setSelection(int spriteIndex, int chainRootIndex, int highlightChain)
 {
-    if (spriteIndex < 0 || spriteIndex >= NG_MAX_SPRITES) {
+    if (spriteIndex < 0 || spriteIndex >= NEOGEO_SPRITE_DECODE_MAX_SPRITES) {
         spriteIndex = -1;
     }
-    if (chainRootIndex < 0 || chainRootIndex >= NG_MAX_SPRITES) {
+    if (chainRootIndex < 0 || chainRootIndex >= NEOGEO_SPRITE_DECODE_MAX_SPRITES) {
         chainRootIndex = -1;
     }
     if (neogeo_sprite_debugState.selectedSpriteIndex == spriteIndex &&
@@ -1730,7 +1583,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     e9k_debug_rom_region_t fixrom = { 0 };
     const uint8_t *fixromData = NULL;
     size_t fixromSize = 0u;
-    if (st->vram_words <= (NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET + NG_MAX_SPRITES)) {
+    if (st->vram_words <= (NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET + NEOGEO_SPRITE_DECODE_MAX_SPRITES)) {
         return;
     }
     if (libretro_host_neogeo_getFixRom(&fixrom)) {
@@ -1741,8 +1594,8 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     const uint16_t *scb3 = vram + NEOGEO_SPRITE_DEBUG_SCB3_WORD_OFFSET;
     const uint16_t *scb4 = vram + NEOGEO_SPRITE_DEBUG_SCB4_WORD_OFFSET;
 
-    const int baseW = NG_COORD_W;
-    const int baseH = NG_COORD_H;
+    const int baseW = NEOGEO_SPRITE_DECODE_COORD_W;
+    const int baseH = NEOGEO_SPRITE_DECODE_COORD_H;
     int extW = baseW;
     const int extH = baseH;
     if (neogeo_sprite_debug_histogramEnabled) {
@@ -1798,27 +1651,27 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         }
     }
     neogeo_sprite_debug_drawRectAbs(pixels, extW, extW, extH,
-                          NG_COORD_OFFSET_X, NG_COORD_OFFSET_Y,
-                          NG_COORD_SIZE, NG_COORD_SIZE, colBounds);
+                          NEOGEO_SPRITE_DECODE_COORD_OFFSET_X, NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y,
+                          NEOGEO_SPRITE_DECODE_COORD_SIZE, NEOGEO_SPRITE_DECODE_COORD_SIZE, colBounds);
 
-    SDL_Rect screenRect = { NG_VISIBLE_X0, NG_VISIBLE_Y0, NG_VISIBLE_W, NG_VISIBLE_H };
+    SDL_Rect screenRect = { NEOGEO_SPRITE_DECODE_VISIBLE_X0, NEOGEO_SPRITE_DECODE_VISIBLE_Y0, NEOGEO_SPRITE_DECODE_VISIBLE_W, NEOGEO_SPRITE_DECODE_VISIBLE_H };
     neogeo_sprite_debug_fillRectCoord(pixels, extW, extW, extH,
                             screenRect.x, screenRect.y, screenRect.w, screenRect.h, colBlack);
     {
-        int bx0 = screenRect.x - 1 + NG_COORD_OFFSET_X;
-        int by0 = screenRect.y - 1 + NG_COORD_OFFSET_Y;
+        int bx0 = screenRect.x - 1 + NEOGEO_SPRITE_DECODE_COORD_OFFSET_X;
+        int by0 = screenRect.y - 1 + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
         int bw = screenRect.w + 2;
         int bh = screenRect.h + 2;
         neogeo_sprite_debug_drawRectAbs(pixels, extW, extW, extH, bx0, by0, bw, bh, colWhite);
     }
 
-    unsigned viscountLine[NG_VISIBLE_H];
-    for (int i = 0; i < NG_VISIBLE_H; ++i) {
+    unsigned viscountLine[NEOGEO_SPRITE_DECODE_VISIBLE_H];
+    for (int i = 0; i < NEOGEO_SPRITE_DECODE_VISIBLE_H; ++i) {
         viscountLine[i] = 0;
     }
     int screenH = (st->screen_h > 0) ? st->screen_h : SCREEN_HEIGHT;
     int activeTotal = 0;
-    for (unsigned i = 0; i < (unsigned)NG_MAX_SPRITES; ) {
+    for (unsigned i = 0; i < (unsigned)NEOGEO_SPRITE_DECODE_MAX_SPRITES; ) {
         if (i != 0u && (scb3[i] & NEOGEO_SPRITE_DEBUG_SCB3_CHAIN_FLAG)) {
             ++i;
             continue;
@@ -1828,7 +1681,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         unsigned by = (unsigned)((scb3b >> NEOGEO_SPRITE_DEBUG_SCB3_YPOS_SHIFT) &
                                  NEOGEO_SPRITE_DEBUG_SCB3_YPOS_MASK);
         unsigned len = 1;
-        while ((i + len) < (unsigned)NG_MAX_SPRITES &&
+        while ((i + len) < (unsigned)NEOGEO_SPRITE_DECODE_MAX_SPRITES &&
                (scb3[i + len] & NEOGEO_SPRITE_DEBUG_SCB3_CHAIN_FLAG)) {
             ++len;
         }
@@ -1838,86 +1691,27 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         i += len;
     }
 
-    neogeo_sprite_debug_decoded_sprite_t decodedSprites[NG_MAX_SPRITES];
-    uint8_t chainHasAnimBits[NG_MAX_SPRITES];
+    neogeo_sprite_debug_decoded_sprite_t decodedSprites[NEOGEO_SPRITE_DECODE_MAX_SPRITES];
+    uint8_t chainHasAnimBits[NEOGEO_SPRITE_DECODE_MAX_SPRITES];
     neogeo_sprite_debug_line_sprites_t lineSprites[NEOGEO_SPRITE_DEBUG_LINE_COUNT];
-    int lineOffset = e9k_debug_geo_spriteVisibleLineOffset(st);
-    memset(lineSprites, 0, sizeof(lineSprites));
-    {
-        unsigned xpos = 0;
-        unsigned ypos = 0;
-        unsigned sprsize = 0;
-        unsigned hshrink = NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK;
-        unsigned vshrink = NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK;
-        unsigned chainRootIndex = 0;
-
-        memset(decodedSprites, 0, sizeof(decodedSprites));
-        memset(chainHasAnimBits, 0, sizeof(chainHasAnimBits));
-        for (unsigned i = 0; i < (unsigned)NG_MAX_SPRITES; ++i) {
-            uint16_t scb3w = scb3[i];
-            uint16_t scb2w = scb2[i];
-            uint16_t scb4w = scb4[i];
-
-            if (i != 0u && (scb3w & NEOGEO_SPRITE_DEBUG_SCB3_CHAIN_FLAG)) {
-                xpos = (unsigned)((xpos + (hshrink + 1)) & NG_WRAP_MASK);
-            } else {
-                chainRootIndex = i;
-                xpos = (unsigned)((scb4w >> NEOGEO_SPRITE_DEBUG_SCB4_XPOS_SHIFT) & NG_WRAP_MASK);
-                ypos = (unsigned)((scb3w >> NEOGEO_SPRITE_DEBUG_SCB3_YPOS_SHIFT) & NG_WRAP_MASK);
-                sprsize = (unsigned)(scb3w & NEOGEO_SPRITE_DEBUG_SCB3_ROW_MASK);
-                vshrink = (unsigned)(scb2w & NEOGEO_SPRITE_DEBUG_SCB2_VSHRINK_MASK);
-            }
-            hshrink = (unsigned)((scb2w >> NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_SHIFT) &
-                                 NEOGEO_SPRITE_DEBUG_SCB2_HSHRINK_MASK);
-
-            decodedSprites[i].xpos = xpos;
-            decodedSprites[i].ypos = ypos;
-            decodedSprites[i].sprsize = sprsize;
-            decodedSprites[i].hshrink = hshrink;
-            decodedSprites[i].vshrink = vshrink;
-            decodedSprites[i].chainRootIndex = chainRootIndex;
-            decodedSprites[i].width = (int)neogeo_sprite_debug_countShrinkWidth(hshrink);
-
-            unsigned oddWordOffset = i * NEOGEO_SPRITE_DEBUG_SPRITE_VRAM_WORDS_PER_SPRITE +
-                NEOGEO_SPRITE_DEBUG_SPRITE_TILE_ODD_WORD_OFFSET;
-            if (oddWordOffset < st->vram_words) {
-                decodedSprites[i].hasAnimBits =
-                    neogeo_sprite_debug_spriteHasAnimBits(vram, st->vram_words, i, sprsize);
-                decodedSprites[i].paletteBank =
-                    (unsigned)((vram[oddWordOffset] >> NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_SHIFT) &
-                               NEOGEO_SPRITE_DEBUG_SPRITE_PALETTE_MASK);
-            }
-            if (decodedSprites[i].hasAnimBits && chainRootIndex < (unsigned)NG_MAX_SPRITES) {
-                chainHasAnimBits[chainRootIndex] = 1u;
-            }
-
-            unsigned totalH = sprsize << 4;
-            if (totalH == 0u) {
-                continue;
-            }
-            for (unsigned row = 0; row < totalH && row < (unsigned)NEOGEO_SPRITE_DEBUG_LINE_COUNT; ++row) {
-                unsigned line = (unsigned)((NG_COORD_SIZE - ypos + row - lineOffset) & NG_WRAP_MASK);
-                neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
-
-                if (lineList->count >= NG_SPRITES_PER_LINE_MAX) {
-                    continue;
-                }
-                lineList->indices[lineList->count] = (uint16_t)i;
-                lineList->count++;
-            }
-        }
+    if (!neogeo_sprite_decode_decodeSprites(st,
+                                            decodedSprites,
+                                            lineSprites,
+                                            chainHasAnimBits,
+                                            NEOGEO_SPRITE_DECODE_SPRITES_PER_LINE_MAX)) {
+        return;
     }
 
-    unsigned sprlimit = st->sprlimit ? st->sprlimit : NG_SPRITES_PER_LINE_MAX;
+    unsigned sprlimit = st->sprlimit ? st->sprlimit : NEOGEO_SPRITE_DECODE_SPRITES_PER_LINE_MAX;
     int maxcnt = 0;
-    for (int line = 0; line < NG_COORD_SIZE; ++line) {
+    for (int line = 0; line < NEOGEO_SPRITE_DECODE_COORD_SIZE; ++line) {
         unsigned viscount = 0;
         neogeo_sprite_debug_line_sprites_t *lineList = &lineSprites[line];
 
         for (unsigned lineSpriteIndex = 0; lineSpriteIndex < lineList->count; ++lineSpriteIndex) {
             unsigned i = (unsigned)lineList->indices[lineSpriteIndex];
             const neogeo_sprite_debug_decoded_sprite_t *sprite = &decodedSprites[i];
-            unsigned srow = (unsigned)(((line + lineOffset) - (int)(NG_COORD_SIZE - (int)sprite->ypos)) & NG_WRAP_MASK);
+            unsigned srow = neogeo_sprite_decode_visibleLineSpriteRow(st, sprite, line);
 
             int w = sprite->width;
             if (w <= 0) {
@@ -1925,16 +1719,16 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             }
             uint32_t spriteCol =
                 chainHasAnimBits[sprite->chainRootIndex] ? colAnim : colGreen;
-            if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_shrink) {
+            if (neogeo_sprite_debugState.viewMode == neogeo_sprite_3d_view_mode_shrink) {
                 spriteCol = neogeo_sprite_debug_shrinkRgbColor(sprite->hshrink, sprite->vshrink);
-            } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_palette) {
+            } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_3d_view_mode_palette) {
                 spriteCol = neogeo_sprite_debug_paletteColor(sprite->paletteBank);
-            } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_chain) {
+            } else if (neogeo_sprite_debugState.viewMode == neogeo_sprite_3d_view_mode_chain) {
                 spriteCol = neogeo_sprite_debug_chainColor(sprite->chainRootIndex);
             }
-            int x0 = (int)(sprite->xpos & NG_WRAP_MASK);
+            int x0 = (int)(sprite->xpos & NEOGEO_SPRITE_DECODE_WRAP_MASK);
             int xsum = x0 + w;
-            int visible = (x0 < NG_VISIBLE_W) || (xsum > NG_COORD_SIZE);
+            int visible = (x0 < NEOGEO_SPRITE_DECODE_VISIBLE_W) || (xsum > NEOGEO_SPRITE_DECODE_COORD_SIZE);
             if (visible) {
                 viscount++;
             }
@@ -1961,8 +1755,8 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             }
         }
 
-        if (line >= NG_VISIBLE_Y0 && line < (NG_VISIBLE_Y0 + NG_VISIBLE_H)) {
-            viscountLine[line - NG_VISIBLE_Y0] = viscount;
+        if (line >= NEOGEO_SPRITE_DECODE_VISIBLE_Y0 && line < (NEOGEO_SPRITE_DECODE_VISIBLE_Y0 + NEOGEO_SPRITE_DECODE_VISIBLE_H)) {
+            viscountLine[line - NEOGEO_SPRITE_DECODE_VISIBLE_Y0] = viscount;
         }
         if ((int)lineList->count > maxcnt) {
             maxcnt = (int)lineList->count;
@@ -1970,7 +1764,7 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
     }
 
     if (neogeo_sprite_debug_histogramEnabled) {
-        int histX0 = NG_COORD_OFFSET_X + NG_COORD_SIZE + DBG_GAP;
+        int histX0 = NEOGEO_SPRITE_DECODE_COORD_OFFSET_X + NEOGEO_SPRITE_DECODE_COORD_SIZE + DBG_GAP;
         int histW = DBG_HIST_WIDTH;
         int fixW = histW;
         int fixH = (fixW * NG_FIX_ROWS) / NG_FIX_COLS;
@@ -1978,8 +1772,8 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         if (histW < 1) {
             histW = 1;
         }
-        if (fixH > NG_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2) {
-            fixH = NG_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2;
+        if (fixH > NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2) {
+            fixH = NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y - NG_FIX_PANEL_PAD * 2;
         }
         if (fixH >= 3) {
             neogeo_sprite_debug_drawFixMiniMap(pixels, extW, extW, extH,
@@ -1993,8 +1787,8 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
         }
 
         neogeo_sprite_debug_fillRectAbs(pixels, extW, extW, extH,
-                              histX0, NG_VISIBLE_Y0 + NG_COORD_OFFSET_Y,
-                              histW, NG_VISIBLE_H, colHistBg);
+                              histX0, NEOGEO_SPRITE_DECODE_VISIBLE_Y0 + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y,
+                              histW, NEOGEO_SPRITE_DECODE_VISIBLE_H, colHistBg);
         if (!neogeo_sprite_debugState.histGradReady) {
             int denomx = (DBG_HIST_WIDTH > 1) ? (DBG_HIST_WIDTH - 1) : 1;
             for (int dx = 0; dx < DBG_HIST_WIDTH; ++dx) {
@@ -2004,14 +1798,14 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             }
             neogeo_sprite_debugState.histGradReady = 1;
         }
-        for (int line = 0; line < NG_VISIBLE_H; ++line) {
+        for (int line = 0; line < NEOGEO_SPRITE_DECODE_VISIBLE_H; ++line) {
             int viscount = (int)viscountLine[line];
             int barLen = (int)((viscount * (unsigned)histW) / sprlimit);
             if (barLen > histW) {
                 barLen = histW;
             }
             if (barLen > 0) {
-                int y = NG_VISIBLE_Y0 + line + NG_COORD_OFFSET_Y;
+                int y = NEOGEO_SPRITE_DECODE_VISIBLE_Y0 + line + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
                 uint32_t *row = pixels + y * extW + histX0;
                 for (int dx = 0; dx < barLen; ++dx) {
                     row[dx] = neogeo_sprite_debugState.histGrad[dx];
@@ -2021,9 +1815,9 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
 
         {
             int bx0 = histX0 - 1;
-            int by0 = NG_VISIBLE_Y0 - 1 + NG_COORD_OFFSET_Y;
+            int by0 = NEOGEO_SPRITE_DECODE_VISIBLE_Y0 - 1 + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y;
             int bw = histW + 2;
-            int bh = NG_VISIBLE_H + 2;
+            int bh = NEOGEO_SPRITE_DECODE_VISIBLE_H + 2;
             neogeo_sprite_debug_drawRectAbs(pixels, extW, extW, extH, bx0, by0, bw, bh, colWhite);
         }
 
@@ -2031,16 +1825,16 @@ neogeo_sprite_debug_renderFrameInternal(const e9k_debug_sprite_state_t *st, int 
             const int glyphH = 5;
             const int pad = 4;
             const int legendGap = 10;
-            const int statsY = NG_VISIBLE_Y0 + NG_COORD_OFFSET_Y + NG_VISIBLE_H + 6;
+            const int statsY = NEOGEO_SPRITE_DECODE_VISIBLE_Y0 + NEOGEO_SPRITE_DECODE_COORD_OFFSET_Y + NEOGEO_SPRITE_DECODE_VISIBLE_H + 6;
             if (statsY + glyphH + pad * 2 <= extH) {
                 int rightBadgeH = neogeo_sprite_debug_drawBadge(pixels, extW, extW, extH,
                                                        histX0 + histW, statsY,
                                                        maxcnt, 1, (int)sprlimit, colWhite);
                 int leftBadgeH = neogeo_sprite_debug_drawBadge(pixels, extW, extW, extH,
                                                       histX0, statsY,
-                                                      activeTotal, 0, NG_MAX_SPRITES - 1, colWhite);
+                                                      activeTotal, 0, NEOGEO_SPRITE_DECODE_MAX_SPRITES - 1, colWhite);
 
-                if (neogeo_sprite_debugState.viewMode == neogeo_sprite_debug_view_mode_shrink) {
+                if (neogeo_sprite_debugState.viewMode == neogeo_sprite_3d_view_mode_shrink) {
                     int legendH = histW;
                     int legendY = statsY + (leftBadgeH > rightBadgeH ? leftBadgeH : rightBadgeH) + legendGap;
                     if (legendY + legendH <= extH) {
@@ -2065,6 +1859,16 @@ neogeo_sprite_debug_render(const e9k_debug_sprite_state_t *st)
         neogeo_sprite_debugState.lastState = *st;
         neogeo_sprite_debugState.hasLastState = 1;
     }
+    neogeo_sprite_3d_source_t source = {
+        .lastState = &neogeo_sprite_debugState.lastState,
+        .hasLastState = neogeo_sprite_debugState.hasLastState,
+        .viewMode = neogeo_sprite_debugState.viewMode,
+        .selectedSpriteIndex = neogeo_sprite_debugState.selectedSpriteIndex,
+        .selectedChainRootIndex = neogeo_sprite_debugState.selectedChainRootIndex,
+        .highlightSelectionChain = neogeo_sprite_debugState.highlightSelectionChain
+    };
+    neogeo_sprite_3d_setSource(&source);
+
     (void)libretro_host_neogeo_setFixLayerMode(neogeo_sprite_debugState.fixLayerMode);
     if (!neogeo_sprite_debugState.windowState.open) {
         return;
@@ -2099,6 +1903,7 @@ neogeo_sprite_debug_persistConfig(FILE *file)
                                 "comp.sprite_debug",
                                 &neogeo_sprite_debugState.windowState,
                                 &e9ui->ctx);
+    neogeo_sprite_3d_persistConfig(file);
 }
 
 int
@@ -2128,6 +1933,9 @@ neogeo_sprite_debug_loadConfigProperty(const char *prop, const char *value)
                 e9ui_windowHasSavedPosition(neogeo_sprite_debugState.windowState.winX, neogeo_sprite_debugState.windowState.winY);
             return 1;
         }
+    }
+    if (neogeo_sprite_3d_loadConfigProperty(prop, value)) {
+        return 1;
     }
     if (strcmp(prop, "fix_layer_mode") == 0) {
         if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
@@ -2181,9 +1989,9 @@ neogeo_sprite_debug_loadConfigProperty(const char *prop, const char *value)
     if (!neogeo_sprite_debug_parseInt(value, &intValue)) {
         return 0;
     }
-    neogeo_sprite_debugState.viewMode = neogeo_sprite_debug_isValidViewMode((neogeo_sprite_debug_view_mode_t)intValue) ?
-        (neogeo_sprite_debug_view_mode_t)intValue :
-        neogeo_sprite_debug_view_mode_normal;
+    neogeo_sprite_debugState.viewMode = neogeo_sprite_debug_isValidViewMode((neogeo_sprite_3d_view_mode_t)intValue) ?
+        (neogeo_sprite_3d_view_mode_t)intValue :
+        neogeo_sprite_3d_view_mode_normal;
     if (neogeo_sprite_debugState.windowState.open) {
         neogeo_sprite_debugState.cachedValid = 0;
         neogeo_sprite_debug_updateModeButtons();
