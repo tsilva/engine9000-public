@@ -261,6 +261,11 @@ e9k_debug_set_debug_profile_start_callback(void (*cb)(void));
 void
 e9k_debug_set_debug_args(const uint32_t *args, size_t count);
 
+#if E9K_HACK_DEBUGGER_HOST
+void
+e9k_debug_text_write(uae_u8 byte);
+#endif
+
 // Optional host callback used for source location resolution in cores that support source-line stepping.
 void
 e9k_debug_set_source_location_resolver(int (*resolver)(uint32_t pc24, uint64_t *out_location, void *user), void *user);
