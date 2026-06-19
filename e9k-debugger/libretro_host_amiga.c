@@ -346,6 +346,39 @@ libretro_host_amiga_getSpriteVis(int *outEnabled)
     return true;
 }
 
+bool
+libretro_host_amiga_setStatusbar(int enabled)
+{
+    if (!libretro_host.debugAmigaSetStatusbar) {
+        libretro_host.debugAmigaSetStatusbar = (e9k_debug_amiga_set_statusbar_fn_t)
+            libretro_host_loadSymbol("e9k_debug_amiga_set_statusbar");
+    }
+    if (!libretro_host.debugAmigaSetStatusbar) {
+        return false;
+    }
+    libretro_host.debugAmigaSetStatusbar(enabled ? 1 : 0);
+    return true;
+}
+
+bool
+libretro_host_amiga_getStatusbar(int *outEnabled)
+{
+    if (outEnabled) {
+        *outEnabled = 0;
+    }
+    if (!libretro_host.debugAmigaGetStatusbar) {
+        libretro_host.debugAmigaGetStatusbar = (e9k_debug_amiga_get_statusbar_fn_t)
+            libretro_host_loadSymbol("e9k_debug_amiga_get_statusbar");
+    }
+    if (!libretro_host.debugAmigaGetStatusbar) {
+        return false;
+    }
+    if (outEnabled) {
+        *outEnabled = libretro_host.debugAmigaGetStatusbar() ? 1 : 0;
+    }
+    return true;
+}
+
 size_t
 libretro_host_amiga_readSpriteVisPoints(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight)
 {

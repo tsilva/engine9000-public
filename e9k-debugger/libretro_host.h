@@ -221,6 +221,12 @@ libretro_host_debugReadCheckpoints(e9k_debug_checkpoint_t *out, size_t cap);
 bool
 libretro_host_debugResetCheckpoints(void);
 
+size_t
+libretro_host_debugReadCounters(e9k_debug_counter_t *out, size_t cap);
+
+bool
+libretro_host_debugResetCounters(void);
+
 uint64_t
 libretro_host_debugReadCycleCount(void);
 
@@ -401,6 +407,12 @@ libretro_host_amiga_setSpriteVis(int enabled);
 
 bool
 libretro_host_amiga_getSpriteVis(int *outEnabled);
+
+bool
+libretro_host_amiga_setStatusbar(int enabled);
+
+bool
+libretro_host_amiga_getStatusbar(int *outEnabled);
 
 size_t
 libretro_host_amiga_readSpriteVisPoints(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *outWidth, uint32_t *outHeight);

@@ -108,6 +108,8 @@ typedef size_t (*e9k_debug_read_checkpoints_fn_t)(e9k_debug_checkpoint_t *out, s
 typedef void (*e9k_debug_reset_checkpoints_fn_t)(void);
 typedef void (*e9k_debug_set_checkpoint_enabled_fn_t)(int enabled);
 typedef int (*e9k_debug_get_checkpoint_enabled_fn_t)(void);
+typedef size_t (*e9k_debug_read_counters_fn_t)(e9k_debug_counter_t *out, size_t cap);
+typedef void (*e9k_debug_reset_counters_fn_t)(void);
 typedef uint64_t (*e9k_debug_read_cycle_count_fn_t)(void);
 typedef void (*e9k_debug_set_vblank_callback_fn_t)(void (*cb)(void *), void *user);
 typedef void (*e9k_debug_set_amiga_custom_log_frame_callback_fn_t)(e9k_debug_ami_custom_log_frame_callback_t cb, void *user);
@@ -125,6 +127,8 @@ typedef size_t (*e9k_debug_amiga_blitter_vis_read_stats_fn_t)(e9k_debug_ami_blit
 typedef size_t (*e9k_debug_amiga_blitter_vis_read_word_tags_fn_t)(uint32_t addr, uint32_t *out, size_t cap);
 typedef void (*e9k_debug_amiga_set_sprite_vis_fn_t)(int enabled);
 typedef int (*e9k_debug_amiga_get_sprite_vis_fn_t)(void);
+typedef void (*e9k_debug_amiga_set_statusbar_fn_t)(int enabled);
+typedef int (*e9k_debug_amiga_get_statusbar_fn_t)(void);
 typedef size_t (*e9k_debug_amiga_sprite_vis_read_points_fn_t)(e9k_debug_ami_sprite_vis_point_t *out, size_t cap, uint32_t *out_width, uint32_t *out_height);
 typedef const e9k_debug_ami_dma_debug_frame_view_t *(*e9k_debug_amiga_dma_debug_get_frame_view_fn_t)(uint32_t frameSelect);
 typedef const e9k_debug_ami_copper_debug_frame_view_t *(*e9k_debug_amiga_copper_debug_get_frame_view_fn_t)(uint32_t frameSelect);
@@ -293,6 +297,8 @@ typedef struct {
     e9k_debug_reset_checkpoints_fn_t debugResetCheckpoints;
     e9k_debug_set_checkpoint_enabled_fn_t debugSetCheckpointEnabled;
     e9k_debug_get_checkpoint_enabled_fn_t debugGetCheckpointEnabled;
+    e9k_debug_read_counters_fn_t debugReadCounters;
+    e9k_debug_reset_counters_fn_t debugResetCounters;
     e9k_debug_read_cycle_count_fn_t debugReadCycleCount;
     e9k_debug_set_vblank_callback_fn_t setVblankCallback;
     e9k_debug_set_amiga_custom_log_frame_callback_fn_t setAmigaCustomLogFrameCallback;
@@ -314,6 +320,8 @@ typedef struct {
     e9k_debug_amiga_blitter_vis_read_word_tags_fn_t debugAmigaBlitterVisReadWordTags;
     e9k_debug_amiga_set_sprite_vis_fn_t debugAmigaSetSpriteVis;
     e9k_debug_amiga_get_sprite_vis_fn_t debugAmigaGetSpriteVis;
+    e9k_debug_amiga_set_statusbar_fn_t debugAmigaSetStatusbar;
+    e9k_debug_amiga_get_statusbar_fn_t debugAmigaGetStatusbar;
     e9k_debug_amiga_sprite_vis_read_points_fn_t debugAmigaSpriteVisReadPoints;
     e9k_debug_amiga_dma_debug_get_frame_view_fn_t debugAmigaDmaDebugGetFrameView;
     e9k_debug_amiga_copper_debug_get_frame_view_fn_t debugAmigaCopperDebugGetFrameView;

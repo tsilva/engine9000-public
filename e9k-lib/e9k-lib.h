@@ -82,6 +82,8 @@ typedef struct e9k_debug_processor_reg
 
 #define E9K_CHECKPOINT_COUNT 64
 #define E9K_CHECKPOINT_NAME_MAX 48
+#define E9K_COUNTER_COUNT E9K_CHECKPOINT_COUNT
+#define E9K_COUNTER_NAME_MAX E9K_CHECKPOINT_NAME_MAX
 
 typedef struct e9k_debug_checkpoint {
     char name[E9K_CHECKPOINT_NAME_MAX];
@@ -104,6 +106,8 @@ typedef struct e9k_debug_checkpoint {
     uint64_t scanlineSpanMinimum;
     uint64_t scanlineSpanMaximum;
 } e9k_debug_checkpoint_t;
+
+typedef e9k_debug_checkpoint_t e9k_debug_counter_t;
 
 typedef struct e9k_debug_ami_blitter_vis_span {
     uint16_t x;

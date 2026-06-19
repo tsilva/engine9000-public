@@ -116,6 +116,8 @@ NOTE: Testing on Linux/Windows builds has been minimal at this stage.
 - `0xB7E900` through `0xB7E924` - read-only 32-bit debug argument registers 0-9, set with `--debug-arg VALUE`
 - `0xB7E928` - read-only 32-bit current processor cycle count divided by 4
 - `0xFC0100` - checkpoint description array base (`uint32_t[64]`), write `description_ptr` to `0xFC0100 + index*4`
+- `0xFC0200` - counter name array base (`uint32_t[64]`), write `name_ptr` to `0xFC0200 + index*4` - counters display in status bar
+- `0xFC0300` - counter value array base (`uint32_t[64]`), write `value` to `0xFC0300 + index*4`
 - `0xFCxxxx` debug registers overlay ROM addresses; the `0xB7E900` argument block is mapped as an e9k-only debug peripheral outside ROM and outside the usual Zorro II fast RAM range. Other emulators or real Amiga might crash if you use these.
 
 ### Profiling Features
