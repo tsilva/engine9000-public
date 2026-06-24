@@ -766,7 +766,21 @@ This should create:
 
 ### Linux (Ubuntu/Debian)
 
-- `apt install -y libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libreadline-dev pkg-config zenity`
+One-command setup:
+
+- `curl -fsSL https://raw.githubusercontent.com/tsilva/engine9000-public/main/install.sh | sudo bash`
+
+This installs the required apt packages, clones this repo to `~/engine9000-public`,
+initializes submodules, builds Engine9000, and writes `run-engine9000.sh` and
+`build-engine9000.sh` helper scripts in the checkout.
+
+To choose the checkout directory:
+
+- `curl -fsSL https://raw.githubusercontent.com/tsilva/engine9000-public/main/install.sh | sudo bash -s -- --dir "$PWD/engine9000-public"`
+
+Manual build:
+
+- `apt install -y ca-certificates git build-essential make libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libreadline-dev pkg-config zenity libpng-dev libgl-dev zlib1g-dev`
 - `make mega9000-support`
 - `make`
 
