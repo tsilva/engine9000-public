@@ -1,4 +1,8 @@
-# ENGINE9000 68k/z80 Retro Debugger/Profiler
+<p align="center">
+  <!-- repo-tagline:start -->
+  <strong>🕹️ Debug and profile Amiga, Neo Geo, and Mega Drive games 🔍</strong>
+  <!-- repo-tagline:end -->
+</p>
 
 Amiga/Neo Geo/Mega Drive debugger/profiler - under heavy development so likely to be unstable for the time being. 
 
