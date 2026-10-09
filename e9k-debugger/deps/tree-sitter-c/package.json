@@ -56,5 +56,24 @@
     "prestart": "tree-sitter build --wasm",
     "start": "tree-sitter playground",
     "test": "node --test bindings/node/*_test.js"
+  },
+  "overrides": {
+    "brace-expansion@<2.0.0": "1.1.21",
+    "brace-expansion@>=2.0.0 <3.0.0": "2.1.7",
+    "js-yaml@>=4.0.0": "4.3.2",
+    "flatted": "3.4.2",
+    "minimatch@<4.0.0": "3.1.4",
+    "minimatch@>=9.0.0 <10.0.0": "9.0.7",
+    "@humanfs/node": "0.16.8",
+    "@eslint/plugin-kit@<0.3.4": "0.3.4",
+    "ajv@<7.0.0": "6.14.0",
+    "source-map-js": "1.2.2",
+    "tinypool": "2.1.2",
+    "nanoid@<4.0.0": "3.3.19",
+    "postcss": "8.5.23",
+    "vite@>=7.0.0 <8.0.0": "7.3.6",
+    "picomatch@>=4.0.0": "4.0.4",
+    "rollup@>=4.0.0": "4.59.0",
+    "tar-fs@>=2.0.0 <3.0.0": "2.1.4"
   }
 }
