@@ -100,7 +100,7 @@ assert_eq!(
 
 ## Using Wasm Grammar Files
 
-> Requires the feature **wasm** to be enabled.
+> Requires the **wasm** feature and Rust 1.86 or later.
 
 First, create a parser with a Wasm store:
 
